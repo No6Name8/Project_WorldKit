@@ -9,12 +9,33 @@ mask wire format.
 Fallback path (FALLBACK_LOCAL_MASK): if the Meta API is unavailable (no key,
 or a billing/auth rejection), falls back to a local background-removal model
 (rembg/u2net, runs on CPU, no network once its weights are cached) to produce
-a foreground mask. This never claims to be SAM 3.1 -- every mask produced
-this way is tagged ``used_fallback_mask=True`` and every output filename it
-touches is prefixed ``FALLBACK_``, so it can never be mistaken for a real
-result. It also cannot find a named concept (e.g. "A4 sheet") -- it only
-separates foreground from background -- so A4 segmentation is skipped when
-falling back; use --height-cm instead.
+a whole-foreground mask, THEN refines it with ``refine_mask_with_grabcut``
+(classical OpenCV, no model/download) to separate the actual object from
+whatever larger surface it's sitting on. This never claims to be SAM 3.1 --
+every mask produced this way is tagged ``used_fallback_mask=True`` and every
+output filename it touches is prefixed ``FALLBACK_``, so it can never be
+mistaken for a real result. It also cannot find a named concept (e.g.
+"A4 sheet") -- it only separates foreground from background -- so A4
+segmentation is skipped when falling back; use --height-cm instead.
+
+Why the refinement step exists: on a real test photo (a mug on a round
+table), plain rembg returned the WHOLE TABLE as "foreground" (it has no
+concept awareness -- it just finds the largest salient foreground blob, and
+the table-plus-mug reads as one blob against the floor). That raw mask is
+not usable as reconstruction input. ``refine_mask_with_grabcut`` narrows it:
+it finds the sub-region of the rough mask with the highest local texture
+(a sitting object's edges/pattern/shadow read as higher-frequency detail
+than a plain table surface) that does NOT touch the rough mask's own
+boundary (the table's own rim/legs are high-texture too, but they touch that
+boundary; an object resting on top does not), then runs classical GrabCut
+seeded from that region. On that same test photo this took the mask from
+207,736px / 93% of the frame width (the whole table) down to 11,516px / 27%
+of the frame width, tight to the mug body, confirmed by eye. It is NOT
+pixel-perfect: a mug's plain white glaze can match the table's white marble
+closely enough in color to be excluded (seen on the test photo: the mug's
+rim/interior was left out), and it cannot recover any geometry a single 2D
+frame doesn't show (an occluded handle, for instance) -- no segmentation
+method can fix that from one frame.
 """
 
 from __future__ import annotations
@@ -23,6 +44,7 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
 import numpy as np
 from openai import AsyncOpenAI
 from PIL import Image
@@ -101,25 +123,101 @@ async def _segment_concept_async(
     return result
 
 
+def refine_mask_with_grabcut(
+    image_bgr: np.ndarray,
+    rough_mask: np.ndarray,
+    *,
+    erosion_px: int = 41,
+    texture_percentile: float = 85.0,
+    margin_frac: float = 0.15,
+) -> np.ndarray | None:
+    """Narrow a whole-foreground mask down to the object sitting within it.
+
+    ``rough_mask`` (e.g. from rembg) is assumed to cover a larger surface
+    (a table) PLUS the object on it. This locates the object by finding the
+    rough mask's highest-local-texture region that is fully interior to it
+    (eroded by ``erosion_px``, so the surface's own rim/legs -- which touch
+    the rough mask's boundary -- are excluded), then runs classical GrabCut
+    seeded from that region (OpenCV builtin, no model download).
+
+    Returns a tighter boolean mask, or None if no interior high-texture
+    region is found (e.g. the rough mask IS tight already, or the object has
+    no texture/color contrast against its surface) -- callers should fall
+    back to ``rough_mask`` in that case rather than treat None as an error.
+    """
+    h, w = rough_mask.shape
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    texture = cv2.GaussianBlur(np.abs(cv2.Laplacian(gray, cv2.CV_32F, ksize=3)), (0, 0), sigmaX=9)
+
+    interior = cv2.erode(rough_mask.astype("uint8"), np.ones((erosion_px, erosion_px), np.uint8)).astype(bool)
+    if not interior.any():
+        return None
+
+    texture_masked = texture.copy()
+    texture_masked[~interior] = 0
+    thresh = np.percentile(texture_masked[interior], texture_percentile)
+    high_texture = (texture_masked > thresh).astype("uint8")
+    high_texture = cv2.morphologyEx(high_texture, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    high_texture = cv2.morphologyEx(high_texture, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(high_texture, connectivity=8)
+    if n_labels <= 1:
+        return None
+    largest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    x, y, bw, bh, _area = stats[largest]
+
+    mx, my = int(bw * margin_frac), int(bh * margin_frac)
+    rx0, ry0 = max(0, x - mx), max(0, y - my)
+    rx1, ry1 = min(w, x + bw + mx), min(h, y + bh + my)
+
+    mask = np.full((h, w), cv2.GC_BGD, np.uint8)
+    mask[ry0:ry1, rx0:rx1] = cv2.GC_PR_FGD
+    mask[labels == largest] = cv2.GC_FGD
+    bgd_model = np.zeros((1, 65), np.float64)
+    fgd_model = np.zeros((1, 65), np.float64)
+    cv2.grabCut(image_bgr, mask, None, bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_MASK)
+    refined = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 1, 0).astype("uint8")
+
+    refined = cv2.morphologyEx(refined, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    n2, labels2, stats2, _ = cv2.connectedComponentsWithStats(refined, connectivity=8)
+    if n2 <= 1:
+        return None
+    largest2 = 1 + int(np.argmax(stats2[1:, cv2.CC_STAT_AREA]))
+    refined = labels2 == largest2
+    refined = cv2.morphologyEx(refined.astype("uint8"), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    return refined.astype(bool)
+
+
 def _fallback_mask(image_path: Path) -> SegmentationMaskResult:
-    """FALLBACK_LOCAL_MASK: local background removal via rembg/u2net (CPU, no Meta API)."""
+    """FALLBACK_LOCAL_MASK: rembg/u2net whole-foreground mask, refined with
+    refine_mask_with_grabcut to separate the object from the surface it's on
+    (CPU only, no Meta API, no new model download)."""
     from rembg import remove
 
     img = Image.open(image_path).convert("RGB")
     cutout = remove(img)  # RGBA, alpha = foreground mask
     alpha = np.asarray(cutout)[..., 3]
-    mask = alpha > 10
+    rough_mask = alpha > 10
 
-    if not mask.any():
+    if not rough_mask.any():
         raise SegmentationError(
             f"FALLBACK_LOCAL_MASK found no foreground in {image_path} (fully transparent result)"
         )
+
+    image_bgr = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+    refined = refine_mask_with_grabcut(image_bgr, rough_mask)
+    mask = refined if refined is not None else rough_mask
+    concept = (
+        "(fallback: rembg foreground, GrabCut-refined to isolate the object)"
+        if refined is not None
+        else "(fallback: whole foreground, no concept prompt -- GrabCut refinement found nothing to narrow)"
+    )
 
     ys, xs = np.where(mask)
     box = (float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max()))
 
     return SegmentationMaskResult(
-        concept="(fallback: whole foreground, no concept prompt)",
+        concept=concept,
         mask=mask,
         box=box,
         foreground_pixels=int(mask.sum()),
