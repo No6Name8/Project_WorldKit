@@ -105,10 +105,36 @@ way, and the pipeline's `MetaAPIUnavailable` fallback path (local
   the before/after overlays (all gitignored, local only). Not pixel-perfect:
   the mug's white rim/interior is excluded where its color matches the
   marble table too closely, and no 2D segmentation method can recover
-  geometry a single frame doesn't show (e.g. an occluded handle -- none is
-  even visible in this frame). 3 new regression tests
+  geometry a single frame doesn't show. 3 new regression tests
   (`tests/test_segment.py`) cover the refinement function directly, with a
   synthetic image, no rembg/network/GPU needed.
+
+**Frame selection investigated -- correction to a prior claim.** An earlier
+status entry said no handle was visible "in this frame"; that was based only
+on the auto-selected frame and was wrong as a general statement. Built a
+labeled contact sheet of all 12 kept frames
+(`runs/mug_local/CONTACT_SHEET_all_frames.png`) and checked by eye: **the
+mug DOES have a visible handle, and it shows clearly in 6 of the 12 kept
+frames** (sharp_01/04/05/08/09/10) -- just not in the one the fallback
+selection picks (sharp_00, the single sharpest frame, where the handle
+happens to be rotated out of view). Confirmed, not assumed: full-resolution
+spot checks on sharp_00/01/09.
+
+Tried to fix this with a local, non-ML metric -- convex-hull defect depth on
+the fallback mask, as a "has a protruding handle" proxy. It separates
+synthetic test shapes cleanly (plain rectangle 0.0 vs rectangle+tab 0.26),
+but **measured against the real frames it does not reliably track actual
+handle visibility** (e.g. sharp_07, no handle, scored higher than sharp_01
+and sharp_09, which do show it) -- the GrabCut mask's own edge noise
+contaminates the signal. **Left `detect.py`'s selection algorithm
+unchanged** rather than wire in an unreliable rule; full scores and the
+visual ground truth are in `runs/mug_local/SELECTION_ANALYSIS.json`
+(gitignored, local only). Manually identified `sharp_01.png` (sharpness
+195.8) as the best available frame for continued local testing -- sharp,
+full cup in frame, handle clearly visible -- but this was a human judgment
+call, not something the pipeline picks on its own. This is exactly the kind
+of call Muse Spark is meant to make once billing is resolved; it's also
+exactly why `detect_object()`'s real path already asks it to.
 - SAM 3D Objects / Modal: not invoked. No mesh was reconstructed from the
   real mug. Any mesh in `runs/mug_local/TEMP_TEST_*` is a hand-built
   cylinder+handle test shape, explicitly NOT a reconstruction -- used only
@@ -141,11 +167,15 @@ is no automatic real-world scale recovery for this video at all.**
    before any real Meta API call (Muse Spark naming, SAM 3.1 masking) can
    succeed.
 2. The fallback local mask now isolates the mug from the table reasonably
-   well (GrabCut refinement), but still excludes its white rim/interior and
-   can't recover unseen geometry (e.g. a handle not visible in the chosen
-   frame) -- still not a real stand-in for SAM 3.1 in the actual demo.
-3. No coin-based (or any non-A4) scale recovery exists; add it, or keep
+   well (GrabCut refinement), but still excludes its white rim/interior --
+   still not a real stand-in for SAM 3.1 in the actual demo.
+3. Fallback frame selection still just picks the sharpest frame, which can
+   (and here, does) pick an angle where the handle is rotated out of view,
+   even though better frames exist in the same kept set. No reliable local
+   fix was found (see Frame selection investigated, above); needs Muse Spark
+   once billing works, or a smarter sampling/selection strategy later.
+4. No coin-based (or any non-A4) scale recovery exists; add it, or keep
    requiring `--height-cm` for this kind of shot.
-4. SAM 3D Objects on Modal is still completely unexercised against a real
+5. SAM 3D Objects on Modal is still completely unexercised against a real
    checkpoint/image -- first real run will also build the container image
    and download gated checkpoints (slow, costs Modal credits).
