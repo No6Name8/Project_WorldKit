@@ -80,11 +80,37 @@ resolved, every real Meta API call (Muse Spark, SAM 3.1) will fail the same
 way, and the pipeline's `MetaAPIUnavailable` fallback path (local
 `FALLBACK_`-tagged detection/segmentation) will trigger automatically.
 
-**Not yet run end-to-end:** no video has been placed in `pipeline/samples/`
-yet, so the pipeline has never been run against real footage, and the Modal
-GPU (SAM 3D Objects) stage has never been exercised beyond a hello-world
-connectivity check — its container build + checkpoint download + real
-inference cost/timing are still unmeasured.
+**Real video now in `pipeline/samples/`:** `WhatsApp Video 2026-10-26 at
+9.32.38 PM.mp4` (16s, 480x856, h264). Ran the local-only stages against it
+(no Meta API calls, no Modal GPU, per explicit instruction):
+
+- Frame extraction: real, works. 12 sharp frames in 0.67s, sharpness
+  192-208 (Laplacian variance).
+- Detect: only the fallback path was exercised directly (sharpest frame +
+  `--object` override) -- calling the real `detect_object()`/
+  `segment_concept()` wrappers was avoided since the key is now present and
+  they'd attempt a real (billing-blocked) API call first.
+- Segment: fallback (`rembg`/u2net) was tested directly on the real chosen
+  frame. **Result: it masks the whole round table the mug sits on, not the
+  mug alone** (no concept-awareness -- it just finds the largest
+  high-contrast foreground region). This mask is NOT usable as real
+  reconstruction input. See `runs/mug_local/FALLBACK_mask_overlay.png`
+  (gitignored, local only).
+- SAM 3D Objects / Modal: not invoked. No mesh was reconstructed from the
+  real mug. Any mesh in `runs/mug_local/TEMP_TEST_*` is a hand-built
+  cylinder+handle test shape, explicitly NOT a reconstruction -- used only
+  to verify printprep/STL export/preview rendering still work (they do:
+  watertight, 9.5cm upright height, one thin-wall point flagged at 0.367mm,
+  4 preview angles rendered).
+
+**Coin-for-scale: not implemented, confirmed by code search.** The real
+video has a coin next to the mug on the table (visible in the chosen
+frame), but the only scale-reference logic in the codebase is
+`estimate_height_cm_from_a4()` (A4 sheet, grep for "coin" in `worldkit/` and
+`modal_app/` returns nothing). Even with a working Meta API key, SAM 3.1
+would only ever be asked to find "A4 sheet of paper", never a coin. **The
+mug's scale currently comes only from `--height-cm` (user-measured); there
+is no automatic real-world scale recovery for this video at all.**
 
 **Key decisions:**
 - SAM 3D Objects has a built-in textured-mesh output (`with_mesh_postprocess`
@@ -97,7 +123,14 @@ inference cost/timing are still unmeasured.
   prefix), so a demo run can never accidentally pass off fallback output as
   real Meta API/SAM 3.1 output.
 
-**Known issues / next steps:** billing needs resolving before any real Meta
-API call can succeed; a real test video needs to go in `pipeline/samples/`
-before a genuine end-to-end run (with real measured timings/dimensions/cost)
-is possible.
+**Known issues / next steps:**
+1. Billing needs resolving (`https://dev.meta.ai/billing/?team_id=4497333240582980`)
+   before any real Meta API call (Muse Spark naming, SAM 3.1 masking) can
+   succeed.
+2. The fallback local mask cannot isolate the mug from the table it's sitting
+   on -- not usable as a stand-in for a real demo reconstruction.
+3. No coin-based (or any non-A4) scale recovery exists; add it, or keep
+   requiring `--height-cm` for this kind of shot.
+4. SAM 3D Objects on Modal is still completely unexercised against a real
+   checkpoint/image -- first real run will also build the container image
+   and download gated checkpoints (slow, costs Modal credits).
