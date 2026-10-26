@@ -67,7 +67,7 @@ video → frames → Muse Spark lists objects → SAM 3.1 tracks and masks them 
 _Last updated: Object mode CLI build + API verification session._
 
 **What works:** `/pipeline` has a full `worldkit` package (frames, meta_api,
-detect, segment, Modal SAM 3D app, printprep, render, CLI) with 18/18 unit
+detect, segment, Modal SAM 3D app, printprep, render, CLI) with 21/21 unit
 tests passing against synthetic data. Modal is authenticated (workspace
 `no6name8`) and confirmed reachable with a live remote call. `pipeline/.env`
 exists with a real `MODEL_API_KEY`, and the key loads correctly.
@@ -135,12 +135,14 @@ full cup in frame, handle clearly visible -- but this was a human judgment
 call, not something the pipeline picks on its own. This is exactly the kind
 of call Muse Spark is meant to make once billing is resolved; it's also
 exactly why `detect_object()`'s real path already asks it to.
-- SAM 3D Objects / Modal: not invoked. No mesh was reconstructed from the
-  real mug. Any mesh in `runs/mug_local/TEMP_TEST_*` is a hand-built
-  cylinder+handle test shape, explicitly NOT a reconstruction -- used only
-  to verify printprep/STL export/preview rendering still work (they do:
-  watertight, 9.5cm upright height, one thin-wall point flagged at 0.367mm,
-  4 preview angles rendered).
+
+**SAM 3D Objects / Modal: not invoked. No mesh has been reconstructed from
+the real mug, and no genuine 3D reconstruction of it exists anywhere in this
+repo.** Any mesh under `runs/mug_local/TEMP_TEST_*` is a hand-built
+cylinder+handle test shape, explicitly NOT a reconstruction -- used only to
+verify printprep/STL export/preview rendering still work (they do:
+watertight, 9.5cm upright height, one thin-wall point flagged at 0.367mm,
+4 preview angles rendered).
 
 **Coin-for-scale: not implemented, confirmed by code search.** The real
 video has a coin next to the mug on the table (visible in the chosen
