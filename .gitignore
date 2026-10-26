@@ -1,0 +1,67 @@
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Node / Next.js (/app) ---
+node_modules/
+.next/
+out/
+build/
+dist/
+.vercel/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.turbo/
+coverage/
+next-env.d.ts
+
+# --- Python (/pipeline) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+.ipynb_checkpoints/
+
+# --- Model weights / checkpoints ---
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+weights/
+checkpoints/
+
+# --- Large media and generated 3D output ---
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.glb
+*.gltf
+*.stl
+*.ply
+*.obj
+*.fbx
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
