@@ -61,3 +61,43 @@ video → frames → Muse Spark lists objects → SAM 3.1 tracks and masks them 
 4. AI Edit
 5. Map mode
 6. Stretch: diorama splitting, game/robot export
+
+## Status
+
+_Last updated: Object mode CLI build + API verification session._
+
+**What works:** `/pipeline` has a full `worldkit` package (frames, meta_api,
+detect, segment, Modal SAM 3D app, printprep, render, CLI) with 18/18 unit
+tests passing against synthetic data. Modal is authenticated (workspace
+`no6name8`) and confirmed reachable with a live remote call. `pipeline/.env`
+exists with a real `MODEL_API_KEY`, and the key loads correctly.
+
+**Meta API auth result:** the key itself is valid (not a 401), but the team
+has **no billing configured**: a real `muse-spark-1.3` call returns
+**HTTP 402 `billing_not_configured`**, pointing to
+`https://dev.meta.ai/billing/?team_id=4497333240582980`. Until that's
+resolved, every real Meta API call (Muse Spark, SAM 3.1) will fail the same
+way, and the pipeline's `MetaAPIUnavailable` fallback path (local
+`FALLBACK_`-tagged detection/segmentation) will trigger automatically.
+
+**Not yet run end-to-end:** no video has been placed in `pipeline/samples/`
+yet, so the pipeline has never been run against real footage, and the Modal
+GPU (SAM 3D Objects) stage has never been exercised beyond a hello-world
+connectivity check — its container build + checkpoint download + real
+inference cost/timing are still unmeasured.
+
+**Key decisions:**
+- SAM 3D Objects has a built-in textured-mesh output (`with_mesh_postprocess`
+  + `with_texture_baking`, both default `True` in the underlying pipeline);
+  `modal_app/sam3d.py` calls that directly instead of writing a custom
+  splat-to-mesh conversion.
+- Fallback behavior (no key / billing / auth rejection only -- never on other
+  errors) is built into `detect.py`/`segment.py` from the start, each
+  fallback result unmistakably tagged (`used_fallback`, `FALLBACK_` filename
+  prefix), so a demo run can never accidentally pass off fallback output as
+  real Meta API/SAM 3.1 output.
+
+**Known issues / next steps:** billing needs resolving before any real Meta
+API call can succeed; a real test video needs to go in `pipeline/samples/`
+before a genuine end-to-end run (with real measured timings/dimensions/cost)
+is possible.
