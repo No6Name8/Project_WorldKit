@@ -1,0 +1,28 @@
+# Local pipeline dependencies (frames -> detect -> segment -> printprep -> CLI).
+# SAM 3D Objects' own heavy deps (torch, PyTorch3D, Kaolin, ...) are NOT
+# installed here -- they only run inside the Modal container image built by
+# modal_app/sam3d.py.
+#
+# Install with Python 3.10 specifically (py -3.10 -m venv .venv on Windows):
+#   py -3.10 -m venv .venv
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt
+
+trimesh==5.2.0
+rtree==1.4.1
+manifold3d==3.5.4
+numpy==2.2.6
+opencv-python-headless==5.0.0.93
+imageio-ffmpeg==0.6.0
+openai==3.37.0
+python-dotenv==1.2.4
+pillow==12.3.0
+matplotlib==3.10.9
+tenacity==9.2.1
+meta-sam-parser==0.1.0
+modal==1.6.2
+
+# Local fallback mask (used only when the Meta API is unavailable):
+rembg==2.0.69
+onnxruntime==1.23.2
+
+pytest==9.1.1
