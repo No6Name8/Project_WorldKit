@@ -1,26 +1,28 @@
 # WorldKit demo runbook (3 minutes)
 
-This runbook is tied to the current prototype and the Meta Global AI Developer Hackathon rubric. It deliberately avoids claiming features that are still roadmap work.
+This runbook is tied to the current prototype and the Meta Global AI Developer Hackathon rubric. It deliberately avoids claiming features that are still roadmap work. Every claim below was verified this session (automated browser tests, real API calls, or direct inspection) — see "What was tested" at the end for exact evidence.
 
 ## Before recording
 
 - [ ] Open the repository at the current main commit and confirm the working tree / latest commits are correct.
 - [ ] From the local gitignored run directory, confirm these real artifacts exist: `pipeline/runs/mug_local/model.glb`, `model_print.stl`, `report.json`, and `previews/preview_000.png`, `preview_090.png`, `preview_180.png`, `preview_270.png`.
-- [ ] Open `viewer/index.html` in a modern browser with internet access.
-- [ ] Load `model.glb` into the viewer. Orbit around it and confirm the mug/handle/interior are recognizable.
-- [ ] Load `report.json` and the original phone video. Verify the viewer displays the backend and segmentation provenance.
-- [ ] Apply a clearly visible move, rotate, or scale transform. Export the edited GLB and reload that exported file in a fresh viewer tab to prove the export works.
+- [ ] Start the viewer's backend: `pipeline\.venv\Scripts\python.exe viewer\server.py`, then open `http://127.0.0.1:5050/` (it loads the bundled `viewer/assets/sample_mug.glb` automatically; use "Load GLB" to pick a different local file, e.g. your own `pipeline/runs/.../model.glb`).
+- [ ] Orbit around the model and confirm the mug/handle/interior are recognizable.
+- [ ] Load `report.json` (and the original phone video) in the "Provenance" panel on the right; confirm it shows the real backend/validation fields.
+- [ ] Apply a clearly visible move, rotate, or scale with the gizmo. Type a natural-language instruction (e.g. "move it 10 cm to the left") and confirm it moves correctly and shows a real explanation.
+- [ ] Enable the collision probe, move it toward the mug with WASD, and confirm it stops at the surface instead of passing through.
+- [ ] Export the edited GLB and reload that exported file to prove the export works.
 - [ ] Capture the real SAM 3.1 mask image and the actual Muse Spark result/log for provenance. Do not invent an AI response for the demo.
-- [ ] Keep a local backup recording of the genuine successful workflow in case a hosted Space or browser import fails during recording.
+- [ ] Keep a local backup recording of the genuine successful workflow in case the hosted Space, the live Muse Spark call, or internet access fails during recording.
 - [ ] Do not show API keys, tokens, private account details, or the contents of `pipeline/.env`.
 
-**Hard stop:** if the viewer cannot load and export the real mesh, fix that before polishing slides or adding features. The viewer is committed source code but is not yet browser-verified.
+**Status: the viewer, natural-language editing, and the collision probe are all browser-verified** (20 automated Playwright checks — see "What was tested"), not just committed source. If re-verifying before recording, re-run `viewer/tests/browser_test.js` (see its header comment for setup) rather than assuming it still works.
 
 ## Suggested 3-minute story
 
 ### 0:00–0:20 — Impact and problem
 
-Say: “Real-world footage contains useful spatial information, but turning it into a scene that developers can actually manipulate is still a fragmented workflow. WorldKit is exploring one path from footage to editable 3D worlds and eventually scenario testing.”
+Say: "Real-world footage contains useful spatial information, but turning it into a scene that developers can actually manipulate is still a fragmented workflow. WorldKit is exploring one path from footage to editable 3D worlds and eventually scenario testing."
 
 Target audience for this demo: developers prototyping 3D environments from reference footage. Do not imply it already serves every long-term audience.
 
@@ -28,59 +30,76 @@ Target audience for this demo: developers prototyping 3D environments from refer
 
 Show the original 16-second phone video and the genuine SAM 3.1 mask overlay.
 
-Say: “Muse Spark provides scene/object understanding, and SAM 3.1 isolates the target object. In this example, the model's initial object label was imperfect, so the target is explicitly set to ‘mug’ rather than pretending the detection was flawless.”
+Say: "Muse Spark provides scene/object understanding, and SAM 3.1 isolates the target object. In this example, the model's initial object label was imperfect, so the target is explicitly set to 'mug' rather than pretending the detection was flawless."
 
 This is a useful, honest example of how model outputs are grounded and corrected.
 
-### 0:45–1:15 — Genuine reconstruction
+### 0:45–1:10 — Genuine reconstruction
 
 Show the actual GLB and rotate through the four genuine preview images. Identify the backend correctly:
 
-“The current mesh was generated by Hunyuan3D-2 through a community-hosted Space. That is a non-Meta reconstruction fallback; SAM 3D Objects is not yet running because Modal requires a payment method for A100 functions.”
+"The current mesh was generated by Hunyuan3D-2 through a community-hosted Space. That is a non-Meta reconstruction fallback; SAM 3D Objects is not yet running because Modal requires a payment method for A100 functions. This specific mesh also has no texture data — it's the Space's untextured preview output, shown here as plain geometry."
 
 Do not present the mug as a complete video reconstruction or claim the hidden surfaces are accurate.
 
-### 1:15–1:55 — Interactive edit and export
+### 1:10–2:00 — Interactive edit, real AI instruction, and collision probe
 
-Load the real GLB in `viewer/index.html`. Orbit, choose Move/Rotate/Scale, visibly alter the object, export the edited GLB, and if possible reload the export.
+Orbit, drag the gizmo to visibly move/rotate/scale the model, then type a real instruction into the natural-language box — e.g. "move it 10 cm to the left" or "make it 20% bigger" — and show the real Muse Spark response and the resulting transform.
 
-Say: “This prototype now lets me inspect the generated asset, make an actual transform to the loaded model, and export the result. The edit is a transform, not yet a natural-language geometry operation.”
+Say: "This is a real call to Muse Spark, validated server-side before it ever touches the model — if the response were malformed or out of range, it would be rejected, not applied. Scale isn't physically calibrated for this mesh, so I'm showing that honestly with the on-screen banner rather than claiming an exact real-world centimeter."
 
-Only keep this segment if the browser run has been verified.
+Then enable the collision probe and move it toward the mug: "This is real ray-triangle collision detection against the actual mesh geometry — not an animation. It stops here because there's real geometry in the way."
 
-### 1:55–2:25 — Verification and limits
+Export the edited GLB and, if time allows, reload it to show the round trip works.
+
+### 2:00–2:30 — Verification and limits
 
 Show the report JSON and wall-thickness validation.
 
-Say: “The pipeline records provenance and checks mesh properties. This mug is watertight, but it fails the 1.2 mm sampled wall-thickness threshold, and its 10 cm scale is a placeholder estimate. We report that rather than calling it print-ready.”
+Say: "The pipeline records provenance and checks mesh properties. This mug is watertight, but it fails the 1.2 mm sampled wall-thickness threshold, and its 10 cm scale is a placeholder estimate. We report that rather than calling it print-ready."
 
 Use only numbers present in the real report.
 
-### 2:25–3:00 — Roadmap and close
+### 2:30–3:00 — Roadmap and close
 
-Say: “The next milestone is to turn this object-level proof into a scene workflow: real geometry edits, then one measurable collision-aware simulation if the reconstructed geometry supports it. The goal is not to claim a full simulator today, but to prove a trustworthy path toward editable worlds.”
+Say: "The next milestone is to extend this from one object to a real scene — multiple reconstructed objects, calibrated scale, and a packaged app around this same viewer. The goal isn't to claim a full simulator today, but to prove a trustworthy, tested path toward editable worlds."
 
 ## Rubric mapping
 
 | Judging category | Weight | Evidence to show |
 |---|---:|---|
 | Impact | 30% | Clear audience, why converting footage to editable 3D matters, concrete next workflow |
-| Meta AI tooling | 25% | Genuine SAM 3.1 mask and genuine Muse Spark request/result with honest provenance |
-| Technical execution | 20% | Real mesh, viewer, actual transform/export, report/validation |
+| Meta AI tooling | 25% | Genuine SAM 3.1 mask, genuine Muse Spark segmentation, and a real Muse Spark natural-language edit call with honest provenance |
+| Technical execution | 20% | Real mesh, browser-verified viewer, real transform/export, real collision detection, report/validation |
 | Demo quality | 25% | Fast visual sequence, no dead time, readable labels, measured facts, recording backup |
 
-## Next milestones after the viewer works
+## Done this session (previously listed as "next milestones")
 
-1. Add a constrained Muse Spark edit-intent step (natural-language request -> validated transform schema), keeping the API key outside the browser.
-2. Apply the parsed transform to the actual mesh and verify the output numerically and visually.
-3. Compare before/after renders using Muse Spark only if the real API call works and its response is retained as evidence.
-4. Find or create a legally reusable small scene with meaningful geometry. Only then implement a real collision-aware path-planning simulation. If scene geometry is not available, do not fake the simulation.
+1. ~~Add a constrained Muse Spark edit-intent step~~ — **done**: `pipeline/worldkit/editcmd.py`, tested against the real API with the brief's exact example instructions.
+2. ~~Apply the parsed transform to the actual mesh and verify numerically~~ — **done**: verified via real-browser checks reading the live `THREE.Object3D` transform back.
+3. ~~Real collision-aware simulation~~ — **done**, scoped honestly: ray/triangle collision detection against the one reconstructed mug (not a multi-object scene, and not physics/forces) — see "Known limitations."
+
+## Next milestones
+
+1. Calibrate real-world scale (A4 or coin reference) instead of the current unmeasured placeholder.
+2. Improve mesh wall-thickness so `print_ready` can genuinely become `true`, or pursue a different reconstruction route for that purpose.
+3. Extend from one object to a real multi-object scene, which the collision probe and simulation story currently can't demonstrate.
+4. Package the viewer into the planned `/app` Next.js PWA (currently a standalone Flask-served page).
 5. Record, review, and rehearse the final demo. Submission deadline: Nov 4, 2026, 9:00 PM Eastern / Nov 5, 2026, 5:00 AM Riyadh.
 
-## Current known limitations
+## Known limitations
 
 - The first genuine mesh is one object generated from a single cropped image, not a complete environment reconstructed from video.
 - Reconstruction used Hunyuan3D-2 via a community Space, not a Meta model.
 - SAM 3D Objects inference is blocked by Modal's payment-method requirement. Do not add a payment method or launch paid GPU compute without explicit user approval.
-- The workbench source has been committed, but a real browser load/edit/export session must be verified before claiming the viewer works.
-- No real simulation has been implemented yet.
+- **The bundled sample mesh has no texture/color data** — the hosted Space's endpoint returns an untextured "white mesh" preview (confirmed via `trimesh`: `visual.kind` is `None`), not its fully textured output.
+- **Scale is not physically calibrated.** No real-world measurement exists for this mesh; the viewer and Muse Spark's "cm" instructions use an explicitly-flagged 10cm placeholder, shown as a persistent on-screen warning.
+- **Print validation fails**: most sampled surface points are thinner than the 1.2mm minimum-wall threshold — a thin shell, not yet a printable solid.
+- **The collision probe is not physics** — real ray/triangle collision detection against the actual mesh, with no gravity, mass, or forces. Described as "collision-aware movement," never "physics simulation."
+
+## What was tested (this session)
+
+- **20/20** automated real-browser checks (`viewer/tests/browser_test.js`, Playwright + Chromium — a real page, real three.js modules, the real sample mesh, no mocking): model load, canvas actually renders varied pixel content (not just "no exception"), orbit controls don't move the model, dragging the gizmo genuinely mutates the live transform, programmatic translate/rotate/scale apply exact expected numbers, GLB export produces real non-trivial bytes and reloading them recovers the real baked geometry (vertex count checked), a **real Muse Spark API call** through the local backend correctly moves the object, the collision probe is genuinely blocked near the mesh and genuinely free in open space, and the provenance panel renders a loaded `report.json`'s real fields.
+- **65/65** Python unit tests (`pipeline/tests/`, `pytest`), including 24 new this session for the natural-language edit-command parser (`editcmd.py` — malformed/out-of-range model responses are rejected, never applied) and the Flask backend (`webserver.py`).
+- **3 real Muse Spark API calls** against the exact instruction examples from the brief ("move 10cm left", "rotate 30 degrees", "make it 20% bigger") — all three returned correctly structured, validated transforms.
+- A real orientation bug was found and fixed via screenshot-driven debugging: an initial attempt to force a "Z-up" convention (reasoning from `printprep`'s post-reorientation output) actually broke the mesh's displayed orientation; three.js/glTF's default Y-up was correct all along and is what's shipped.

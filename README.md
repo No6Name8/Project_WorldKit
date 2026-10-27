@@ -11,17 +11,19 @@ Built for the Meta Global AI Developer Hackathon 2026 (Indie Developer track, Pu
 - **Python object pipeline:** video frame extraction, Muse Spark object understanding with explicit-object override, SAM 3.1 segmentation, reconstruction backend selection, mesh print-prep, and preview rendering.
 - **Real reconstruction proof:** a genuine mug GLB generated with Hunyuan3D-2 from a tightly cropped SAM 3.1 object image. The generated local artifact is kept under the git-ignored `pipeline/runs/mug_local/` directory; large run artifacts are not committed.
 - **Print-prep validation:** the mug mesh was exported to STL and sampled for wall thickness. It is **not print-ready**: many sampled points failed the 1.2 mm wall-thickness threshold, and its 10 cm scale is an explicitly flagged placeholder estimate.
-- **Interactive GLB workbench:** `viewer/index.html` is a browser viewer for loading a local GLB, orbiting around it, applying a real object transform (move/rotate/scale), viewing mesh statistics, optionally loading the run report/source video, and exporting the edited GLB.
-- **Automated tests:** the latest reported run was 41/41 passing. The hosted-model integration tests mock the network call; the test suite does not claim to run model inference.
+- **Interactive, browser-verified viewer:** `viewer/index.html` (+ `viewer/server.py`, a small Flask backend) loads a GLB, orbits around it, applies a real object transform via a move/rotate/scale gizmo, exports/reloads the edited GLB, and optionally loads a run's `report.json`/source video for provenance. **Verified with 20 automated real-browser checks** (Playwright + Chromium, `viewer/tests/browser_test.js`) — not just committed, unverified source.
+- **Real natural-language editing:** type an instruction like "move it 10 cm to the left" and it's interpreted by a real Muse Spark API call (`pipeline/worldkit/editcmd.py`), validated server-side (malformed/out-of-range responses are rejected before they can touch the model), and applied to the live object. The API key never reaches the browser. Manual gizmo editing works identically with or without a configured key.
+- **A real, scoped collision-detection demo:** the viewer's collision probe uses genuine ray/triangle intersection tests (`THREE.Raycaster`) against the actual loaded mesh — it stops at real geometry rather than passing through. Not physics (no gravity/mass/forces), and scoped to the one reconstructed object, not a multi-object scene.
+- **Automated tests:** 65/65 Python tests passing (`pytest`), plus the 20 real-browser checks above. The hosted-model integration tests mock the network call for determinism; a handful of real API calls (Muse Spark detection, segmentation, and the three NL-edit examples from the brief) were made and verified by hand, separately from the automated suite.
 
 ## What is not yet implemented or verified
 
-- Full multi-object or room/city reconstruction from video.
+- Full multi-object or room/city reconstruction from video — the collision demo and viewer both operate on one reconstructed object.
 - SAM 3D Objects inference: the Modal image builds, but Modal blocks A100 functions until a payment method is added. No payment method was added.
-- A genuine collision-aware simulation.
-- Engineering-grade scale/geometry accuracy, printer-ready wall thickness, or reliable export to Unity/Unreal/CAD.
+- Calibrated real-world scale — the current mesh's dimensions use an explicitly-flagged, unmeasured placeholder.
+- Engineering-grade scale/geometry accuracy, printer-ready wall thickness (this mesh fails print validation), or reliable export to Unity/Unreal/CAD.
 - Muse Wonder, VGGT, or Muse Image integration in the verified mug run.
-- A deployed, production-ready web application or account/device sync.
+- A deployed, production-ready web application, the planned `/app` Next.js PWA wrapper, or account/device sync — the viewer runs standalone via `viewer/server.py` today.
 
 ## Run the Python pipeline
 
@@ -41,11 +43,15 @@ pipeline\.venv\Scripts\python.exe -m worldkit.object "pipeline\samples\<video>" 
 
 Inspect `report.json` for actual backend provenance, stage timings, warnings, and print-prep validation. Do not infer print readiness from watertightness alone.
 
-## Open the interactive workbench
+## Open the interactive viewer
 
-Open `viewer/index.html` in a modern browser with internet access (the page loads Three.js modules from jsDelivr). Choose the actual generated `model.glb` from your local `pipeline/runs/mug_local/` folder. Optionally load `report.json` and the source video. Use the gizmo to move, rotate, or scale the model and export an edited GLB.
+```powershell
+pipeline\.venv\Scripts\python.exe viewer\server.py
+```
 
-The viewer is a lightweight prototype. It edits the loaded object's transform, not its internal topology, and does not implement simulation.
+Then open `http://127.0.0.1:5050/` (needs internet access — it loads three.js from a CDN). It loads the bundled `viewer/assets/sample_mug.glb` automatically; use "Load GLB" to pick a different local file, e.g. your own `pipeline/runs/.../model.glb`. Optionally load `report.json` and the source video in the provenance panel. Use the gizmo or the natural-language box to move/rotate/scale the model, enable the collision probe, and export an edited GLB.
+
+The viewer edits the loaded object's transform, not its internal topology. The collision probe is real ray/triangle collision detection, not a physics simulation.
 
 ## Meta AI tooling and provenance
 
@@ -61,13 +67,23 @@ The viewer is a lightweight prototype. It edits the loaded object's transform, n
 
 See [the three-minute demo runbook](docs/DEMO_RUNBOOK.md) for the recording checklist, suggested narrative, rubric mapping, and milestone gates.
 
-1. Demonstrate a real source-to-mesh workflow and inspect the mesh from multiple views.
-2. Demonstrate a genuine object selection/edit in the viewer and export the changed GLB.
-3. Add a meaningful Muse Spark-assisted edit-intent or before/after verification step; show the real request/response and validate the resulting change in code.
-4. Only if usable scene/collision geometry is available, add one small real simulation such as collision-aware path planning. Otherwise clearly label simulation as future work.
-5. Record a concise, truthful three-minute demo: source footage → genuine reconstruction → actual edit → validation/export → broader vision. Report measured results only.
+1. Calibrate real-world scale (A4 or coin reference) instead of today's unmeasured placeholder.
+2. Improve mesh wall-thickness so `print_ready` can genuinely become `true`.
+3. Extend from one object to a real multi-object scene.
+4. Package the viewer into the planned `/app` Next.js PWA wrapper.
+5. Record a concise, truthful three-minute demo: source footage → genuine reconstruction → actual edit (gizmo + natural language) → collision demo → validation/export → broader vision. Report measured results only.
 
-The hackathon judges impact (30%), Meta AI tooling (25%), technical execution (20%), and demo quality (25%). The priority is one complete, credible workflow—not a list of unimplemented features.
+The hackathon judges impact (30%), Meta AI tooling (25%), technical execution (20%), and demo quality (25%). The priority is one complete, credible, *tested* workflow — not a list of unimplemented features.
+
+## Repo structure
+
+```
+/pipeline Python AI pipeline (video -> mesh -> print-ready STL)
+/viewer   Browser 3D viewer + editor (three.js + a small Flask backend)
+/docs     Architecture notes, benchmark results, docs/DEMO_RUNBOOK.md
+```
+
+(`/app`, a Next.js PWA wrapping the viewer, is a planned next step — not built yet. The viewer runs standalone today via `viewer/server.py`.)
 
 ## License and author
 

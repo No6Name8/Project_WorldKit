@@ -63,6 +63,10 @@ pipeline/.cache/
 *.ply
 *.obj
 *.fbx
+# One small (~170KB) bundled demo sample is tracked on purpose so the
+# viewer has something to load out of the box -- real reconstruction output,
+# not a placeholder.
+!viewer/assets/sample_mug.glb
 
 # --- OS / editor ---
 .DS_Store

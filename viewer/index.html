@@ -1,162 +1,499 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WorldKit · Object Workbench</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WorldKit Viewer</title>
 <style>
-:root{color-scheme:dark;--bg:#0b1018;--panel:#111a27;--line:#253448;--text:#eaf1fb;--muted:#9bacc2;--accent:#76e0c0;--warn:#ffc978}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif}
-header{height:68px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:#0d1420}
-.brand{font-weight:800;font-size:18px;letter-spacing:.02em}.brand span{color:var(--accent)}.tag{color:var(--muted);font-size:12px}
-main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;padding:16px;max-width:1600px;margin:auto}
-.viewer{min-height:620px;position:relative;background:#0d1522;border:1px solid var(--line);border-radius:14px;overflow:hidden}
-#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
-.overlay{position:absolute;z-index:2;left:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap}
-.pill{padding:6px 10px;border:1px solid #33445a;border-radius:999px;background:#111a27dd;color:#c9d6e7;font-size:11px}
-.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:32px}
-.empty-card{max-width:340px;background:#111a27e8;border:1px solid var(--line);padding:24px;border-radius:14px}
-.empty-card h2{font-size:22px;margin:0 0 8px}.empty-card p{color:var(--muted);margin:0}
-#empty.hidden{display:none}
-.side{display:flex;flex-direction:column;gap:12px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
-h1,h2,h3,p{margin-top:0}h2{font-size:15px;margin-bottom:12px}h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px}
-label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
-input[type=file],select,button{font:inherit}
-input[type=file]{width:100%;font-size:12px;color:var(--muted)}
-select,button{background:#1a2839;border:1px solid #33465e;border-radius:8px;color:var(--text);padding:9px 10px}
-button{cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#08221b;font-weight:750}
-button:disabled{opacity:.4;cursor:not-allowed}.row{display:flex;gap:8px;align-items:center}.row>*{flex:1;min-width:0}
-.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#0d1520;border:1px solid var(--line);border-radius:9px;padding:10px}.stat strong{display:block;font-size:16px}.stat span{font-size:11px;color:var(--muted)}
-.note{color:var(--muted);font-size:12px}.status{font-size:12px;color:var(--accent);min-height:18px;margin-top:10px}.warning{color:var(--warn)}
-.source-video{width:100%;max-height:180px;background:#05080d;border-radius:8px;margin-top:8px}
-#videoWrap{display:none}#videoWrap.visible{display:block}
-footer{padding:0 24px 20px;color:var(--muted);font-size:11px;max-width:1600px;margin:auto}
-@media(max-width:900px){main{grid-template-columns:1fr}.viewer{min-height:55vh}.side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.side .card:first-child{grid-column:1/-1}}
-@media(max-width:580px){header{padding:0 14px}.tag{display:none}main{padding:8px;gap:8px}.side{display:flex}.viewer{min-height:420px}}
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #14161b; font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  #canvas-wrap { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  .panel {
+    position: fixed; background: rgba(22, 24, 30, 0.92); border: 1px solid #2d313c;
+    border-radius: 10px; color: #e6e8ee; padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+  }
+  #top-left { top: 14px; left: 14px; width: 280px; }
+  #top-right { top: 14px; right: 14px; width: 220px; }
+  #top-left h1 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+  #scale-banner {
+    font-size: 11.5px; line-height: 1.4; padding: 8px; border-radius: 6px; margin-bottom: 10px;
+    background: #3a2a10; border: 1px solid #7a5a1a; color: #ffcf7a;
+  }
+  .row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  button {
+    background: #262a34; color: #e6e8ee; border: 1px solid #3a3f4b; border-radius: 6px;
+    padding: 6px 10px; font-size: 12.5px; cursor: pointer;
+  }
+  button:hover { background: #30353f; }
+  button.active { background: #3b6fe0; border-color: #3b6fe0; color: white; }
+  #transform-readout { font-size: 11px; line-height: 1.6; color: #a8adba; white-space: pre; margin-top: 6px; }
+  label.file-btn { display: inline-block; }
+  input[type=file] { display: none; }
+
+  #bottom-left { bottom: 14px; left: 14px; width: 420px; }
+  #edit-log { font-size: 12px; max-height: 110px; overflow-y: auto; margin-top: 8px; color: #c3c7d1; }
+  #edit-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
+  #edit-log .err { color: #ff8080; }
+  #instruction-row { display: flex; gap: 6px; }
+  #instruction-row input[type=text] {
+    flex: 1; background: #1b1e25; border: 1px solid #3a3f4b; border-radius: 6px;
+    color: #e6e8ee; padding: 8px; font-size: 13px;
+  }
+  #status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: #777; }
+  #status-dot.ok { background: #3ed07e; }
+  #status-dot.bad { background: #ff5c5c; }
 </style>
-<script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
-</script>
 </head>
 <body>
-<header><div class="brand">WORLD<span>KIT</span> <span style="color:#eaf1fb;font-weight:500">/ Object Workbench</span></div><div class="tag">HACKATHON BUILD · INTERACTIVE MESH PROOF</div></header>
-<main>
-<section class="viewer">
-<canvas id="stage"></canvas>
-<div class="overlay"><span class="pill" id="meshPill">NO MODEL LOADED</span><span class="pill">ORBIT · PAN · ZOOM</span></div>
-<div class="empty" id="empty"><div class="empty-card"><h2>Bring a real world object into the workbench.</h2><p>Load the generated GLB to inspect it from every angle, apply a real transform, then export the edited model.</p></div></div>
-</section>
-<aside class="side">
-<section class="card">
-<h2>01 / Load evidence</h2>
-<label for="meshFile">Reconstructed mesh (.glb)</label><input id="meshFile" type="file" accept=".glb,model/gltf-binary">
-<div style="height:12px"></div><label for="reportFile">Pipeline report (.json, optional)</label><input id="reportFile" type="file" accept=".json,application/json">
-<div id="videoWrap"><label style="margin-top:12px">Source footage</label><video id="sourceVideo" class="source-video" controls></video></div>
-<div style="height:12px"></div><label for="videoFile">Source video (optional)</label><input id="videoFile" type="file" accept="video/*">
-<div id="loadStatus" class="status">Waiting for a GLB file.</div>
-</section>
-<section class="card">
-<h2>02 / Edit the actual scene object</h2>
-<label for="mode">Transform tool</label><select id="mode"><option value="translate">Move</option><option value="rotate">Rotate</option><option value="scale">Scale</option></select>
-<div class="row" style="margin-top:10px"><button id="resetBtn" disabled>Reset transform</button><button id="exportBtn" class="primary" disabled>Export edited GLB</button></div>
-<p class="note" style="margin:10px 0 0">Use the gizmo in the viewport. Changes apply to the loaded model transform and are included in the exported GLB.</p>
-<div id="editStatus" class="status">Load a model to enable editing.</div>
-</section>
-<section class="card">
-<h2>03 / Measured mesh facts</h2>
-<div class="statgrid">
-<div class="stat"><strong id="vertices">—</strong><span>Vertices</span></div>
-<div class="stat"><strong id="faces">—</strong><span>Triangles</span></div>
-<div class="stat"><strong id="dims">—</strong><span>Local dimensions</span></div>
-<div class="stat"><strong id="scale">1.00×</strong><span>Current scale</span></div>
-</div>
-<div id="provenance" class="note" style="margin-top:12px">Backend provenance not loaded.</div>
-</section>
-<section class="card">
-<h2>Workflow status</h2>
-<p class="note">Verified today: the project report says Hunyuan3D-2 generated the mug mesh. SAM 3.1 supplied the object mask. The hosted reconstruction model is not a Meta model.</p>
-<p class="note warning">Simulation is not claimed here: a single reconstructed object is not yet a reconstructed environment with validated collision geometry.</p>
-</section>
-</aside>
-</main>
-<footer>WorldKit proof-of-workbench · Mesh edits and export run in your browser. This viewer does not claim engineering accuracy, print readiness, or a completed simulation.</footer>
-<script type="module">
-import * as THREE from 'three';
-import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-import {TransformControls} from 'three/addons/controls/TransformControls.js';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+<div id="canvas-wrap"></div>
 
-const canvas=document.querySelector('#stage');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);
-renderer.outputColorSpace=THREE.SRGBColorSpace;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.1;
-const scene=new THREE.Scene();scene.background=new THREE.Color('#0d1522');
-const camera=new THREE.PerspectiveCamera(45,1,.01,10000);camera.position.set(2.8,2.2,3.4);
-const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
-scene.add(new THREE.HemisphereLight(0xddeaff,0x263447,2));
-const key=new THREE.DirectionalLight(0xffffff,3);key.position.set(4,6,4);scene.add(key);
-const fill=new THREE.DirectionalLight(0x76e0c0,1.2);fill.position.set(-4,2,-3);scene.add(fill);
-const grid=new THREE.GridHelper(10,20,0x3a526b,0x203247);scene.add(grid);
-const axes=new THREE.AxesHelper(.5);scene.add(axes);
-const transform=new TransformControls(camera,renderer.domElement);transform.setMode('translate');scene.add(transform.getHelper());
-transform.addEventListener('dragging-changed',e=>{controls.enabled=!e.value});
-transform.addEventListener('change',()=>updateStats());
-let root=null,original=null,meshName='model.glb',sourceUrl=null;
-const $=id=>document.getElementById(id);
-function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
-window.addEventListener('resize',resize);
-function frameObject(obj){const box=new THREE.Box3().setFromObject(obj);if(box.isEmpty())return;const size=box.getSize(new THREE.Vector3());const center=box.getCenter(new THREE.Vector3());obj.position.sub(center);const max=Math.max(size.x,size.y,size.z)||1;camera.position.set(max*1.7,max*1.25,max*1.9);camera.near=Math.max(max/1000,.001);camera.far=max*100;camera.updateProjectionMatrix();controls.target.set(0,0,0);controls.update();grid.scale.setScalar(Math.max(max/5,1));grid.position.y=-size.y/2}
-function updateStats(){
- if(!root)return;
- let vertices=0,faces=0;
- root.traverse(o=>{if(o.isMesh&&o.geometry){const g=o.geometry;vertices+=g.attributes.position?.count||0;faces+=g.index?g.index.count/3:(g.attributes.position?.count||0)/3}});
- $('vertices').textContent=vertices.toLocaleString();$('faces').textContent=Math.round(faces).toLocaleString();
- const b=new THREE.Box3().setFromObject(root),s=b.getSize(new THREE.Vector3());
- $('dims').textContent=[s.x,s.y,s.z].map(v=>v.toFixed(3)).join(' × ');
- $('scale').textContent=root.scale.x.toFixed(2)+'×';
+<div id="top-left" class="panel">
+  <h1>WorldKit Viewer</h1>
+  <div id="scale-banner">⚠ Scale is NOT physically calibrated. This mesh's size comes from a
+    placeholder estimate (printprep default_fallback, 10&nbsp;cm), not a real measurement.
+    Numbers below are consistent within this scene, not guaranteed physical centimeters.</div>
+  <div class="row">
+    <button id="mode-translate" class="active">Move (W)</button>
+    <button id="mode-rotate">Rotate (E)</button>
+    <button id="mode-scale">Scale (R)</button>
+  </div>
+  <div class="row">
+    <button id="btn-export">Export GLB</button>
+    <label class="file-btn"><button id="btn-load-label" type="button">Load GLB</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
+    <button id="btn-reset">Reset view</button>
+    <button id="btn-reset-transform">Reset transform</button>
+  </div>
+  <div id="transform-readout">loading…</div>
+</div>
+
+<div id="top-right" class="panel">
+  <div class="row" style="margin-bottom:6px;">
+    <button id="btn-sim-toggle">Enable collision probe</button>
+  </div>
+  <div id="sim-readout" style="font-size:11px; line-height:1.6; color:#a8adba; white-space:pre; display:none;">off</div>
+  <div id="sim-hint" style="font-size:11px; color:#6b7080; display:none; margin-top:4px;">WASD move · Q/E down/up</div>
+</div>
+
+<div id="bottom-left" class="panel">
+  <div><span id="status-dot"></span><span id="status-text">checking Muse Spark…</span></div>
+  <div id="instruction-row">
+    <input id="instruction-input" type="text" placeholder='e.g. "move it 10 cm to the left"' />
+    <button id="btn-send">Apply</button>
+  </div>
+  <div id="edit-log"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
 }
-function enableModel(obj,name){
- if(root){transform.detach();scene.remove(root)}
- root=obj;meshName=name;root.updateMatrixWorld(true);scene.add(root);frameObject(root);transform.attach(root);
- $('empty').classList.add('hidden');$('meshPill').textContent=name.toUpperCase();$('resetBtn').disabled=false;$('exportBtn').disabled=false;
- $('loadStatus').textContent='Loaded mesh into the viewer.';$('editStatus').textContent='Editing enabled. Drag the gizmo or choose a tool.';updateStats();
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+
+// --- Scale convention ----------------------------------------------------
+// The bundled sample (assets/sample_mug.glb) is the RAW Hunyuan3D-2 output,
+// never run through printprep (which also re-orients/re-scales the mesh --
+// see the camera.up comment above for why this viewer does NOT reuse
+// printprep's post-reorientation Z-as-height convention). We display
+// distances using an analogous placeholder: the object's bounding-box
+// Y-extent (three.js/glTF's own "up" axis) is treated as if it were
+// PLACEHOLDER_HEIGHT_CM centimeters. This is NOT a measurement -- see the
+// on-screen banner and CLAUDE.md. If a future mesh carries a real measured
+// height, set CALIBRATED = true and REAL_HEIGHT_CM accordingly.
+const PLACEHOLDER_HEIGHT_CM = 10.0;
+const CALIBRATED = false;
+let cmPerSceneUnit = 1.0; // recomputed once the model loads, from its real bounding box
+
+// --- Renderer / scene / camera -------------------------------------------
+const wrap = document.getElementById("canvas-wrap");
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+wrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14161b);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000);
+camera.position.set(2.5, 2, 2.5);
+// glTF's spec mandates Y-up vertex data from a compliant exporter, and
+// three.js/GridHelper both default to Y-up -- tried overriding to Z-up here
+// (reasoning from printprep.py's scale_to_height, which treats extents[2]
+// as "height") and it was wrong: visually confirmed via screenshot that the
+// mesh rendered correctly (upright, sensible silhouette) under the
+// DEFAULT Y-up setup, and compute_stable_poses-based reorientation (same
+// method printprep.orient_for_printing uses) made it WORSE, not better --
+// printprep's own correct-looking result depended on also having already
+// added a flat base before reorienting, which this raw sample doesn't have.
+// Left as three.js's default Y-up; do not reintroduce a Z-up override
+// without re-verifying with a screenshot first.
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.2));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
+dirLight.position.set(3, 5, 2);
+scene.add(dirLight);
+
+const grid = new THREE.GridHelper(10, 20, 0x3a3f4b, 0x24272f);
+scene.add(grid);
+
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+
+// modelGroup is the stable object we attach TransformControls to; its
+// single child is whatever GLTF scene is currently loaded, so "load GLB"
+// can swap content without re-wiring any controls.
+const modelGroup = new THREE.Group();
+scene.add(modelGroup);
+
+const gizmo = new TransformControls(camera, renderer.domElement);
+gizmo.addEventListener("dragging-changed", (e) => { orbit.enabled = !e.value; });
+gizmo.addEventListener("change", updateReadout);
+scene.add(gizmo.getHelper ? gizmo.getHelper() : gizmo);
+gizmo.attach(modelGroup);
+
+// --- Loading ---------------------------------------------------------------
+const loader = new GLTFLoader();
+
+function frameCameraOn(object3d) {
+  const box = new THREE.Box3().setFromObject(object3d);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+  const radius = Math.max(size.length() / 2, 1e-4);
+  const dist = radius / Math.sin((camera.fov * Math.PI) / 360) * 1.3;
+  const dir = new THREE.Vector3(1, 0.8, 1).normalize();
+  camera.position.copy(center.clone().add(dir.multiplyScalar(dist)));
+  orbit.target.copy(center);
+  orbit.update();
+  return { size, center };
 }
-$('meshFile').addEventListener('change',async e=>{
- const file=e.target.files?.[0];if(!file)return;
- $('loadStatus').textContent='Parsing GLB…';$('loadStatus').classList.remove('warning');
- try{
-  const data=await file.arrayBuffer();const gltf=await new GLTFLoader().parseAsync(data,'');
-  const obj=gltf.scene||gltf.scenes?.[0];if(!obj)throw new Error('GLB contains no scene');
-  obj.name=file.name;original={position:obj.position.clone(),rotation:obj.rotation.clone(),scale:obj.scale.clone()};
-  enableModel(obj,file.name);
- }catch(err){$('loadStatus').textContent='Could not load GLB: '+err.message;$('loadStatus').classList.add('warning')}
+
+function clearModelGroupChildren() {
+  while (modelGroup.children.length) modelGroup.remove(modelGroup.children[0]);
+  modelGroup.position.set(0, 0, 0);
+  modelGroup.rotation.set(0, 0, 0);
+  modelGroup.scale.set(1, 1, 1);
+}
+
+window.__sceneReady = false;
+window.__lastLoadError = null;
+
+function loadGLBFromArrayBuffer(arrayBuffer, label) {
+  return new Promise((resolve, reject) => {
+    loader.parse(
+      arrayBuffer,
+      "",
+      (gltf) => {
+        clearModelGroupChildren();
+        modelGroup.add(gltf.scene);
+        const { size } = frameCameraOn(modelGroup);
+        cmPerSceneUnit = CALIBRATED ? cmPerSceneUnit : PLACEHOLDER_HEIGHT_CM / Math.max(size.y, 1e-6);
+        window.__sceneReady = true;
+        logEntry(`Loaded ${label} (bbox ${size.x.toFixed(3)} x ${size.y.toFixed(3)} x ${size.z.toFixed(3)} scene units)`);
+        updateReadout();
+        resolve(gltf);
+      },
+      (err) => { window.__lastLoadError = String(err); reject(err); }
+    );
+  });
+}
+
+function loadGLBFromURL(url, label) {
+  return fetch(url)
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${url}`); return r.arrayBuffer(); })
+    .then((buf) => loadGLBFromArrayBuffer(buf, label))
+    .catch((err) => { window.__lastLoadError = String(err); logEntry(`Failed to load ${label}: ${err}`, true); });
+}
+
+loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
+
+// --- Gizmo mode buttons ----------------------------------------------------
+const modeButtons = {
+  translate: document.getElementById("mode-translate"),
+  rotate: document.getElementById("mode-rotate"),
+  scale: document.getElementById("mode-scale"),
+};
+function setGizmoMode(mode) {
+  gizmo.setMode(mode);
+  for (const [m, btn] of Object.entries(modeButtons)) btn.classList.toggle("active", m === mode);
+}
+modeButtons.translate.onclick = () => setGizmoMode("translate");
+modeButtons.rotate.onclick = () => setGizmoMode("rotate");
+modeButtons.scale.onclick = () => setGizmoMode("scale");
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || simEnabled) return; // WASD drives the probe while the collision sim is on
+  if (e.key === "w") setGizmoMode("translate");
+  if (e.key === "e") setGizmoMode("rotate");
+  if (e.key === "r") setGizmoMode("scale");
 });
-$('mode').addEventListener('change',()=>transform.setMode($('mode').value));
-$('resetBtn').addEventListener('click',()=>{if(!root||!original)return;root.position.copy(original.position);root.rotation.copy(original.rotation);root.scale.copy(original.scale);root.updateMatrixWorld(true);updateStats();$('editStatus').textContent='Transform reset to the loaded model state.'});
-$('exportBtn').addEventListener('click',async()=>{
- if(!root)return;$('editStatus').textContent='Exporting edited scene…';
- try{
-  const exporter=new GLTFExporter();const result=await exporter.parseAsync(root,{binary:true,onlyVisible:true});
-  const blob=new Blob([result],{type:'model/gltf-binary'});const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=meshName.replace(/\.glb$/i,'')+'_worldkit_edited.glb';a.click();URL.revokeObjectURL(url);
-  $('editStatus').textContent='Edited GLB exported successfully.';
- }catch(err){$('editStatus').textContent='Export failed: '+err.message;$('editStatus').classList.add('warning')}
+window.__setGizmoMode = setGizmoMode;
+
+// --- Transform readout / test hook -----------------------------------------
+function currentTransform() {
+  const p = modelGroup.position, r = modelGroup.rotation, s = modelGroup.scale;
+  return {
+    position_units: [p.x, p.y, p.z],
+    position_cm: [p.x * cmPerSceneUnit, p.y * cmPerSceneUnit, p.z * cmPerSceneUnit],
+    rotation_deg: [THREE.MathUtils.radToDeg(r.x), THREE.MathUtils.radToDeg(r.y), THREE.MathUtils.radToDeg(r.z)],
+    scale: [s.x, s.y, s.z],
+    cm_per_scene_unit: cmPerSceneUnit,
+    calibrated: CALIBRATED,
+  };
+}
+function updateReadout() {
+  const el = document.getElementById("transform-readout");
+  if (!el) return; // guards against the TransformControls "change" event firing during initial attach(), before this element is queried
+  const t = currentTransform();
+  el.textContent =
+    `pos (units): ${t.position_units.map((v) => v.toFixed(3)).join(", ")}\n` +
+    `pos (~cm):   ${t.position_cm.map((v) => v.toFixed(2)).join(", ")}\n` +
+    `rot (deg):   ${t.rotation_deg.map((v) => v.toFixed(1)).join(", ")}\n` +
+    `scale:       ${t.scale.map((v) => v.toFixed(3)).join(", ")}`;
+}
+window.__getTransform = currentTransform;
+
+// --- Apply a validated EditTransform (from /api/edit or a manual call) -----
+function applyEditTransform(t) {
+  const dxu = t.translate_cm[0] / cmPerSceneUnit;
+  const dyu = t.translate_cm[1] / cmPerSceneUnit;
+  const dzu = t.translate_cm[2] / cmPerSceneUnit;
+  modelGroup.position.x += dxu;
+  modelGroup.position.y += dyu;
+  modelGroup.position.z += dzu;
+  modelGroup.rotation.x += THREE.MathUtils.degToRad(t.rotate_deg[0]);
+  modelGroup.rotation.y += THREE.MathUtils.degToRad(t.rotate_deg[1]);
+  modelGroup.rotation.z += THREE.MathUtils.degToRad(t.rotate_deg[2]);
+  modelGroup.scale.multiplyScalar(t.scale_factor);
+  updateReadout();
+}
+window.__applyEdit = applyEditTransform;
+
+// --- Export / reload ---------------------------------------------------
+const exporter = new GLTFExporter();
+window.__lastExportedGLB = null;
+
+function exportGLB() {
+  return new Promise((resolve, reject) => {
+    exporter.parse(
+      modelGroup,
+      (result) => {
+        const bytes = result instanceof ArrayBuffer ? result : new TextEncoder().encode(JSON.stringify(result));
+        window.__lastExportedGLB = bytes;
+        const blob = new Blob([bytes], { type: "model/gltf-binary" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "worldkit_export.glb";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        resolve(bytes);
+      },
+      (err) => reject(err),
+      { binary: true }
+    );
+  });
+}
+document.getElementById("btn-export").onclick = () => exportGLB().then(() => logEntry("Exported GLB"));
+window.__exportGLB = exportGLB;
+
+document.getElementById("btn-load-label").onclick = () => document.getElementById("file-load").click();
+document.getElementById("file-load").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  file.arrayBuffer().then((buf) => loadGLBFromArrayBuffer(buf, file.name));
 });
-$('reportFile').addEventListener('change',async e=>{
- const f=e.target.files?.[0];if(!f)return;
- try{const r=JSON.parse(await f.text());const backend=r.mesh_method||r.mesh_backend||'not recorded';const segment=r.segment_source||'not recorded';const ready=r.print_ready===true?'yes':r.print_ready===false?'no':'not recorded';$('provenance').textContent='Mesh: '+backend+' · Segmentation: '+segment+' · Print ready: '+ready}
- catch(err){$('provenance').textContent='Report could not be parsed: '+err.message}
+window.__loadGLBFromArrayBuffer = loadGLBFromArrayBuffer;
+
+document.getElementById("btn-reset").onclick = () => frameCameraOn(modelGroup);
+
+function resetTransform() {
+  modelGroup.position.set(0, 0, 0);
+  modelGroup.rotation.set(0, 0, 0);
+  modelGroup.scale.set(1, 1, 1);
+  updateReadout();
+}
+document.getElementById("btn-reset-transform").onclick = () => { resetTransform(); logEntry("Reset transform to identity"); };
+window.__resetTransform = resetTransform;
+
+// --- Natural-language edit panel -----------------------------------------
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+const editLog = document.getElementById("edit-log");
+
+function logEntry(text, isError) {
+  const div = document.createElement("div");
+  div.className = "entry" + (isError ? " err" : "");
+  div.textContent = text;
+  editLog.prepend(div);
+}
+
+fetch("/api/health")
+  .then((r) => r.json())
+  .then((data) => {
+    if (data.muse_spark_key_configured) {
+      statusDot.className = "ok";
+      statusText.textContent = "Muse Spark ready";
+    } else {
+      statusDot.className = "bad";
+      statusText.textContent = "Muse Spark unavailable (no key) — use the Move/Rotate/Scale gizmo instead";
+    }
+  })
+  .catch(() => {
+    statusDot.className = "bad";
+    statusText.textContent = "Backend unreachable — gizmo still works, AI edits won't";
+  });
+
+function sendInstruction() {
+  const input = document.getElementById("instruction-input");
+  const instruction = input.value.trim();
+  if (!instruction) return;
+  logEntry(`→ "${instruction}"`);
+  fetch("/api/edit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instruction }),
+  })
+    .then((r) => r.json().then((data) => ({ status: r.status, data })))
+    .then(({ status, data }) => {
+      if (status !== 200 || !data.ok) {
+        logEntry(`✗ ${data.error_type || "error"}: ${data.error || "unknown error"}`, true);
+        return;
+      }
+      applyEditTransform(data.transform);
+      logEntry(`✓ ${data.transform.explanation}`);
+      input.value = "";
+    })
+    .catch((err) => logEntry(`✗ request failed: ${err}`, true));
+}
+document.getElementById("btn-send").onclick = sendInstruction;
+document.getElementById("instruction-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendInstruction();
 });
-$('videoFile').addEventListener('change',e=>{
- const f=e.target.files?.[0];if(!f)return;if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl=URL.createObjectURL(f);$('sourceVideo').src=sourceUrl;$('videoWrap').classList.add('visible')
+window.__sendInstruction = sendInstruction;
+
+// --- Collision-aware probe: real raycasting against the loaded mesh --------
+// A small sphere the user drives with WASD/QE. Movement is collision-aware:
+// each step casts a ray from the probe's current position toward the
+// requested direction and checks for a REAL intersection with the actual
+// loaded mesh's triangles (THREE.Raycaster.intersectObject(modelGroup,
+// true) -- genuine BufferGeometry ray/triangle tests, not a bounding-box or
+// distance-heuristic shortcut). If the ray hits before the requested step
+// distance, the probe stops just short of the surface instead of passing
+// through it. This demonstrates real collision detection against
+// reconstructed geometry -- not decorative animation, and not physics
+// (no gravity/forces/momentum are simulated, only move-or-blocked).
+const PROBE_RADIUS = 0.05;
+const probeGeo = new THREE.SphereGeometry(PROBE_RADIUS, 16, 12);
+const probeMat = new THREE.MeshStandardMaterial({ color: 0xff5050, emissive: 0x330000 });
+const probe = new THREE.Mesh(probeGeo, probeMat);
+probe.visible = false;
+scene.add(probe);
+
+const raycaster = new THREE.Raycaster();
+let simEnabled = false;
+let lastSimResult = { blocked: false, hitDistance: null };
+
+function simSetEnabled(enabled) {
+  simEnabled = enabled;
+  probe.visible = enabled;
+  document.getElementById("sim-readout").style.display = enabled ? "block" : "none";
+  document.getElementById("sim-hint").style.display = enabled ? "block" : "none";
+  document.getElementById("btn-sim-toggle").textContent = enabled ? "Disable collision probe" : "Enable collision probe";
+  if (enabled) {
+    const box = new THREE.Box3().setFromObject(modelGroup);
+    probe.position.set(box.max.x + 0.3, (box.min.y + box.max.y) / 2, 0);
+    updateSimReadout();
+  }
+}
+document.getElementById("btn-sim-toggle").onclick = () => simSetEnabled(!simEnabled);
+window.__simSetEnabled = simSetEnabled;
+window.__simIsEnabled = () => simEnabled;
+
+function updateSimReadout() {
+  const el = document.getElementById("sim-readout");
+  if (!el) return;
+  const p = probe.position;
+  el.textContent =
+    `probe (units): ${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}\n` +
+    `status: ${lastSimResult.blocked ? "⛔ COLLISION" : "✓ clear"}` +
+    (lastSimResult.hitDistance != null ? ` (${lastSimResult.hitDistance.toFixed(3)} units ahead)` : "");
+}
+
+// Moves the probe by (dx, dy, dz) in world units, stopping short of any
+// real mesh surface in that direction. Returns {moved, blocked, hitDistance}.
+// Exposed on window so both the keyboard handler and the automated test use
+// the exact same, real collision logic.
+function simMove(dx, dy, dz) {
+  const delta = new THREE.Vector3(dx, dy, dz);
+  const dist = delta.length();
+  if (dist < 1e-9) return { moved: false, blocked: false, hitDistance: null };
+  const dir = delta.clone().normalize();
+
+  raycaster.set(probe.position, dir);
+  raycaster.far = dist + PROBE_RADIUS;
+  raycaster.near = 0;
+  const hits = raycaster.intersectObject(modelGroup, true);
+
+  let blocked = false;
+  let hitDistance = null;
+  let travel = dist;
+  if (hits.length > 0 && hits[0].distance < dist + PROBE_RADIUS) {
+    hitDistance = hits[0].distance;
+    travel = Math.max(0, hits[0].distance - PROBE_RADIUS);
+    blocked = true;
+  }
+
+  const actualMove = dir.clone().multiplyScalar(travel);
+  const nextPos = probe.position.clone().add(actualMove);
+  nextPos.y = Math.max(nextPos.y, PROBE_RADIUS); // don't sink through the floor grid (y=0 plane)
+  probe.position.copy(nextPos);
+
+  lastSimResult = { blocked, hitDistance };
+  updateSimReadout();
+  return { moved: travel > 1e-6, blocked, hitDistance };
+}
+window.__simMove = simMove;
+window.__simProbePosition = () => probe.position.toArray();
+
+const SIM_STEP = 0.12;
+const simKeys = { w: [0, 0, -1], s: [0, 0, 1], a: [-1, 0, 0], d: [1, 0, 0], q: [0, -1, 0], e: [0, 1, 0] };
+window.addEventListener("keydown", (ev) => {
+  if (!simEnabled || ev.target.tagName === "INPUT") return;
+  const k = ev.key.toLowerCase();
+  if (simKeys[k]) {
+    const [ux, uy, uz] = simKeys[k];
+    simMove(ux * SIM_STEP, uy * SIM_STEP, uz * SIM_STEP);
+  }
 });
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
-resize();animate();
+
+// --- Render loop -----------------------------------------------------------
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  orbit.update();
+  renderer.render(scene, camera);
+}
+animate();
 </script>
 </body>
 </html>
