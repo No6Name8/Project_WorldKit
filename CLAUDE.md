@@ -72,13 +72,31 @@ tests passing against synthetic data. Modal is authenticated (workspace
 `no6name8`) and confirmed reachable with a live remote call. `pipeline/.env`
 exists with a real `MODEL_API_KEY`, and the key loads correctly.
 
-**Meta API auth result:** the key itself is valid (not a 401), but the team
-has **no billing configured**: a real `muse-spark-1.3` call returns
-**HTTP 402 `billing_not_configured`**, pointing to
-`https://dev.meta.ai/billing/?team_id=4497333240582980`. Until that's
-resolved, every real Meta API call (Muse Spark, SAM 3.1) will fail the same
-way, and the pipeline's `MetaAPIUnavailable` fallback path (local
-`FALLBACK_`-tagged detection/segmentation) will trigger automatically.
+**Meta API: BILLING RESOLVED, confirmed working (2026-10-27).** The prior
+HTTP 402 `billing_not_configured` block is gone. One minimal
+`muse-spark-1.3` call via the existing `meta_api.get_client()` (no pipeline
+code changed): **HTTP 200**, latency 2.32s, usage
+`{prompt_tokens: 13, completion_tokens: 5, total_tokens: 18}` (of the 5
+completion tokens, 3 were internal reasoning tokens, leaving none for
+visible text at `max_tokens=5` -- content came back empty; not an error, a
+token-budget artifact of a deliberately tiny test call). The
+`MetaAPIUnavailable` fallback path will no longer trigger for billing
+reasons going forward -- real Muse Spark/SAM 3.1 calls should now work in
+the actual pipeline.
+
+**Baseten (new, hackathon offer) also verified working.** One minimal call
+to `https://inference.baseten.co/v1`, model `meta-models/muse-spark-open-1026`,
+key from `BASETEN_API_KEY` (not yet used anywhere in the pipeline -- this
+was a standalone connectivity check only): **HTTP 200**, latency 1.43s,
+usage `{prompt_tokens: 150, completion_tokens: 5, total_tokens: 155,
+cached_tokens: 128}` (same empty-content-at-max_tokens=5 artifact as
+above). No billing/credit-balance endpoint is documented for either
+provider -- Meta only exposes a web dashboard, Baseten's docs don't mention
+one at all; neither was checked via a paid call.
+
+Both `MODEL_API_KEY` and `BASETEN_API_KEY` confirmed present and loading
+correctly in `pipeline/.env` (lengths checked, values never printed, logged,
+or committed).
 
 **Real video now in `pipeline/samples/`:** `WhatsApp Video 2026-10-26 at
 9.32.38 PM.mp4` (16s, 480x856, h264). Ran the local-only stages against it
@@ -165,9 +183,11 @@ is no automatic real-world scale recovery for this video at all.**
   real Meta API/SAM 3.1 output.
 
 **Known issues / next steps:**
-1. Billing needs resolving (`https://dev.meta.ai/billing/?team_id=4497333240582980`)
-   before any real Meta API call (Muse Spark naming, SAM 3.1 masking) can
-   succeed.
+1. ~~Billing needs resolving~~ **RESOLVED 2026-10-27** -- a real Meta API call
+   now succeeds (HTTP 200). The actual pipeline (`detect.py`/`segment.py`
+   real paths) has not yet been run against this -- only a standalone
+   minimal test call was made, per this round's safety constraints (no
+   pipeline changes, no repeated calls).
 2. The fallback local mask now isolates the mug from the table reasonably
    well (GrabCut refinement), but still excludes its white rim/interior --
    still not a real stand-in for SAM 3.1 in the actual demo.
