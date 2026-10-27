@@ -13,7 +13,11 @@ textured "object" patch well inside it.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
+import pytest
+from PIL import Image
 
 from worldkit import segment
 
@@ -127,3 +131,164 @@ def test_place_mask_on_canvas_falls_back_to_stretch_without_a_box():
 
     assert canvas.shape == (100, 100)
     assert canvas.all()  # an all-True small mask stretches to an all-True canvas
+
+
+# --- real-result cache: reuse a valid existing SAM 3.1 result for the same
+# exact image (by content hash), never for a different image, a different
+# concept, or an approximate fallback result. No network/API calls here --
+# everything is seeded/read directly against a temp cache dir.
+
+
+@pytest.fixture
+def two_distinct_images(tmp_path: Path) -> tuple[Path, Path]:
+    img_a = Image.fromarray(np.zeros((20, 20, 3), dtype="uint8"))
+    img_b = Image.fromarray(np.full((20, 20, 3), 255, dtype="uint8"))
+    path_a, path_b = tmp_path / "a.png", tmp_path / "b.png"
+    img_a.save(path_a)
+    img_b.save(path_b)
+    return path_a, path_b
+
+
+@pytest.fixture
+def isolated_cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(segment, "_CACHE_DIR", cache_dir)
+    return cache_dir
+
+
+def test_cache_roundtrip_hits_on_same_image_and_concept(
+    two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path
+):
+    image_path, _ = two_distinct_images
+    mask = np.ones((10, 10), dtype=bool)
+    real_result = segment.SegmentationMaskResult(
+        concept="mug", mask=mask, box=(1.0, 2.0, 11.0, 12.0), foreground_pixels=100, used_fallback=False
+    )
+
+    segment._store_cached_segmentation(image_path, "mug", real_result)
+    cached = segment._load_cached_segmentation(image_path, "mug")
+
+    assert cached is not None
+    assert cached.from_cache is True
+    assert cached.used_fallback is False
+    assert np.array_equal(cached.mask, mask)
+    assert cached.box == (1.0, 2.0, 11.0, 12.0)
+    assert cached.foreground_pixels == 100
+
+
+def test_cache_misses_on_different_image_content(
+    two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path
+):
+    image_a, image_b = two_distinct_images
+    mask = np.ones((10, 10), dtype=bool)
+    real_result = segment.SegmentationMaskResult(
+        concept="mug", mask=mask, box=None, foreground_pixels=100, used_fallback=False
+    )
+
+    segment._store_cached_segmentation(image_a, "mug", real_result)
+
+    # Different image content (even if a caller passed the "wrong" file by
+    # mistake, or a video's frame changed) must never be served image_a's
+    # cached mask.
+    assert segment._load_cached_segmentation(image_b, "mug") is None
+
+
+def test_cache_misses_on_different_concept(two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path):
+    image_path, _ = two_distinct_images
+    mask = np.ones((10, 10), dtype=bool)
+    real_result = segment.SegmentationMaskResult(
+        concept="mug", mask=mask, box=None, foreground_pixels=100, used_fallback=False
+    )
+
+    segment._store_cached_segmentation(image_path, "mug", real_result)
+
+    assert segment._load_cached_segmentation(image_path, "coffee cup") is None
+
+
+def test_cache_never_stores_fallback_results(two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path):
+    image_path, _ = two_distinct_images
+    mask = np.ones((10, 10), dtype=bool)
+    fallback_result = segment.SegmentationMaskResult(
+        concept="(fallback: whole foreground, no concept prompt)",
+        mask=mask,
+        box=None,
+        foreground_pixels=100,
+        used_fallback=True,
+    )
+
+    segment._store_cached_segmentation(image_path, "mug", fallback_result)
+
+    assert not isolated_cache_dir.exists() or not any(isolated_cache_dir.iterdir())
+    assert segment._load_cached_segmentation(image_path, "mug") is None
+
+
+def test_cache_rejects_corrupted_metadata(two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path):
+    image_path, _ = two_distinct_images
+    mask = np.ones((10, 10), dtype=bool)
+    real_result = segment.SegmentationMaskResult(
+        concept="mug", mask=mask, box=None, foreground_pixels=100, used_fallback=False
+    )
+    segment._store_cached_segmentation(image_path, "mug", real_result)
+
+    # Tamper with the cached metadata's recorded hash -- simulates a hand-
+    # edited or corrupted cache entry. Must not be trusted even though the
+    # filename itself still matches.
+    image_hash = segment._image_sha256(image_path)
+    meta_path, _ = segment._cache_paths(image_hash, "mug")
+    tampered = meta_path.read_text().replace(image_hash, "0" * 64)
+    meta_path.write_text(tampered)
+
+    assert segment._load_cached_segmentation(image_path, "mug") is None
+
+
+def test_segment_concept_uses_cache_without_any_network_call(
+    two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path
+):
+    image_path, _ = two_distinct_images
+    mask = np.ones((10, 10), dtype=bool)
+    real_result = segment.SegmentationMaskResult(
+        concept="mug", mask=mask, box=(0.0, 0.0, 10.0, 10.0), foreground_pixels=100, used_fallback=False
+    )
+    segment._store_cached_segmentation(image_path, "mug", real_result)
+
+    # If this fell through to the real API or the local fallback, it would
+    # either hang/error on a fake 20x20 PNG with no real content, or require
+    # rembg's model -- reaching a clean, instant, correct result proves the
+    # cache path was taken, not either of those.
+    result = segment.segment_concept(image_path, "mug")
+
+    assert result.from_cache is True
+    assert result.used_fallback is False
+    assert np.array_equal(result.mask, mask)
+
+
+def test_segment_concept_cache_bypass_flag(
+    two_distinct_images: tuple[Path, Path], isolated_cache_dir: Path, monkeypatch: pytest.MonkeyPatch
+):
+    image_path, _ = two_distinct_images
+    cached_mask = np.ones((10, 10), dtype=bool)
+    real_result = segment.SegmentationMaskResult(
+        concept="mug", mask=cached_mask, box=None, foreground_pixels=100, used_fallback=False
+    )
+    segment._store_cached_segmentation(image_path, "mug", real_result)
+
+    # use_cache=False must skip the cache entirely and take the normal
+    # no-key-available path instead. Patch the name segment.py actually
+    # calls (it imported has_api_key directly, so patching worldkit.meta_api
+    # wouldn't affect it) and stub out _fallback_mask so this stays
+    # network/model-free rather than invoking real rembg.
+    monkeypatch.setattr(segment, "has_api_key", lambda: False)
+    stub_mask = np.zeros((5, 5), dtype=bool)
+    monkeypatch.setattr(
+        segment,
+        "_fallback_mask",
+        lambda path: segment.SegmentationMaskResult(
+            concept="(stub fallback)", mask=stub_mask, box=None, foreground_pixels=0, used_fallback=True
+        ),
+    )
+
+    result = segment.segment_concept(image_path, "mug", use_cache=False)
+
+    assert result.from_cache is False
+    assert result.used_fallback is True
+    assert not np.array_equal(result.mask, cached_mask)  # proves the cache was NOT used

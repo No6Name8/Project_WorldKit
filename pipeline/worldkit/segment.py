@@ -41,6 +41,10 @@ method can fix that from one frame.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
+import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,10 +72,88 @@ class SegmentationError(RuntimeError):
 @dataclass
 class SegmentationMaskResult:
     concept: str
-    mask: np.ndarray  # bool array, shape (H, W)
+    mask: np.ndarray  # bool array, shape (H, W) -- or a SAM-local crop, see box
     box: tuple[float, float, float, float] | None  # left, top, right, bottom
     foreground_pixels: int
     used_fallback: bool = False
+    from_cache: bool = False  # True if reused from a prior real SAM 3.1 result
+
+
+# --- real-result cache -------------------------------------------------------
+#
+# A real SAM 3.1 call costs money and ~3s. Once we've segmented an exact image
+# for an exact concept, there's no reason to pay for it again. Identity is
+# verified by SHA-256 of the image bytes (not filename/path), so a cache entry
+# can never be silently reused for a different frame or a different video that
+# happens to share a filename -- any byte difference is a cache miss, and the
+# normal (real-API-or-fallback) path runs as if there were no cache at all.
+# Only real (non-fallback) results are ever cached.
+
+_CACHE_DIR = Path(__file__).resolve().parent.parent / ".cache" / "sam31"
+
+
+def _image_sha256(image_path: Path) -> str:
+    return hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
+
+
+def _concept_slug(concept: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", concept.strip().lower()).strip("-")
+    return slug or "concept"
+
+
+def _cache_paths(image_hash: str, concept: str) -> tuple[Path, Path]:
+    key = f"{image_hash[:16]}_{_concept_slug(concept)}"
+    return _CACHE_DIR / f"{key}.json", _CACHE_DIR / f"{key}.npy"
+
+
+def _load_cached_segmentation(image_path: Path, concept: str) -> SegmentationMaskResult | None:
+    image_hash = _image_sha256(image_path)
+    meta_path, mask_path = _cache_paths(image_hash, concept)
+    if not (meta_path.is_file() and mask_path.is_file()):
+        return None
+    try:
+        meta = json.loads(meta_path.read_text())
+    except json.JSONDecodeError:
+        return None
+    # Identity check: the hash is already in the filename, but re-verify the
+    # recorded hash and concept inside the file too, so a hand-edited or
+    # corrupted cache entry can't be silently trusted.
+    if meta.get("image_sha256") != image_hash or meta.get("concept") != concept:
+        return None
+    mask = np.load(mask_path)
+    box = tuple(meta["box"]) if meta.get("box") is not None else None
+    return SegmentationMaskResult(
+        concept=concept,
+        mask=mask,
+        box=box,
+        foreground_pixels=meta["foreground_pixels"],
+        used_fallback=False,
+        from_cache=True,
+    )
+
+
+def _store_cached_segmentation(image_path: Path, concept: str, result: SegmentationMaskResult) -> None:
+    if result.used_fallback:
+        return  # never cache an approximate local fallback as if it were real
+    image_hash = _image_sha256(image_path)
+    meta_path, mask_path = _cache_paths(image_hash, concept)
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    np.save(mask_path, result.mask)
+    meta_path.write_text(
+        json.dumps(
+            {
+                "image_sha256": image_hash,
+                "concept": concept,
+                "source_image": str(image_path),
+                "box": list(result.box) if result.box is not None else None,
+                "foreground_pixels": result.foreground_pixels,
+                "mask_shape": list(result.mask.shape),
+                "model": SAM_MODEL,
+                "cached_at": time.time(),
+            },
+            indent=2,
+        )
+    )
 
 
 def _get_async_client() -> AsyncOpenAI:
@@ -226,15 +308,23 @@ def _fallback_mask(image_path: Path) -> SegmentationMaskResult:
 
 
 def segment_concept(
-    image_path: Path, concept: str, client: AsyncOpenAI | None = None
+    image_path: Path, concept: str, client: AsyncOpenAI | None = None, use_cache: bool = True
 ) -> SegmentationMaskResult:
     """Segment ``concept`` (a short noun phrase, e.g. 'coffee mug') in ``image_path``.
 
-    Falls back to FALLBACK_LOCAL_MASK (whole-foreground cutout, no concept
-    awareness) if the Meta API is unavailable. Raises SegmentationError if
-    SAM 3.1 is reachable but reports no mask / an error for the concept, or
-    if the fallback itself fails.
+    If a real SAM 3.1 result for this exact image (by content hash, not
+    filename) and this exact concept was already cached, reuses it instead of
+    paying for another call -- set ``from_cache=True`` on the result so
+    callers/reports can tell. Otherwise falls back to FALLBACK_LOCAL_MASK
+    (whole-foreground cutout, no concept awareness) if the Meta API is
+    unavailable. Raises SegmentationError if SAM 3.1 is reachable but reports
+    no mask / an error for the concept, or if the fallback itself fails.
     """
+    if use_cache:
+        cached = _load_cached_segmentation(image_path, concept)
+        if cached is not None:
+            return cached
+
     if not has_api_key():
         return _fallback_mask(image_path)
 
@@ -272,13 +362,16 @@ def segment_concept(
         b = matching_boxes[0]
         box = (b.left, b.top, b.right, b.bottom)
 
-    return SegmentationMaskResult(
+    final_result = SegmentationMaskResult(
         concept=concept,
         mask=arr,
         box=box,
         foreground_pixels=int(arr.sum()),
         used_fallback=False,
     )
+    if use_cache:
+        _store_cached_segmentation(image_path, concept, final_result)
+    return final_result
 
 
 def _place_mask_on_canvas(

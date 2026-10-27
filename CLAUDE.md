@@ -67,8 +67,9 @@ video → frames → Muse Spark lists objects → SAM 3.1 tracks and masks them 
 _Last updated: Object mode CLI build + API verification session._
 
 **What works:** `/pipeline` has a full `worldkit` package (frames, meta_api,
-detect, segment, Modal SAM 3D app, printprep, render, CLI) with 24/24 unit
-tests passing against synthetic data. Modal is authenticated (workspace
+detect, segment, Modal SAM 3D app, printprep, render, CLI) with 31/31 unit
+tests passing against synthetic data (`.venv\Scripts\python.exe -m pytest
+tests/ -v`). Modal is authenticated (workspace
 `no6name8`) and confirmed reachable with a live remote call. `pipeline/.env`
 exists with a real `MODEL_API_KEY`, and the key loads correctly.
 
@@ -265,3 +266,70 @@ Also unverified: whether the Modal secret `huggingface`'s token actually has
 working access to the gated `facebook/sam-3d-objects` repo (never
 download-tested) -- if not, the first run would fail after the container
 (and GPU) has already started.
+
+---
+
+**2026-10-27, later: real-SAM-3.1-result cache added; reconstruction still
+blocked externally, not attempted with a fake mesh.**
+
+**Phase 1 -- reproducible reuse of the real SAM 3.1 result (DONE, tested):**
+`segment.py` gained a content-hash-keyed cache (`segment_concept(...,
+use_cache=True)`, the default) under `pipeline/.cache/sam31/` (gitignored).
+Identity is SHA-256 of the image bytes + the concept string, re-verified
+inside the cached JSON on every load -- a different frame, a different
+video, or a different concept is always a cache miss (never silently
+served stale data); only real (non-fallback) results are ever cached.
+Seeded from the already-verified real result (no new API call): the
+existing `runs/mug_local/REAL_SAM31_mask_raw.npy` + its box, for
+`sharp_01.png` + concept "mug". Verified live: `segment_concept(sharp_01,
+"mug")` now returns in 0.002s with `from_cache=True`, `used_fallback=False`,
+identical mask -- vs. ~3s for a real API call. `object.py`'s report.json
+now also records `segment_from_cache` and `segment_source`
+("sam-3.1_live" / "sam-3.1_cached" / "fallback_local_mask") for provenance.
+`--object` override already existed and needed no change. 7 new cache
+tests (hit, miss-on-different-image, miss-on-different-concept, never
+caches fallback results, rejects tampered metadata, `segment_concept` skips
+the network on a hit, `use_cache=False` bypass) -- **31/31 tests passing**
+(`.venv\Scripts\python.exe -m pytest tests/ -v`). Also added
+`pipeline/runs/` and `pipeline/.cache/` to `.gitignore` (previously kept out
+of commits by hand, every round -- now enforced).
+
+**Phase 2 -- SAM 3D input/config verified by inspection (DONE, no GPU
+needed):** `REAL_SAM31_object_rgba.png` re-confirmed correct (480x856 RGBA,
+full-canvas, mask properly embedded in alpha at its real position -- exactly
+the format `facebookresearch/sam-3d-objects`' own `load_image`/
+`merge_image_and_mask` expects, no pre-cropping needed or done). Checkpoint/
+secret/Volume flow in `modal_app/sam3d.py` re-read end to end; matches its
+own docstring, no new defect found beyond the already-reported
+checkpoint-inside-GPU-function cost inefficiency (left as-is rather than
+refactoring untested, cost-sensitive infrastructure code right before a
+real paid run). **Quality note, not a defect:** the mug occupies only
+155x140px of the 480x856 frame (the frame itself is what SAM 3.1 segmented,
+unchanged) -- low effective resolution for the subject, worth knowing if
+reconstruction quality turns out poor.
+
+**Phase 3 -- funding/access still block launching, not re-investigated
+where already known:** Modal credit balance remains unverifiable via CLI
+(unchanged from the check above -- not repeated, per instruction). HF gated
+access for the `huggingface` Modal secret is still untested -- doing so
+needs at least a CPU-only Modal function call (no GPU), which is a real,
+if tiny, possible charge; **not run without asking first.** Confirmed no
+local GPU exists on this machine (checked earlier in the project:
+`nvidia-smi` not found). No hosted inference service offering SAM 3D
+Objects (or an equivalent) was found or assumed -- Meta Model API and
+Baseten (`muse-spark-open-1026`) host different models, confirmed in the
+prior investigation round, not re-researched here.
+
+**No reconstruction attempted. No mesh fabricated or substituted.** Phase 4
+(validate mesh, print-prep) does not apply -- its precondition ("once a
+genuine mesh exists") was never met. The earlier `TEMP_TEST_*` placeholder
+mesh from a prior round already demonstrated printprep/STL/preview work in
+isolation; it was not regenerated or re-presented as reconstruction
+progress.
+
+**Next action, in order:** (1) you confirm Modal credit balance on the
+web dashboard; (2) you approve a small Modal CPU-only call to test HF gated
+access (cost: a few seconds of CPU time, a small fraction of a cent, not
+a GPU charge); (3) only then, one controlled `reconstruct_mesh.remote()`
+call using the already-cached, already-verified `REAL_SAM31_object_rgba.png`
+as input.

@@ -44,8 +44,13 @@ pip-delete-this-directory.txt
 *.safetensors
 *.onnx
 *.bin
+*.npy
 weights/
 checkpoints/
+
+# --- Pipeline run outputs / local caches (never committed; see CLAUDE.md) ---
+pipeline/runs/
+pipeline/.cache/
 
 # --- Large media and generated 3D output ---
 *.mp4

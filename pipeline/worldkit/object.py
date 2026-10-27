@@ -110,6 +110,12 @@ def run(args: argparse.Namespace) -> dict:
 
     obj_mask_result, a4_box = _timed("segment", timings, _segment_stage)
     report["used_fallback_segment"] = obj_mask_result.used_fallback
+    report["segment_from_cache"] = obj_mask_result.from_cache
+    report["segment_source"] = (
+        "fallback_local_mask" if obj_mask_result.used_fallback
+        else "sam-3.1_cached" if obj_mask_result.from_cache
+        else "sam-3.1_live"
+    )
 
     overlay_name = "mask_overlay.png"
     overlay_path = out_dir / overlay_name
