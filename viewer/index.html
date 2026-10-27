@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WorldKit · Object Workbench</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1018;--panel:#111a27;--line:#253448;--text:#eaf1fb;--muted:#9bacc2;--accent:#76e0c0;--warn:#ffc978}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif}
+header{height:68px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:#0d1420}
+.brand{font-weight:800;font-size:18px;letter-spacing:.02em}.brand span{color:var(--accent)}.tag{color:var(--muted);font-size:12px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;padding:16px;max-width:1600px;margin:auto}
+.viewer{min-height:620px;position:relative;background:#0d1522;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
+.overlay{position:absolute;z-index:2;left:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:6px 10px;border:1px solid #33445a;border-radius:999px;background:#111a27dd;color:#c9d6e7;font-size:11px}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:32px}
+.empty-card{max-width:340px;background:#111a27e8;border:1px solid var(--line);padding:24px;border-radius:14px}
+.empty-card h2{font-size:22px;margin:0 0 8px}.empty-card p{color:var(--muted);margin:0}
+#empty.hidden{display:none}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+h1,h2,h3,p{margin-top:0}h2{font-size:15px;margin-bottom:12px}h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px}
+label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
+input[type=file],select,button{font:inherit}
+input[type=file]{width:100%;font-size:12px;color:var(--muted)}
+select,button{background:#1a2839;border:1px solid #33465e;border-radius:8px;color:var(--text);padding:9px 10px}
+button{cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#08221b;font-weight:750}
+button:disabled{opacity:.4;cursor:not-allowed}.row{display:flex;gap:8px;align-items:center}.row>*{flex:1;min-width:0}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#0d1520;border:1px solid var(--line);border-radius:9px;padding:10px}.stat strong{display:block;font-size:16px}.stat span{font-size:11px;color:var(--muted)}
+.note{color:var(--muted);font-size:12px}.status{font-size:12px;color:var(--accent);min-height:18px;margin-top:10px}.warning{color:var(--warn)}
+.source-video{width:100%;max-height:180px;background:#05080d;border-radius:8px;margin-top:8px}
+#videoWrap{display:none}#videoWrap.visible{display:block}
+footer{padding:0 24px 20px;color:var(--muted);font-size:11px;max-width:1600px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr}.viewer{min-height:55vh}.side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.side .card:first-child{grid-column:1/-1}}
+@media(max-width:580px){header{padding:0 14px}.tag{display:none}main{padding:8px;gap:8px}.side{display:flex}.viewer{min-height:420px}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<header><div class="brand">WORLD<span>KIT</span> <span style="color:#eaf1fb;font-weight:500">/ Object Workbench</span></div><div class="tag">HACKATHON BUILD · INTERACTIVE MESH PROOF</div></header>
+<main>
+<section class="viewer">
+<canvas id="stage"></canvas>
+<div class="overlay"><span class="pill" id="meshPill">NO MODEL LOADED</span><span class="pill">ORBIT · PAN · ZOOM</span></div>
+<div class="empty" id="empty"><div class="empty-card"><h2>Bring a real world object into the workbench.</h2><p>Load the generated GLB to inspect it from every angle, apply a real transform, then export the edited model.</p></div></div>
+</section>
+<aside class="side">
+<section class="card">
+<h2>01 / Load evidence</h2>
+<label for="meshFile">Reconstructed mesh (.glb)</label><input id="meshFile" type="file" accept=".glb,model/gltf-binary">
+<div style="height:12px"></div><label for="reportFile">Pipeline report (.json, optional)</label><input id="reportFile" type="file" accept=".json,application/json">
+<div id="videoWrap"><label style="margin-top:12px">Source footage</label><video id="sourceVideo" class="source-video" controls></video></div>
+<div style="height:12px"></div><label for="videoFile">Source video (optional)</label><input id="videoFile" type="file" accept="video/*">
+<div id="loadStatus" class="status">Waiting for a GLB file.</div>
+</section>
+<section class="card">
+<h2>02 / Edit the actual scene object</h2>
+<label for="mode">Transform tool</label><select id="mode"><option value="translate">Move</option><option value="rotate">Rotate</option><option value="scale">Scale</option></select>
+<div class="row" style="margin-top:10px"><button id="resetBtn" disabled>Reset transform</button><button id="exportBtn" class="primary" disabled>Export edited GLB</button></div>
+<p class="note" style="margin:10px 0 0">Use the gizmo in the viewport. Changes apply to the loaded model transform and are included in the exported GLB.</p>
+<div id="editStatus" class="status">Load a model to enable editing.</div>
+</section>
+<section class="card">
+<h2>03 / Measured mesh facts</h2>
+<div class="statgrid">
+<div class="stat"><strong id="vertices">—</strong><span>Vertices</span></div>
+<div class="stat"><strong id="faces">—</strong><span>Triangles</span></div>
+<div class="stat"><strong id="dims">—</strong><span>Local dimensions</span></div>
+<div class="stat"><strong id="scale">1.00×</strong><span>Current scale</span></div>
+</div>
+<div id="provenance" class="note" style="margin-top:12px">Backend provenance not loaded.</div>
+</section>
+<section class="card">
+<h2>Workflow status</h2>
+<p class="note">Verified today: the project report says Hunyuan3D-2 generated the mug mesh. SAM 3.1 supplied the object mask. The hosted reconstruction model is not a Meta model.</p>
+<p class="note warning">Simulation is not claimed here: a single reconstructed object is not yet a reconstructed environment with validated collision geometry.</p>
+</section>
+</aside>
+</main>
+<footer>WorldKit proof-of-workbench · Mesh edits and export run in your browser. This viewer does not claim engineering accuracy, print readiness, or a completed simulation.</footer>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {TransformControls} from 'three/addons/controls/TransformControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+
+const canvas=document.querySelector('#stage');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+const scene=new THREE.Scene();scene.background=new THREE.Color('#0d1522');
+const camera=new THREE.PerspectiveCamera(45,1,.01,10000);camera.position.set(2.8,2.2,3.4);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xddeaff,0x263447,2));
+const key=new THREE.DirectionalLight(0xffffff,3);key.position.set(4,6,4);scene.add(key);
+const fill=new THREE.DirectionalLight(0x76e0c0,1.2);fill.position.set(-4,2,-3);scene.add(fill);
+const grid=new THREE.GridHelper(10,20,0x3a526b,0x203247);scene.add(grid);
+const axes=new THREE.AxesHelper(.5);scene.add(axes);
+const transform=new TransformControls(camera,renderer.domElement);transform.setMode('translate');scene.add(transform.getHelper());
+transform.addEventListener('dragging-changed',e=>{controls.enabled=!e.value});
+transform.addEventListener('change',()=>updateStats());
+let root=null,original=null,meshName='model.glb',sourceUrl=null;
+const $=id=>document.getElementById(id);
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+window.addEventListener('resize',resize);
+function frameObject(obj){const box=new THREE.Box3().setFromObject(obj);if(box.isEmpty())return;const size=box.getSize(new THREE.Vector3());const center=box.getCenter(new THREE.Vector3());obj.position.sub(center);const max=Math.max(size.x,size.y,size.z)||1;camera.position.set(max*1.7,max*1.25,max*1.9);camera.near=Math.max(max/1000,.001);camera.far=max*100;camera.updateProjectionMatrix();controls.target.set(0,0,0);controls.update();grid.scale.setScalar(Math.max(max/5,1));grid.position.y=-size.y/2}
+function updateStats(){
+ if(!root)return;
+ let vertices=0,faces=0;
+ root.traverse(o=>{if(o.isMesh&&o.geometry){const g=o.geometry;vertices+=g.attributes.position?.count||0;faces+=g.index?g.index.count/3:(g.attributes.position?.count||0)/3}});
+ $('vertices').textContent=vertices.toLocaleString();$('faces').textContent=Math.round(faces).toLocaleString();
+ const b=new THREE.Box3().setFromObject(root),s=b.getSize(new THREE.Vector3());
+ $('dims').textContent=[s.x,s.y,s.z].map(v=>v.toFixed(3)).join(' × ');
+ $('scale').textContent=root.scale.x.toFixed(2)+'×';
+}
+function enableModel(obj,name){
+ if(root){transform.detach();scene.remove(root)}
+ root=obj;meshName=name;root.updateMatrixWorld(true);scene.add(root);frameObject(root);transform.attach(root);
+ $('empty').classList.add('hidden');$('meshPill').textContent=name.toUpperCase();$('resetBtn').disabled=false;$('exportBtn').disabled=false;
+ $('loadStatus').textContent='Loaded mesh into the viewer.';$('editStatus').textContent='Editing enabled. Drag the gizmo or choose a tool.';updateStats();
+}
+$('meshFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ $('loadStatus').textContent='Parsing GLB…';$('loadStatus').classList.remove('warning');
+ try{
+  const data=await file.arrayBuffer();const gltf=await new GLTFLoader().parseAsync(data,'');
+  const obj=gltf.scene||gltf.scenes?.[0];if(!obj)throw new Error('GLB contains no scene');
+  obj.name=file.name;original={position:obj.position.clone(),rotation:obj.rotation.clone(),scale:obj.scale.clone()};
+  enableModel(obj,file.name);
+ }catch(err){$('loadStatus').textContent='Could not load GLB: '+err.message;$('loadStatus').classList.add('warning')}
+});
+$('mode').addEventListener('change',()=>transform.setMode($('mode').value));
+$('resetBtn').addEventListener('click',()=>{if(!root||!original)return;root.position.copy(original.position);root.rotation.copy(original.rotation);root.scale.copy(original.scale);root.updateMatrixWorld(true);updateStats();$('editStatus').textContent='Transform reset to the loaded model state.'});
+$('exportBtn').addEventListener('click',async()=>{
+ if(!root)return;$('editStatus').textContent='Exporting edited scene…';
+ try{
+  const exporter=new GLTFExporter();const result=await exporter.parseAsync(root,{binary:true,onlyVisible:true});
+  const blob=new Blob([result],{type:'model/gltf-binary'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=meshName.replace(/\.glb$/i,'')+'_worldkit_edited.glb';a.click();URL.revokeObjectURL(url);
+  $('editStatus').textContent='Edited GLB exported successfully.';
+ }catch(err){$('editStatus').textContent='Export failed: '+err.message;$('editStatus').classList.add('warning')}
+});
+$('reportFile').addEventListener('change',async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ try{const r=JSON.parse(await f.text());const backend=r.mesh_method||r.mesh_backend||'not recorded';const segment=r.segment_source||'not recorded';const ready=r.print_ready===true?'yes':r.print_ready===false?'no':'not recorded';$('provenance').textContent='Mesh: '+backend+' · Segmentation: '+segment+' · Print ready: '+ready}
+ catch(err){$('provenance').textContent='Report could not be parsed: '+err.message}
+});
+$('videoFile').addEventListener('change',e=>{
+ const f=e.target.files?.[0];if(!f)return;if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl=URL.createObjectURL(f);$('sourceVideo').src=sourceUrl;$('videoWrap').classList.add('visible')
+});
+function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
+resize();animate();
+</script>
+</body>
+</html>
