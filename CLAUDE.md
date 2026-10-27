@@ -241,5 +241,27 @@ is no automatic real-world scale recovery for this video at all.**
 5. No coin-based (or any non-A4) scale recovery exists; add it, or keep
    requiring `--height-cm` for this kind of shot.
 6. SAM 3D Objects on Modal is still completely unexercised against a real
-   checkpoint/image -- first real run will also build the container image
-   and download gated checkpoints (slow, costs Modal credits).
+   checkpoint/image -- not launched yet (2026-10-27 cost check below).
+
+**Modal cost check (2026-10-27), before launching anything:**
+`modal billing summary` -- $0.00 billed so far (confirms nothing has run).
+`modal billing rates` -- A100 (40GB) = **$2.10/hour**. **No CLI command
+exposes available/granted credit balance** (`modal billing`/`workspace`
+have no such subcommand) -- only actual spend, which is $0. Whether the
+hackathon's $100 Modal credit offer has actually posted to this workspace
+is **unverified** and needs checking on the Modal web dashboard's
+Billing page (`modal billing summary`/`report` don't show it). Rough cost
+bound from the code (`gpu="A100-40GB"`, `timeout=30*60`): worst case
+**$1.05** if the function ran the full 30-minute timeout; realistically
+likely well under $1 for one run, but the actual checkpoint size and image
+build time are unknown, so this is a bound, not a precise estimate.
+**Did not launch the job** -- funding couldn't be confirmed.
+
+**Implementation issue found (reported, not fixed, per this round's
+instructions):** `_ensure_checkpoints()` (the gated HF checkpoint download)
+runs *inside* `reconstruct_mesh`, the GPU-attached function -- so checkpoint
+download time is billed at the A100 rate, not done more cheaply beforehand.
+Also unverified: whether the Modal secret `huggingface`'s token actually has
+working access to the gated `facebook/sam-3d-objects` repo (never
+download-tested) -- if not, the first run would fail after the container
+(and GPU) has already started.
