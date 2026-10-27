@@ -286,6 +286,20 @@ window.__getTransform = currentTransform;
 // which only holds right after frameCameraOn and drifts once the loaded
 // mesh's bounding box changes size (confirmed: a reload of a differently-
 // scaled export shifted it off-center, breaking a naive center-click test).
+// What the loaded model's materials actually are -- lets a test (or a human debugging a dark model)
+// check texture presence and metalness without guessing from pixels.
+window.__getMaterialInfo = function () {
+  const info = { meshes: 0, textured: 0, metalness: [], hasNormals: true };
+  modelGroup.traverse((o) => {
+    if (!o.isMesh) return;
+    info.meshes += 1;
+    if (o.material && o.material.map) info.textured += 1;
+    if (o.material) info.metalness.push(o.material.metalness);
+    if (!o.geometry.attributes.normal) info.hasNormals = false;
+  });
+  return info;
+};
+
 window.__getModelScreenPosition = function () {
   const ndc = modelGroup.position.clone().project(camera);
   const rect = renderer.domElement.getBoundingClientRect();
@@ -530,8 +544,26 @@ document.getElementById("file-report").addEventListener("change", (e) => {
     const lines = [
       `mesh_backend: ${report.mesh_backend ?? "(not recorded)"}`,
       `mesh_method: ${report.mesh_method ?? "(not recorded)"}`,
-      `print_ready: ${report.print_ready ?? "(not recorded)"}`,
     ];
+    // Which model made the mesh, and whether it is a Meta model -- never left for the viewer to guess.
+    if (report.reconstruction_model) {
+      const m = report.reconstruction_model;
+      lines.push(`model: ${m.name} (${m.vendor}${m.is_meta_model === true ? ", Meta model" : m.is_meta_model === false ? ", NOT a Meta model" : ""})`);
+    }
+    if (report.appearance && report.appearance.textured) {
+      const a = report.appearance;
+      lines.push(`texture: ${a.texture_source}`);
+      if (a.projection) {
+        lines.push(`  real video pixels: ${Math.round(a.projection.observed_fraction * 100)}% of surface, generated: ${Math.round(a.projection.generated_fraction * 100)}%`);
+        lines.push(`  frames used: ${a.projection.frames_used.length}, geometry modified: ${a.projection.geometry_modified}`);
+      }
+    } else if (report.appearance) {
+      lines.push("texture: none (untextured mesh)");
+    }
+    lines.push(`print_ready: ${report.print_ready ?? "(not recorded)"}`);
+    if (report.print_prep && report.print_prep.geometry_checks_passed !== undefined) {
+      lines.push(`geometry checks (at assumed scale): ${report.print_prep.geometry_checks_passed ? "pass" : "fail"}`);
+    }
     if (report.print_prep) {
       lines.push(`watertight: ${report.print_prep.watertight}`);
       lines.push(`thin_wall_warnings: ${report.print_prep.thin_wall_warning_count ?? "?"}/${report.print_prep.thin_wall_sample_count ?? "?"}`);

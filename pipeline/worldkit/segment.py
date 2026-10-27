@@ -450,6 +450,19 @@ def save_mask_overlay(
     return out_path
 
 
+def full_frame_mask(image_path: Path, result: "SegmentationMaskResult") -> np.ndarray:
+    """The segmentation as a boolean mask the size of the whole frame.
+
+    SAM 3.1 returns a mask rasterised to its own bounding box; this places it at its real
+    position (see ``_place_mask_on_canvas``).
+    """
+    from PIL import Image
+
+    with Image.open(image_path) as im:
+        w, h = im.size
+    return _place_mask_on_canvas(result.mask, h, w, result.box)
+
+
 def save_rgba_with_mask(
     image_path: Path,
     mask: np.ndarray,

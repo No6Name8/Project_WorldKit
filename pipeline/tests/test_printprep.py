@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -58,6 +59,81 @@ def test_make_watertight_noop_on_already_watertight_box(box_mesh: trimesh.Trimes
     assert method == "none"
 
 
+def test_make_watertight_repairs_a_box_with_a_missing_face(box_mesh: trimesh.Trimesh):
+    # Regression: make_watertight crashed with AttributeError on ANY non-watertight
+    # input (trimesh 5.x removed remove_duplicate_faces/remove_degenerate_faces);
+    # it never triggered earlier only because every mesh so far arrived watertight.
+    holed = trimesh.Trimesh(vertices=box_mesh.vertices.copy(), faces=box_mesh.faces[:-1].copy(), process=False)
+    assert not holed.is_watertight
+
+    repaired, method = printprep.make_watertight(holed)
+
+    assert repaired.is_watertight
+    assert method in ("trimesh_repair", "manifold_union")  # a real repair, not the hull fallback
+
+
+def test_make_watertight_tolerates_duplicate_and_degenerate_faces(box_mesh: trimesh.Trimesh):
+    faces = box_mesh.faces.tolist()
+    faces.append(faces[0])  # duplicate face
+    faces.append([0, 0, 1])  # degenerate (repeated vertex) face
+    messy = trimesh.Trimesh(vertices=box_mesh.vertices.copy(), faces=faces, process=False)
+
+    repaired, _ = printprep.make_watertight(messy)  # must not raise
+
+    assert repaired.is_watertight
+
+
+def _textured_box_with_uv_seams(tmp_path: Path) -> Path:
+    """A box exported as a textured GLB: UV seams duplicate vertices, which makes
+    the index graph look non-watertight even though the surface is closed."""
+    import numpy as np
+    from PIL import Image
+
+    box = trimesh.creation.box(extents=(2.0, 2.0, 4.0))
+    # unmerge so every face has its own vertices, then give each a distinct UV
+    unmerged = trimesh.Trimesh(vertices=box.vertices[box.faces].reshape(-1, 3),
+                               faces=np.arange(len(box.faces) * 3).reshape(-1, 3), process=False)
+    uv = np.random.default_rng(0).random((len(unmerged.vertices), 2))
+    tex = Image.fromarray((np.random.default_rng(1).random((8, 8, 3)) * 255).astype("uint8"))
+    unmerged.visual = trimesh.visual.TextureVisuals(uv=uv, image=tex)
+    path = tmp_path / "textured_box.glb"
+    unmerged.export(path, file_type="glb")
+    return path
+
+
+def test_load_mesh_drops_visuals_and_merges_uv_seams(tmp_path: Path):
+    # Real defect risk found with the textured TRELLIS output: texture visuals keep
+    # UV-seam vertices apart, so a closed surface reads as non-watertight and would
+    # fall through to the convex-hull fallback (filling a mug's interior).
+    glb = _textured_box_with_uv_seams(tmp_path)
+
+    mesh = printprep.load_mesh(glb)
+
+    assert mesh.is_watertight
+    assert len(mesh.vertices) == 8  # seams merged back into the box's 8 corners
+
+
+def test_prepare_for_print_on_textured_mesh_does_not_use_hull_fallback(tmp_path: Path):
+    glb = _textured_box_with_uv_seams(tmp_path)
+
+    report = printprep.prepare_for_print(glb, tmp_path / "out.stl", height_cm=4.0)
+
+    assert report.watertight_repair_used == "none"
+    assert report.watertight is True
+
+
+def test_print_ready_is_false_when_geometry_was_replaced_by_convex_hull():
+    # A hull fills cavities/handle holes, so it has no thin walls -- it must never be
+    # reported as print-ready, or a hollow mug would be "validated" as a solid block.
+    report = printprep.PrintPrepReport(
+        scale_factor=1.0, target_height_cm=10.0, upright_height_cm=10.0,
+        height_source="user", is_estimate=False, dimensions_cm=(10.0, 10.0, 10.0),
+        volume_cm3=1000.0, watertight=True, watertight_repair_used="convex_hull_fallback",
+        min_wall_mm_checked=1.2, thin_wall_warnings=[], thin_wall_sample_count=1500,
+    )
+    assert report.print_ready is False
+
+
 def test_add_flat_base_increases_height_and_stays_watertight(box_mesh: trimesh.Trimesh):
     original_height = box_mesh.extents[2]
     based = printprep.add_flat_base(box_mesh, base_thickness_mm=2.0)
@@ -65,10 +141,11 @@ def test_add_flat_base_increases_height_and_stays_watertight(box_mesh: trimesh.T
     assert based.is_watertight
 
 
-def test_orient_for_printing_keeps_mesh_above_z_zero(box_mesh: trimesh.Trimesh):
+def test_settle_on_bed_puts_the_lowest_point_on_z_zero_without_rotating(box_mesh: trimesh.Trimesh):
     box_mesh.apply_translation((0, 0, 50))  # move far from the origin
-    oriented = printprep.orient_for_printing(box_mesh)
-    assert oriented.bounds[0][2] == pytest.approx(0.0, abs=1e-6)
+    settled = printprep.settle_on_bed(box_mesh)
+    assert settled.bounds[0][2] == pytest.approx(0.0, abs=1e-6)
+    assert settled.extents == pytest.approx(box_mesh.extents)  # translated only: orientation untouched
 
 
 def test_check_min_wall_thickness_flags_thin_plate(thin_plate_mesh: trimesh.Trimesh):
@@ -171,3 +248,75 @@ def test_prepare_for_print_falls_back_without_any_height_hint(box_mesh: trimesh.
 
     assert report.height_source == "default_fallback"
     assert report.is_estimate is True
+
+
+def _tall_yup_glb(tmp_path: Path) -> Path:
+    """A 2 x 4 x 2 box exported as GLB. glTF is Y-up, so its HEIGHT is the Y extent (4)."""
+    path = tmp_path / "tall_yup.glb"
+    trimesh.creation.box(extents=(2.0, 4.0, 2.0)).export(path, file_type="glb")
+    return path
+
+
+def test_glb_is_loaded_y_up_so_height_is_the_real_vertical_extent(tmp_path: Path):
+    # Real defect: printprep treated Z as height, but GLBs (Hunyuan3D and TRELLIS alike) are
+    # glTF Y-up. A user-supplied --height-cm therefore scaled the object's DEPTH: on the real
+    # mug, asking for 9.5 cm produced a 9.84 cm mug (and ~22% off for the Hunyuan mesh).
+    mesh = printprep.load_mesh(_tall_yup_glb(tmp_path))
+
+    assert mesh.extents[2] == pytest.approx(4.0)  # vertical axis is now Z, as the rest of printprep assumes
+
+
+def test_prepare_for_print_scales_the_real_vertical_height_for_glb(tmp_path: Path):
+    glb = _tall_yup_glb(tmp_path)
+
+    report = printprep.prepare_for_print(glb, tmp_path / "out.stl", height_cm=10.0)
+
+    assert report.scale_factor == pytest.approx(10.0 / 4.0)  # 4 (Y) -> 10 cm, not 2 (Z) -> 10 cm
+
+
+def test_load_mesh_up_axis_override(tmp_path: Path):
+    path = tmp_path / "z_tall.stl"
+    trimesh.creation.box(extents=(2.0, 2.0, 4.0)).export(path)  # STL has no up-axis convention: assumed Z-up
+
+    assert printprep.load_mesh(path).extents[2] == pytest.approx(4.0)  # auto: non-glTF stays Z-up
+    assert printprep.load_mesh(path, up_axis="y").extents[2] == pytest.approx(2.0)  # forced Y-up swaps the axes
+
+
+def test_load_mesh_rejects_unknown_up_axis(tmp_path: Path):
+    with pytest.raises(printprep.PrintPrepError):
+        printprep.load_mesh(_tall_yup_glb(tmp_path), up_axis="x")
+
+
+def test_print_ready_requires_a_measured_scale():
+    # The wall-thickness verdict depends on real-world scale. With a placeholder/estimated height
+    # the geometry checks can pass, but print-readiness must not be claimed.
+    report = printprep.PrintPrepReport(
+        scale_factor=1.0, target_height_cm=10.0, upright_height_cm=10.0,
+        height_source="default_fallback", is_estimate=True, dimensions_cm=(10.0, 10.0, 10.0),
+        volume_cm3=1000.0, watertight=True, watertight_repair_used="none",
+        min_wall_mm_checked=1.2, thin_wall_warnings=[], thin_wall_sample_count=1500,
+    )
+
+    assert report.geometry_checks_passed is True
+    assert report.print_ready is False
+    d = report.to_dict()
+    assert d["geometry_checks_passed"] is True and d["print_ready"] is False
+
+
+def test_print_orientation_keeps_the_object_upright_on_its_base(tmp_path: Path):
+    # Real defect found by inspecting the STL preview of the real mug: a flat base was added under the
+    # upright object, then orient_for_printing re-rotated to the "most stable resting pose" -- ignoring the
+    # base -- which for a tall object (or a mug) is lying on its side. That left the base slab vertical,
+    # not on the bed. The base defines the print orientation; the object must stay upright on it.
+    glb = _tall_yup_glb(tmp_path)  # 2 x 4 x 2: lying down on a 2x4 face is the "most stable" pose
+
+    report = printprep.prepare_for_print(glb, tmp_path / "out.stl", height_cm=10.0)
+
+    stl = trimesh.load(tmp_path / "out.stl", force="mesh")
+    assert stl.bounds[0][2] == pytest.approx(0.0, abs=1e-6)  # resting on the bed plane
+    base_cm = printprep.BASE_THICKNESS_MM / 10.0
+    assert stl.extents[2] == pytest.approx(10.0 + base_cm, rel=1e-3)  # still upright: height + base thickness
+    assert report.dimensions_cm[2] == pytest.approx(10.0 + base_cm, rel=1e-3)
+    # the slab's large face is the lowest: the lowest 0.1 mm of vertices spread over the whole footprint
+    low = stl.vertices[stl.vertices[:, 2] < 1e-3]
+    assert np.ptp(low[:, 0]) > 0.9 * stl.extents[0] and np.ptp(low[:, 1]) > 0.9 * stl.extents[1]

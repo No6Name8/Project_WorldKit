@@ -31,6 +31,7 @@ from PIL import Image
 
 DEFAULT_SPACE_ID = "frogleo/Image-to-3D"  # a community-hosted Hunyuan3D-2 Gradio Space
 DEFAULT_API_NAME = "/gen_shape"
+DEFAULT_TRELLIS_SPACE_ID = "trellis-community/TRELLIS"  # community deployment of Microsoft's TRELLIS
 
 
 class ReconstructionError(RuntimeError):
@@ -141,7 +142,7 @@ def reconstruct_via_hosted_space(
     except ReconstructionError:
         raise
     except Exception as exc:  # noqa: BLE001 - any Space/network failure
-        raise ReconstructionError(f"hosted Space '{space_id}' reconstruction failed: {exc}") from exc
+        raise ReconstructionError(f"hosted Space '{space_id}' reconstruction failed: {_hint_for_space_error(str(exc))}") from exc
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -154,6 +155,84 @@ def reconstruct_via_hosted_space(
 
     glb_url = f"https://{space_id.replace('/', '-').lower()}.hf.space{glb_static_path}"
     return _download_glb(glb_url)
+
+
+def _hint_for_space_error(message: str) -> str:
+    if "quota" in message.lower():
+        return (
+            f"{message} -- the free ZeroGPU quota for this Hugging Face account is used up; it resets "
+            "daily. Retry later, or import a mesh you already have with --mesh-backend import. "
+            "(Upgrading to a paid plan to get more quota is a billing decision this code never makes.)"
+        )
+    return message
+
+
+def reconstruct_via_trellis_space(
+    rgba_png_bytes: bytes,
+    *,
+    space_id: str = DEFAULT_TRELLIS_SPACE_ID,
+    hf_token: str | None = None,
+    seed: int = 1234,
+    texture_size: int = 1024,
+    crop_to_object: bool = True,
+) -> bytes:
+    """Reconstruct a TEXTURED mesh (GLB) of the masked object with TRELLIS on a hosted Space.
+
+    TRELLIS is Microsoft's open-weights image-to-3D model -- NOT a Meta model, NOT SAM 3D Objects.
+    Unlike the Hunyuan3D "white mesh" endpoint it returns a UV-mapped base-colour texture, a
+    closed surface with real wall thickness, and a handle loop -- but the texture is *generated*
+    (invented on every side the photo doesn't show); see texture_project.py for replacing the
+    parts real video frames can see with real pixels.
+
+    The call sequence mirrors what the Space's UI does (and was verified live): start a session,
+    run the Space's own preprocessing, then generate and extract the GLB. Raises
+    ReconstructionError on any failure (including an exhausted free ZeroGPU quota); never returns
+    a placeholder mesh.
+    """
+    Client, handle_file = _import_gradio_client()
+    if crop_to_object:
+        rgba_png_bytes = crop_to_alpha_bbox(rgba_png_bytes)
+
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        f.write(rgba_png_bytes)
+        tmp_path = f.name
+
+    try:
+        client = Client(space_id, token=hf_token)
+        client.predict(api_name="/start_session")
+        pre = client.predict(image=handle_file(tmp_path), api_name="/preprocess_image")
+        pre_path = pre["path"] if isinstance(pre, dict) else pre
+        result = client.predict(
+            image=handle_file(pre_path),
+            multiimages=[],
+            seed=seed,
+            ss_guidance_strength=7.5,
+            ss_sampling_steps=12,
+            slat_guidance_strength=3.0,
+            slat_sampling_steps=12,
+            multiimage_algo="stochastic",
+            mesh_simplify=0.95,
+            texture_size=texture_size,
+            api_name="/generate_and_extract_glb",
+        )
+    except ReconstructionError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - any Space/network failure
+        raise ReconstructionError(
+            f"hosted Space '{space_id}' reconstruction failed: {_hint_for_space_error(str(exc))}"
+        ) from exc
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+    try:
+        glb_path = Path(result[2])
+    except (TypeError, IndexError) as exc:
+        raise ReconstructionError(f"hosted Space '{space_id}' returned an unexpected result shape: {result!r}") from exc
+    if not glb_path.is_file() or glb_path.stat().st_size == 0:
+        raise ReconstructionError(f"hosted Space '{space_id}' did not produce a GLB file (got {glb_path})")
+    return glb_path.read_bytes()
 
 
 def load_external_mesh(path: Path) -> bytes:

@@ -6,16 +6,21 @@ All work happens in centimeters. Steps, in order:
   2. repair into a watertight, correctly-wound manifold (trimesh repair,
      falling back to a manifold3d self-union for meshes repair can't fix)
   3. add a flat base so the model can stand on a print bed
-  4. orient into the most stable resting pose
+  4. settle the base onto the bed plane (Z=0). The base defines the print
+     orientation: the object stays upright on it. (An earlier version then
+     re-rotated to the "most stable resting pose", ignoring the base it had just
+     added -- for a mug or any tall object that is lying on its side, leaving the
+     base slab vertical.)
   5. check minimum wall thickness by inward ray casting, flagging thin spots
   6. export STL
 
-Note on "height": ``upright_height_cm`` (captured right after step 1, before
-any reorientation) is the real-world height along the object's original
-upright axis -- this is what should be compared against a tape-measured
-height. ``dimensions_cm`` (captured at the end) is the final bounding box
-AFTER orienting for the most stable print pose, which may lay the object on
-its side -- useful for bed-fit, not for "how tall is this".
+Axes: Z is "up" throughout. GLB/glTF is Y-up by spec, so it is rotated Y-up -> Z-up
+on load (see ``load_mesh``).
+
+Note on "height": ``upright_height_cm`` (captured right after step 1) is the
+real-world height of the object along its upright axis -- what should be compared
+against a tape-measured height. ``dimensions_cm`` is the final bounding box
+(upright height PLUS the base thickness), useful for bed-fit.
 """
 
 from __future__ import annotations
@@ -57,14 +62,24 @@ class PrintPrepReport:
     thin_wall_sample_count: int = 0
 
     @property
+    def geometry_checks_passed(self) -> bool:
+        """The automated geometry checks pass AT THE ASSUMED SCALE: watertight (by a real repair,
+        never the convex-hull fallback, which fills cavities and handle holes) and zero sampled
+        points below the minimum wall threshold."""
+        return (
+            self.watertight
+            and self.watertight_repair_used != "convex_hull_fallback"
+            and len(self.thin_wall_warnings) == 0
+        )
+
+    @property
     def print_ready(self) -> bool:
-        """Real defect found via integration testing (2026-10-27): object.py's
-        CLI report never surfaced a print_ready verdict at all -- the viewer's
-        provenance panel expected one and silently showed "(not recorded)".
-        Single source of truth here (not duplicated ad hoc per caller):
-        watertight AND zero sampled points below the minimum wall threshold.
-        """
-        return self.watertight and len(self.thin_wall_warnings) == 0
+        """Single source of truth for the report's print-readiness verdict (found via integration
+        testing: object.py's CLI report used to omit it entirely). It additionally requires a
+        MEASURED scale: wall thickness is only meaningful in real-world units, so with a
+        placeholder/estimated height the geometry checks can pass without the model being
+        verifiably printable."""
+        return self.geometry_checks_passed and not self.is_estimate
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +99,7 @@ class PrintPrepReport:
                 {"point_cm": list(w.point_cm), "thickness_mm": round(w.thickness_mm, 3)}
                 for w in self.thin_wall_warnings[:20]
             ],
+            "geometry_checks_passed": self.geometry_checks_passed,
             "print_ready": self.print_ready,
         }
 
@@ -103,8 +119,10 @@ def estimate_height_cm_from_a4(
     return object_pixel_height / a4_pixel_width * A4_WIDTH_CM
 
 
-def load_mesh(path: Path) -> trimesh.Trimesh:
+def load_mesh(path: Path, up_axis: str = "auto") -> trimesh.Trimesh:
     path = Path(path)
+    if up_axis not in ("auto", "y", "z"):
+        raise PrintPrepError(f"up_axis must be 'auto', 'y' or 'z', got {up_axis!r}")
     if not path.is_file():
         raise PrintPrepError(f"mesh file not found: {path}")
     loaded = trimesh.load(path, force="mesh")
@@ -112,7 +130,18 @@ def load_mesh(path: Path) -> trimesh.Trimesh:
         raise PrintPrepError(f"{path} did not load as a single mesh (got {type(loaded)})")
     if len(loaded.vertices) == 0 or len(loaded.faces) == 0:
         raise PrintPrepError(f"{path} loaded but is empty (0 vertices/faces)")
-    return loaded
+    # Print prep only needs geometry. Textured meshes (e.g. TRELLIS output) duplicate
+    # vertices along UV seams, which makes a closed surface look non-watertight (and
+    # would fall through to the convex-hull fallback); dropping the visuals lets
+    # coincident vertices merge back together.
+    geometry = trimesh.Trimesh(vertices=loaded.vertices.copy(), faces=loaded.faces.copy(), process=False)
+    geometry.merge_vertices()
+    # The rest of print prep treats Z as "height". glTF/GLB is Y-up by spec (Hunyuan3D and TRELLIS
+    # both emit it), so rotate Y-up -> Z-up on load; otherwise a user-supplied --height-cm scales
+    # the object's depth instead of its height. Other formats are assumed Z-up unless told otherwise.
+    if up_axis == "y" or (up_axis == "auto" and path.suffix.lower() in (".glb", ".gltf")):
+        geometry.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))
+    return geometry
 
 
 def scale_to_height(
@@ -135,8 +164,9 @@ def make_watertight(mesh: trimesh.Trimesh) -> tuple[trimesh.Trimesh, str]:
         return mesh, "none"
 
     mesh.merge_vertices()
-    mesh.remove_duplicate_faces()
-    mesh.remove_degenerate_faces()
+    mesh.update_faces(mesh.unique_faces())  # trimesh 5.x replacement for remove_duplicate_faces()
+    mesh.update_faces(mesh.nondegenerate_faces())  # ... and for remove_degenerate_faces()
+    mesh.remove_unreferenced_vertices()
     trimesh.repair.fix_normals(mesh)
     trimesh.repair.fill_holes(mesh)
     if mesh.is_watertight:
@@ -171,16 +201,10 @@ def add_flat_base(mesh: trimesh.Trimesh, base_thickness_mm: float = BASE_THICKNE
     return combined
 
 
-def orient_for_printing(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
-    """Rotate ``mesh`` into its most physically stable resting pose."""
+def settle_on_bed(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Translate ``mesh`` so its lowest point (the base slab's underside) sits on the Z=0 bed plane."""
     mesh = mesh.copy()
-    try:
-        transforms, probabilities = trimesh.poses.compute_stable_poses(mesh)
-        if len(transforms) > 0:
-            mesh.apply_transform(transforms[int(np.argmax(probabilities))])
-    except Exception:  # noqa: BLE001 - keep original orientation if this fails
-        pass
-    mesh.apply_translation((0, 0, -mesh.bounds[0][2]))  # re-settle onto the Z=0 plane
+    mesh.apply_translation((0, 0, -mesh.bounds[0][2]))
     return mesh
 
 
@@ -230,6 +254,7 @@ def prepare_for_print(
     height_cm: float | None = None,
     estimated_height_cm: float | None = None,
     min_wall_mm: float = DEFAULT_MIN_WALL_MM,
+    up_axis: str = "auto",
 ) -> PrintPrepReport:
     """Run the full print-prep pipeline on the mesh at ``mesh_path``.
 
@@ -237,7 +262,7 @@ def prepare_for_print(
     ``estimated_height_cm`` (derived from the A4 sheet, approximate) should
     be given; if both are None, falls back to a flagged default height.
     """
-    mesh = load_mesh(mesh_path)
+    mesh = load_mesh(mesh_path, up_axis=up_axis)
 
     if height_cm is not None:
         target_height_cm, height_source, is_estimate = height_cm, "user", False
@@ -251,7 +276,7 @@ def prepare_for_print(
 
     mesh, repair_used = make_watertight(mesh)
     mesh = add_flat_base(mesh)
-    mesh = orient_for_printing(mesh)
+    mesh = settle_on_bed(mesh)
 
     warnings, n_samples = check_min_wall_thickness(mesh, min_wall_mm=min_wall_mm)
 

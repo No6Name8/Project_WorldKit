@@ -21,6 +21,9 @@ tenacity==9.2.1
 meta-sam-parser==0.1.0
 modal==1.6.2
 
+# Hosted-Space reconstruction backends (--mesh-backend trellis / hosted; imported lazily):
+gradio_client==2.7.2
+
 # Local fallback mask (used only when the Meta API is unavailable):
 rembg==2.0.69
 onnxruntime==1.23.2

@@ -8,9 +8,13 @@ Pipeline stages (see report.json's "timings_sec" for real timings):
                   back to the sharpest frame + --object if the API is unavailable (detect.py)
     3. segment  - SAM 3.1 masks the object, and the A4 sheet if present, or
                   falls back to a local background-removal mask (segment.py)
-    4. sam3d    - SAM 3D Objects on Modal builds a textured mesh (modal_app/sam3d.py)
-    5. printprep - scale, repair, base, orient, thickness-check, STL (printprep.py)
-    6. preview  - 4-angle PNG renders of the final STL (render.py)
+    4. reconstruct - mesh from the masked object: SAM 3D Objects on Modal (modal_app/sam3d.py),
+                  or a Modal-independent hosted Space (TRELLIS textured / Hunyuan3D-2 untextured), or
+                  an imported GLB/OBJ (reconstruct.py)
+    5. appearance - for textured GLBs: replace the texels real video frames can see with their real
+                  pixels (texture_project.py), then make the material display correctly (appearance.py)
+    6. printprep - scale, repair, base, orient, thickness-check, STL (printprep.py)
+    7. preview  - 4-angle PNG renders of the final STL (render.py)
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ import time
 import traceback
 from pathlib import Path
 
-from . import detect, frames, printprep, reconstruct, render, segment
+from . import appearance, detect, frames, printprep, reconstruct, render, segment, texture_project, video_appearance
 from .meta_api import MetaAPIError
 
 
@@ -51,18 +55,87 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--keep-frames", type=int, default=12, help="how many sharp frames to keep (default: 12)")
     parser.add_argument("--min-wall-mm", type=float, default=printprep.DEFAULT_MIN_WALL_MM, help="minimum wall thickness to flag, in mm")
     parser.add_argument(
-        "--mesh-backend", choices=["modal", "hosted", "import"], default="modal",
+        "--mesh-backend", choices=["modal", "hosted", "trellis", "import"], default="modal",
         help=(
             "how to turn the segmented object into a mesh (default: modal). "
             "'modal' calls SAM 3D Objects (a Meta model) on Modal GPUs -- requires Modal to be "
-            "usable (it currently is not; see CLAUDE.md). 'hosted' calls a free community Hugging "
-            "Face Space running Hunyuan3D-2 -- NOT a Meta model, a Modal-independent fallback. "
-            "'import' skips reconstruction and uses an already-generated mesh via --mesh-file."
+            "usable (it currently is not; see CLAUDE.md). 'trellis' calls a free community Hugging "
+            "Face Space running TRELLIS (Microsoft, NOT a Meta model): a TEXTURED mesh with real wall "
+            "thickness. 'hosted' calls a Space running Hunyuan3D-2 (Tencent, NOT a Meta model): an "
+            "untextured, paper-thin shell. 'import' skips reconstruction and uses an already-generated "
+            "mesh via --mesh-file. The hosted Spaces share a small free daily GPU quota."
         ),
     )
-    parser.add_argument("--hosted-space-id", default=reconstruct.DEFAULT_SPACE_ID, help="Hugging Face Space id for --mesh-backend hosted")
+    parser.add_argument("--hosted-space-id", default=None, help="Hugging Face Space id for --mesh-backend hosted/trellis (defaults per backend)")
+    parser.add_argument(
+        "--project-frames", type=int, default=None,
+        help=(
+            "for textured meshes: use up to N real video frames to replace the texture's invented "
+            "colours with real pixels where they can be seen (default: 8 for --mesh-backend trellis, "
+            "0 = off otherwise). Geometry is never modified."
+        ),
+    )
+    parser.add_argument("--up-axis", choices=["auto", "y", "z"], default="auto", help="which mesh axis is 'up' for scaling (auto: glTF/GLB is Y-up, other formats Z-up)")
     parser.add_argument("--mesh-file", type=Path, default=None, help="path to an existing GLB/OBJ mesh, required with --mesh-backend import")
     return parser.parse_args(argv)
+
+
+# Which model actually produced the mesh -- recorded in every report so a demo can never
+# attribute a non-Meta model's output to Meta (or vice versa).
+RECONSTRUCTION_MODELS = {
+    "modal": {"name": "SAM 3D Objects", "vendor": "Meta", "is_meta_model": True},
+    "hosted": {"name": "Hunyuan3D-2 (community-hosted Space, shape only)", "vendor": "Tencent", "is_meta_model": False},
+    "trellis": {"name": "TRELLIS (community-hosted Space)", "vendor": "Microsoft", "is_meta_model": False},
+    "import": {"name": "unknown (imported mesh)", "vendor": "unknown", "is_meta_model": None},
+}
+
+DEFAULT_PROJECT_FRAMES = {"trellis": 8}
+
+
+def _appearance_stage(
+    mesh_path: Path, args: argparse.Namespace, report: dict, sharp_frames: list, object_name: str,
+    anchor: str | None,
+) -> Path:
+    """Textured GLBs only: project real frames onto the texture, then fix the material for display.
+
+    Untextured meshes (Hunyuan3D, SAM 3D without baking, an imported OBJ) pass through unchanged.
+    """
+    if mesh_path.suffix.lower() != ".glb":
+        return mesh_path
+    glb = mesh_path.read_bytes()
+    if not appearance.glb_is_textured(glb):
+        report["appearance"] = {"textured": False, "note": "mesh has no texture; appearance stage skipped"}
+        return mesh_path
+
+    info: dict = {"textured": True}
+    n_frames = args.project_frames if args.project_frames is not None else DEFAULT_PROJECT_FRAMES.get(args.mesh_backend, 0)
+    if n_frames > 0:
+        inputs, skipped = video_appearance.build_frame_inputs([f.path for f in sharp_frames], object_name)
+        info["frames_skipped"] = skipped
+        if len(inputs) < 2:
+            report["warnings"].append(
+                f"Texture projection skipped: only {len(inputs)} frame(s) had a genuine SAM 3.1 segmentation (need >= 2)."
+            )
+        else:
+            anchor_name = anchor if anchor in {i.name for i in inputs} else None
+            glb, projection = texture_project.reproject_frames_onto_glb(
+                glb, inputs, anchor=anchor_name, max_views=n_frames, texture_format="JPEG"
+            )
+            info["projection"] = projection
+            report["warnings"].append(
+                f"Texture: {projection['observed_fraction']:.0%} of the surface is real video pixels; "
+                f"{projection['generated_fraction']:.0%} (unseen sides) is generated, and all geometry is generated."
+            )
+    info["texture_source"] = (
+        "generated + real video pixels where observed" if "projection" in info else "generated by the reconstruction model"
+    )
+
+    glb, finalize = appearance.finalize_textured_glb(glb)
+    info["finalize"] = finalize
+    report["appearance"] = info
+    final_path = mesh_path.with_name("model.glb")
+    final_path.write_bytes(glb)
+    return final_path
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -162,12 +235,23 @@ def run(args: argparse.Namespace) -> dict:
         elif backend == "hosted":
             import os
 
+            space_id = args.hosted_space_id or reconstruct.DEFAULT_SPACE_ID
             mesh_bytes = reconstruct.reconstruct_via_hosted_space(
                 rgba_path.read_bytes(),
-                space_id=args.hosted_space_id,
+                space_id=space_id,
                 hf_token=os.environ.get("HF_TOKEN"),
             )
-            suffix, method = ".glb", f"hosted_space_hunyuan3d:{args.hosted_space_id}"
+            suffix, method = ".glb", f"hosted_space_hunyuan3d:{space_id}"
+        elif backend == "trellis":
+            import os
+
+            space_id = args.hosted_space_id or reconstruct.DEFAULT_TRELLIS_SPACE_ID
+            mesh_bytes = reconstruct.reconstruct_via_trellis_space(
+                rgba_path.read_bytes(),
+                space_id=space_id,
+                hf_token=os.environ.get("HF_TOKEN"),
+            )
+            suffix, method = ".glb", f"hosted_space_trellis:{space_id}"
         elif backend == "import":
             if args.mesh_file is None:
                 raise PipelineError("--mesh-backend import requires --mesh-file")
@@ -184,6 +268,14 @@ def run(args: argparse.Namespace) -> dict:
     (mesh_path, mesh_method) = _timed("reconstruct", timings, _reconstruct_stage)
     report["mesh_method"] = mesh_method
     report["mesh_backend"] = args.mesh_backend
+    report["reconstruction_model"] = RECONSTRUCTION_MODELS[args.mesh_backend]
+
+    # --- 4b. appearance: real video pixels onto the texture, then a display-correct material -------
+    mesh_path = _timed(
+        "appearance", timings, _appearance_stage,
+        mesh_path, args, report, sharp_frames, detection.object_name,
+        chosen_frame_path.stem if args.mesh_backend == "trellis" else None,
+    )
 
     # --- 5. printprep ----------------------------------------------------
     stl_path = out_dir / "model_print.stl"
@@ -193,6 +285,7 @@ def run(args: argparse.Namespace) -> dict:
         height_cm=args.height_cm,
         estimated_height_cm=estimated_height_cm,
         min_wall_mm=args.min_wall_mm,
+        up_axis=args.up_axis,
     )
     report["print_prep"] = prep_report.to_dict()
     report["print_ready"] = prep_report.print_ready

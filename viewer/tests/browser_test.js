@@ -43,6 +43,14 @@ function check(name, cond, detail) {
     JSON.stringify(initialTransform)
   );
 
+  // 1b. The bundled sample is the TEXTURED mug (real video pixels projected onto a TRELLIS mesh), and its
+  // material displays correctly: glTF's implicit metallicFactor of 1.0 rendered the previous textured
+  // output near-black without an environment map, and missing normals gave faceted shading.
+  const mat = await page.evaluate(() => window.__getMaterialInfo());
+  check("sample mesh carries a base-colour texture", mat.meshes >= 1 && mat.textured === mat.meshes, JSON.stringify(mat));
+  check("sample material is dielectric (metalness 0), so it is lit without an HDRI", mat.metalness.every((m) => m === 0), JSON.stringify(mat.metalness));
+  check("sample mesh has vertex normals (smooth shading)", mat.hasNormals === true);
+
   // 2. Canvas actually rendered something (not a blank black screen) --
   // sample pixel colors from the canvas, expect a non-trivial unique count.
   const pixelVariety = await page.evaluate(() => {
@@ -58,6 +66,23 @@ function check(name, cond, detail) {
     return colors.size;
   });
   check("canvas rendered varied pixel content (not blank)", pixelVariety > 3, "unique sampled colors=" + pixelVariety);
+
+  // The model must not render near-black (the failure mode of an implicit-metallic material).
+  const medianLum = await page.evaluate(() => {
+    const canvas = document.querySelector("canvas");
+    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+    const w = canvas.width, h = canvas.height;
+    const px = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const lum = [];
+    for (let i = 0; i < px.length; i += 4 * 37) {
+      const d = Math.abs(px[i] - 20) + Math.abs(px[i + 1] - 22) + Math.abs(px[i + 2] - 27); // vs the 0x14161b scene background
+      if (d > 60) lum.push(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
+    }
+    lum.sort((a, b) => a - b);
+    return lum.length ? lum[Math.floor(lum.length / 2)] : -1;
+  });
+  check("textured sample is lit, not near-black (median luminance of non-background pixels > 70)", medianLum > 70, "median luminance=" + medianLum);
 
   // 3. Orbit controls: camera actually moves when we drag
   const camBefore = await page.evaluate(() => {
@@ -274,9 +299,15 @@ function check(name, cond, detail) {
   // read-only, without touching the loaded mesh's transform.
   const fakeReport = JSON.stringify({
     mesh_backend: "hosted",
-    mesh_method: "hosted_space_hunyuan3d:frogleo/Image-to-3D",
+    mesh_method: "hosted_space_trellis:trellis-community/TRELLIS",
+    reconstruction_model: { name: "TRELLIS (community-hosted Space)", vendor: "Microsoft", is_meta_model: false },
+    appearance: {
+      textured: true,
+      texture_source: "generated + real video pixels where observed",
+      projection: { observed_fraction: 0.69, generated_fraction: 0.31, geometry_modified: false, frames_used: [{}, {}, {}] },
+    },
     print_ready: false,
-    print_prep: { watertight: true, thin_wall_warning_count: 1151, thin_wall_sample_count: 1500, height_source: "default_fallback", is_estimate: true },
+    print_prep: { watertight: true, geometry_checks_passed: true, thin_wall_warning_count: 0, thin_wall_sample_count: 1500, height_source: "default_fallback", is_estimate: true },
   });
   const reportPath = require("path").join(require("os").tmpdir(), "fake_report.json");
   require("fs").writeFileSync(reportPath, fakeReport);
@@ -285,7 +316,17 @@ function check(name, cond, detail) {
   const provenanceText = await page.locator("#provenance-readout").innerText();
   check(
     "provenance panel shows the loaded report's real fields",
-    provenanceText.includes("hosted") && provenanceText.includes("print_ready: false"),
+    provenanceText.includes("hosted_space_trellis") && provenanceText.includes("print_ready: false"),
+    provenanceText
+  );
+  check(
+    "provenance panel states the model is NOT a Meta model, and how much of the texture is real pixels",
+    provenanceText.includes("NOT a Meta model") && provenanceText.includes("real video pixels: 69%") && provenanceText.includes("generated: 31%"),
+    provenanceText
+  );
+  check(
+    "provenance panel separates passing geometry checks from print_ready (scale is only an estimate)",
+    provenanceText.includes("geometry checks (at assumed scale): pass") && provenanceText.includes("print_ready: false") && provenanceText.includes("is_estimate=true"),
     provenanceText
   );
 
