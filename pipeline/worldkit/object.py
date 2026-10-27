@@ -195,6 +195,7 @@ def run(args: argparse.Namespace) -> dict:
         min_wall_mm=args.min_wall_mm,
     )
     report["print_prep"] = prep_report.to_dict()
+    report["print_ready"] = prep_report.print_ready
 
     # --- 6. preview --------------------------------------------------------
     import trimesh

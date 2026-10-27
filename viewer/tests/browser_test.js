@@ -182,6 +182,52 @@ function check(name, cond, detail) {
   const logText = await page.locator("#edit-log").innerText();
   check("edit log shows a real explanation, not an error", logText.includes("✓"), logText.slice(0, 200));
 
+  // 7b. API failure path: intercept /api/edit to simulate the backend being
+  // down/erroring, and confirm the UI degrades gracefully -- shows a real
+  // error (not a silent failure or a crash) -- and that manual gizmo
+  // editing keeps working immediately afterward (the documented guarantee:
+  // "manual editing always available, with or without a working API").
+  await page.route("**/api/edit", (route) =>
+    route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error_type: "api_unavailable", error: "simulated outage" }) })
+  );
+  const beforeFailedAI = await page.evaluate(() => window.__getTransform());
+  await page.fill("#instruction-input", "Move it 5 cm forward.");
+  await page.click("#btn-send");
+  await page.waitForTimeout(300);
+  const afterFailedAI = await page.evaluate(() => window.__getTransform());
+  const failureLogText = await page.locator("#edit-log").innerText();
+  check(
+    "a simulated API failure shows a real error in the log, not a silent failure",
+    failureLogText.includes("✗") && failureLogText.includes("simulated outage"),
+    failureLogText.slice(0, 200)
+  );
+  check(
+    "a failed AI edit does NOT silently change the object's transform",
+    JSON.stringify(beforeFailedAI) === JSON.stringify(afterFailedAI),
+    `before=${JSON.stringify(beforeFailedAI)} after=${JSON.stringify(afterFailedAI)}`
+  );
+  await page.unroute("**/api/edit");
+  // Manual gizmo editing must still work right after an API failure. Re-center
+  // the camera on the model first -- it drifted off-screen-center from the
+  // earlier real AI edit's translation, which would make a center-click miss
+  // the gizmo handles entirely and falsely look like editing was broken.
+  await page.evaluate(() => { window.__resetTransform(); document.getElementById("btn-reset").click(); });
+  await page.waitForTimeout(100);
+  const beforeRecoveryDrag = await page.evaluate(() => window.__getTransform());
+  const screenPos = await page.evaluate(() => window.__getModelScreenPosition());
+  const rcx = screenPos.x, rcy = screenPos.y;
+  await page.mouse.move(rcx, rcy);
+  await page.mouse.down();
+  await page.mouse.move(rcx + 100, rcy, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const afterRecoveryDrag = await page.evaluate(() => window.__getTransform());
+  check(
+    "manual gizmo editing still works immediately after a simulated API failure",
+    JSON.stringify(afterRecoveryDrag.position_units) !== JSON.stringify(beforeRecoveryDrag.position_units),
+    `before=${JSON.stringify(beforeRecoveryDrag.position_units)} after=${JSON.stringify(afterRecoveryDrag.position_units)}`
+  );
+
   // 8. Collision-aware probe: real raycasting against the actual mesh.
   await page.evaluate(() => window.__resetTransform());
   const simInfo = await page.evaluate(() => {

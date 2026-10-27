@@ -94,6 +94,40 @@ def test_export_stl_writes_readable_file(box_mesh: trimesh.Trimesh, tmp_path: Pa
     assert len(reloaded.faces) > 0
 
 
+def test_print_ready_true_when_watertight_and_no_thin_wall_warnings():
+    report = printprep.PrintPrepReport(
+        scale_factor=1.0, target_height_cm=10.0, upright_height_cm=10.0,
+        height_source="user", is_estimate=False, dimensions_cm=(10.0, 10.0, 10.0),
+        volume_cm3=1000.0, watertight=True, watertight_repair_used="none",
+        min_wall_mm_checked=1.2, thin_wall_warnings=[], thin_wall_sample_count=1500,
+    )
+    assert report.print_ready is True
+    assert report.to_dict()["print_ready"] is True
+
+
+def test_print_ready_false_when_thin_wall_warnings_present():
+    report = printprep.PrintPrepReport(
+        scale_factor=1.0, target_height_cm=10.0, upright_height_cm=10.0,
+        height_source="user", is_estimate=False, dimensions_cm=(10.0, 10.0, 10.0),
+        volume_cm3=1000.0, watertight=True, watertight_repair_used="none",
+        min_wall_mm_checked=1.2,
+        thin_wall_warnings=[printprep.ThinWallWarning(point_cm=(0.0, 0.0, 0.0), thickness_mm=0.5)],
+        thin_wall_sample_count=1500,
+    )
+    assert report.print_ready is False
+    assert report.to_dict()["print_ready"] is False
+
+
+def test_print_ready_false_when_not_watertight():
+    report = printprep.PrintPrepReport(
+        scale_factor=1.0, target_height_cm=10.0, upright_height_cm=10.0,
+        height_source="user", is_estimate=False, dimensions_cm=(10.0, 10.0, 10.0),
+        volume_cm3=1000.0, watertight=False, watertight_repair_used="convex_hull_fallback",
+        min_wall_mm_checked=1.2, thin_wall_warnings=[], thin_wall_sample_count=1500,
+    )
+    assert report.print_ready is False
+
+
 def test_prepare_for_print_end_to_end_with_user_height(box_mesh: trimesh.Trimesh, tmp_path: Path):
     glb_path = tmp_path / "model.glb"
     box_mesh.export(glb_path, file_type="glb")
@@ -105,6 +139,7 @@ def test_prepare_for_print_end_to_end_with_user_height(box_mesh: trimesh.Trimesh
     assert report.height_source == "user"
     assert report.is_estimate is False
     assert report.watertight is True
+    assert report.print_ready is True  # thick-walled box, no thin-wall warnings expected
     assert (tmp_path / "model_print.stl").is_file()
     # upright_height_cm is measured along the ORIGINAL upright axis, before
     # print-orientation can rotate the mesh onto its side -- must equal the

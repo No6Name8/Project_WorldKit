@@ -56,6 +56,16 @@ class PrintPrepReport:
     thin_wall_warnings: list[ThinWallWarning] = field(default_factory=list)
     thin_wall_sample_count: int = 0
 
+    @property
+    def print_ready(self) -> bool:
+        """Real defect found via integration testing (2026-10-27): object.py's
+        CLI report never surfaced a print_ready verdict at all -- the viewer's
+        provenance panel expected one and silently showed "(not recorded)".
+        Single source of truth here (not duplicated ad hoc per caller):
+        watertight AND zero sampled points below the minimum wall threshold.
+        """
+        return self.watertight and len(self.thin_wall_warnings) == 0
+
     def to_dict(self) -> dict:
         return {
             "scale_factor": round(self.scale_factor, 5),
@@ -74,6 +84,7 @@ class PrintPrepReport:
                 {"point_cm": list(w.point_cm), "thickness_mm": round(w.thickness_mm, 3)}
                 for w in self.thin_wall_warnings[:20]
             ],
+            "print_ready": self.print_ready,
         }
 
 

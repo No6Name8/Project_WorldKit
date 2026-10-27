@@ -216,6 +216,7 @@ function loadGLBFromArrayBuffer(arrayBuffer, label) {
         const { size } = frameCameraOn(modelGroup);
         cmPerSceneUnit = CALIBRATED ? cmPerSceneUnit : PLACEHOLDER_HEIGHT_CM / Math.max(size.y, 1e-6);
         window.__sceneReady = true;
+        window.__lastLoadLabel = label; // precise re-load signal: __sceneReady alone stays true across a second load, so a test waiting to confirm THIS load finished (not the first) needs this instead
         logEntry(`Loaded ${label} (bbox ${size.x.toFixed(3)} x ${size.y.toFixed(3)} x ${size.z.toFixed(3)} scene units)`);
         updateReadout();
         resolve(gltf);
@@ -278,6 +279,21 @@ function updateReadout() {
     `scale:       ${t.scale.map((v) => v.toFixed(3)).join(", ")}`;
 }
 window.__getTransform = currentTransform;
+
+// Projects the model's world position to canvas pixel coordinates -- lets a
+// test (or any future feature) find where the gizmo actually renders
+// on-screen instead of assuming it's at the canvas's geometric center,
+// which only holds right after frameCameraOn and drifts once the loaded
+// mesh's bounding box changes size (confirmed: a reload of a differently-
+// scaled export shifted it off-center, breaking a naive center-click test).
+window.__getModelScreenPosition = function () {
+  const ndc = modelGroup.position.clone().project(camera);
+  const rect = renderer.domElement.getBoundingClientRect();
+  return {
+    x: rect.left + ((ndc.x + 1) / 2) * rect.width,
+    y: rect.top + ((1 - ndc.y) / 2) * rect.height,
+  };
+};
 
 // --- Apply a validated EditTransform (from /api/edit or a manual call) -----
 function applyEditTransform(t) {
