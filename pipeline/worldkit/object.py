@@ -22,7 +22,7 @@ import time
 import traceback
 from pathlib import Path
 
-from . import detect, frames, printprep, render, segment
+from . import detect, frames, printprep, reconstruct, render, segment
 from .meta_api import MetaAPIError
 
 
@@ -50,6 +50,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fps", type=float, default=2.0, help="frame sampling rate for extraction (default: 2.0)")
     parser.add_argument("--keep-frames", type=int, default=12, help="how many sharp frames to keep (default: 12)")
     parser.add_argument("--min-wall-mm", type=float, default=printprep.DEFAULT_MIN_WALL_MM, help="minimum wall thickness to flag, in mm")
+    parser.add_argument(
+        "--mesh-backend", choices=["modal", "hosted", "import"], default="modal",
+        help=(
+            "how to turn the segmented object into a mesh (default: modal). "
+            "'modal' calls SAM 3D Objects (a Meta model) on Modal GPUs -- requires Modal to be "
+            "usable (it currently is not; see CLAUDE.md). 'hosted' calls a free community Hugging "
+            "Face Space running Hunyuan3D-2 -- NOT a Meta model, a Modal-independent fallback. "
+            "'import' skips reconstruction and uses an already-generated mesh via --mesh-file."
+        ),
+    )
+    parser.add_argument("--hosted-space-id", default=reconstruct.DEFAULT_SPACE_ID, help="Hugging Face Space id for --mesh-backend hosted")
+    parser.add_argument("--mesh-file", type=Path, default=None, help="path to an existing GLB/OBJ mesh, required with --mesh-backend import")
     return parser.parse_args(argv)
 
 
@@ -139,23 +151,45 @@ def run(args: argparse.Namespace) -> dict:
         except printprep.PrintPrepError as exc:
             report["warnings"].append(f"A4-based height estimate failed: {exc}")
 
-    # --- 4. sam3d (Modal) ----------------------------------------------------
-    def _sam3d_stage():
-        from modal_app.sam3d import run_remote
+    # --- 4. reconstruct: modal (SAM 3D Objects) / hosted (fallback) / import --
+    def _reconstruct_stage():
+        backend = args.mesh_backend
+        if backend == "modal":
+            from modal_app.sam3d import run_remote
 
-        glb_bytes = run_remote(rgba_path.read_bytes())
-        glb_path = out_dir / "model.glb"
-        glb_path.write_bytes(glb_bytes)
-        return glb_path
+            mesh_bytes = run_remote(rgba_path.read_bytes())
+            suffix, method = ".glb", "modal_sam3d_builtin_mesh_postprocess_and_texture_baking"
+        elif backend == "hosted":
+            import os
 
-    glb_path = _timed("sam3d", timings, _sam3d_stage)
-    report["mesh_method"] = "sam3d_builtin_mesh_postprocess_and_texture_baking"
+            mesh_bytes = reconstruct.reconstruct_via_hosted_space(
+                rgba_path.read_bytes(),
+                space_id=args.hosted_space_id,
+                hf_token=os.environ.get("HF_TOKEN"),
+            )
+            suffix, method = ".glb", f"hosted_space_hunyuan3d:{args.hosted_space_id}"
+        elif backend == "import":
+            if args.mesh_file is None:
+                raise PipelineError("--mesh-backend import requires --mesh-file")
+            mesh_bytes = reconstruct.load_external_mesh(args.mesh_file)
+            suffix = Path(args.mesh_file).suffix or ".glb"
+            method = f"imported_external_mesh:{Path(args.mesh_file).name}"
+        else:
+            raise PipelineError(f"unknown --mesh-backend: {backend}")
+
+        mesh_path = out_dir / f"model{suffix}"
+        mesh_path.write_bytes(mesh_bytes)
+        return mesh_path, method
+
+    (mesh_path, mesh_method) = _timed("reconstruct", timings, _reconstruct_stage)
+    report["mesh_method"] = mesh_method
+    report["mesh_backend"] = args.mesh_backend
 
     # --- 5. printprep ----------------------------------------------------
     stl_path = out_dir / "model_print.stl"
     prep_report = _timed(
         "printprep", timings, printprep.prepare_for_print,
-        glb_path, stl_path,
+        mesh_path, stl_path,
         height_cm=args.height_cm,
         estimated_height_cm=estimated_height_cm,
         min_wall_mm=args.min_wall_mm,
@@ -171,7 +205,7 @@ def run(args: argparse.Namespace) -> dict:
     )
     report["preview_renders"] = [str(p) for p in preview_paths]
 
-    report["model_glb"] = str(glb_path)
+    report["model_mesh"] = str(mesh_path)
     report["model_stl"] = str(stl_path)
     return report
 
@@ -186,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         report = run(args)
     except (PipelineError, MetaAPIError, frames.FrameExtractionError,
             detect.DetectionError, segment.SegmentationError,
-            printprep.PrintPrepError) as exc:
+            reconstruct.ReconstructionError, printprep.PrintPrepError) as exc:
         report = {"error": str(exc), "error_type": type(exc).__name__}
         report_path.write_text(json.dumps(report, indent=2))
         print(f"FAILED: {exc}", file=sys.stderr)
