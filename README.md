@@ -59,6 +59,8 @@ The viewer is a lightweight prototype. It edits the loaded object's transform, n
 
 ## Judging-focused next milestones
 
+See [the three-minute demo runbook](docs/DEMO_RUNBOOK.md) for the recording checklist, suggested narrative, rubric mapping, and milestone gates.
+
 1. Demonstrate a real source-to-mesh workflow and inspect the mesh from multiple views.
 2. Demonstrate a genuine object selection/edit in the viewer and export the changed GLB.
 3. Add a meaningful Muse Spark-assisted edit-intent or before/after verification step; show the real request/response and validate the resulting change in code.
