@@ -281,23 +281,72 @@ def segment_concept(
     )
 
 
+def _place_mask_on_canvas(
+    mask: np.ndarray,
+    canvas_h: int,
+    canvas_w: int,
+    box: tuple[float, float, float, float] | None,
+) -> np.ndarray:
+    """Return a full-canvas-sized boolean mask, correctly placed.
+
+    SAM 3.1 can return a mask raster sized to its own reported bounding box
+    (a local crop), not the full frame -- confirmed on a real response: a
+    155x140 mask for box (164, 254, 319, 394) on a 480x856 frame, with
+    155 == 319-164 and 140 == 394-254 exactly. Naively resizing that crop to
+    fill the whole frame (the old behavior here) stretches a tight mug mask
+    into a blob smeared across most of the image. If ``box`` is known, the
+    mask is pasted at its correct position in a zero canvas instead; only
+    without a box does this fall back to the old whole-frame resize (which
+    is correct for the fallback path, where the mask IS already full-frame).
+    """
+    if mask.shape == (canvas_h, canvas_w):
+        return mask
+
+    if box is not None:
+        left, top, right, bottom = box
+        box_w, box_h = int(round(right - left)), int(round(bottom - top))
+        resized = mask
+        if mask.shape != (box_h, box_w) and box_w > 0 and box_h > 0:
+            resized_img = Image.fromarray((mask * 255).astype(np.uint8)).resize(
+                (box_w, box_h), Image.NEAREST
+            )
+            resized = np.asarray(resized_img) > 0
+
+        canvas = np.zeros((canvas_h, canvas_w), dtype=bool)
+        x0, y0 = int(round(left)), int(round(top))
+        x1, y1 = min(canvas_w, x0 + resized.shape[1]), min(canvas_h, y0 + resized.shape[0])
+        x0, y0 = max(0, x0), max(0, y0)
+        if x1 > x0 and y1 > y0:
+            canvas[y0:y1, x0:x1] = resized[: y1 - y0, : x1 - x0]
+        return canvas
+
+    # No box to place it with -- assume it's meant to cover the whole frame,
+    # just at a different resolution (true for the fallback path).
+    mask_img = Image.fromarray((mask * 255).astype(np.uint8)).resize((canvas_w, canvas_h), Image.NEAREST)
+    return np.asarray(mask_img) > 0
+
+
 def save_mask_overlay(
-    image_path: Path, mask: np.ndarray, out_path: Path, color=(255, 64, 64), used_fallback: bool = False
+    image_path: Path,
+    mask: np.ndarray,
+    out_path: Path,
+    color=(255, 64, 64),
+    used_fallback: bool = False,
+    box: tuple[float, float, float, float] | None = None,
 ) -> Path:
     """Write a PNG of ``image_path`` with ``mask`` drawn as a translucent overlay.
 
     If ``used_fallback`` is True, the filename is prefixed FALLBACK_ regardless
     of what the caller asked for, so a fallback result can never look real.
+    ``box``, if given (SAM 3.1 results carry one), places a locally-sized
+    mask at its correct position instead of stretching it across the whole
+    frame -- see ``_place_mask_on_canvas``.
     """
     if used_fallback and out_path.name and not out_path.name.startswith("FALLBACK_"):
         out_path = out_path.with_name(f"FALLBACK_{out_path.name}")
 
     base = Image.open(image_path).convert("RGBA")
-    if mask.shape != (base.height, base.width):
-        mask_img = Image.fromarray((mask * 255).astype(np.uint8)).resize(
-            (base.width, base.height), Image.NEAREST
-        )
-        mask = np.asarray(mask_img) > 0
+    mask = _place_mask_on_canvas(mask, base.height, base.width, box)
 
     overlay = np.zeros((base.height, base.width, 4), dtype=np.uint8)
     overlay[mask] = (*color, 110)
@@ -308,19 +357,22 @@ def save_mask_overlay(
     return out_path
 
 
-def save_rgba_with_mask(image_path: Path, mask: np.ndarray, out_path: Path) -> Path:
+def save_rgba_with_mask(
+    image_path: Path,
+    mask: np.ndarray,
+    out_path: Path,
+    box: tuple[float, float, float, float] | None = None,
+) -> Path:
     """Write an RGBA PNG with ``mask`` embedded in the alpha channel.
 
     This is the input format SAM 3D Objects expects: an RGBA image where
     alpha carries the mask (confirmed in facebookresearch/sam-3d-objects'
-    own merge_image_and_mask / merge_mask_to_rgba helpers).
+    own merge_image_and_mask / merge_mask_to_rgba helpers). ``box``, if
+    given, places a locally-sized mask correctly instead of stretching it --
+    see ``_place_mask_on_canvas``.
     """
     base = Image.open(image_path).convert("RGB")
-    if mask.shape != (base.height, base.width):
-        mask_img = Image.fromarray((mask * 255).astype(np.uint8)).resize(
-            (base.width, base.height), Image.NEAREST
-        )
-        mask = np.asarray(mask_img) > 0
+    mask = _place_mask_on_canvas(mask, base.height, base.width, box)
     alpha = (mask * 255).astype(np.uint8)
     rgba = np.dstack([np.asarray(base), alpha])
     out_path.parent.mkdir(parents=True, exist_ok=True)

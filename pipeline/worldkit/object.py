@@ -114,12 +114,13 @@ def run(args: argparse.Namespace) -> dict:
     overlay_name = "mask_overlay.png"
     overlay_path = out_dir / overlay_name
     overlay_path = segment.save_mask_overlay(
-        chosen_frame_path, obj_mask_result.mask, overlay_path, used_fallback=obj_mask_result.used_fallback
+        chosen_frame_path, obj_mask_result.mask, overlay_path,
+        used_fallback=obj_mask_result.used_fallback, box=obj_mask_result.box,
     )
     report["mask_overlay"] = str(overlay_path)
 
     rgba_path = out_dir / "object_rgba.png"
-    segment.save_rgba_with_mask(chosen_frame_path, obj_mask_result.mask, rgba_path)
+    segment.save_rgba_with_mask(chosen_frame_path, obj_mask_result.mask, rgba_path, box=obj_mask_result.box)
 
     # --- height: user-given > A4 estimate > fallback ------------------------
     estimated_height_cm = None

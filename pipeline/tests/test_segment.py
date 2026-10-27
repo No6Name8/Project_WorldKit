@@ -76,3 +76,54 @@ def test_refine_mask_with_grabcut_handles_empty_rough_mask():
     refined = segment.refine_mask_with_grabcut(img, empty_mask)
 
     assert refined is None
+
+
+# --- _place_mask_on_canvas: regression test for a real bug found against the
+# actual Meta API. SAM 3.1 returned a mask raster sized to its own bounding
+# box (e.g. 155x140 for box (164, 254, 319, 394) on a 480x856 frame -- width
+# and height match the box exactly), not the full frame. The old code
+# stretched any differently-shaped mask to fill the WHOLE image, which took a
+# small, correct, mug-only mask and smeared it across most of the frame
+# (visually confirmed before the fix: the overlay covered floor, table and
+# background, not just the mug). Fixed by placing a box-shaped mask at its
+# reported position instead of stretching it.
+
+
+def test_place_mask_on_canvas_positions_a_local_crop_at_its_box():
+    # A small fully-True mask representing a SAM-style local crop.
+    local_mask = np.ones((40, 30), dtype=bool)  # height=40, width=30
+    box = (100.0, 50.0, 130.0, 90.0)  # left, top, right, bottom -> 30x40
+
+    canvas = segment._place_mask_on_canvas(local_mask, canvas_h=200, canvas_w=300, box=box)
+
+    assert canvas.shape == (200, 300)
+    # The mask must land exactly at the box, not be stretched over the canvas.
+    assert canvas[50:90, 100:130].all()
+    assert canvas.sum() == 40 * 30
+    # Nothing outside the box should be set -- this is exactly what the old
+    # whole-canvas-resize behavior got wrong.
+    assert not canvas[0, 0]
+    assert not canvas[199, 299]
+    assert not canvas[0:50, :].any()
+    assert not canvas[90:, :].any()
+
+
+def test_place_mask_on_canvas_passthrough_when_already_full_size():
+    full_mask = np.zeros((200, 300), dtype=bool)
+    full_mask[10:20, 10:20] = True
+
+    canvas = segment._place_mask_on_canvas(full_mask, canvas_h=200, canvas_w=300, box=None)
+
+    assert canvas is full_mask  # no copy/resize needed
+
+
+def test_place_mask_on_canvas_falls_back_to_stretch_without_a_box():
+    # No box available: old behavior (stretch to fill the canvas) is the
+    # only option, and is correct for the fallback path, where the mask IS
+    # already meant to cover the whole frame.
+    small_mask = np.ones((10, 10), dtype=bool)
+
+    canvas = segment._place_mask_on_canvas(small_mask, canvas_h=100, canvas_w=100, box=None)
+
+    assert canvas.shape == (100, 100)
+    assert canvas.all()  # an all-True small mask stretches to an all-True canvas

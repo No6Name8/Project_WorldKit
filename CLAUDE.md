@@ -67,7 +67,7 @@ video → frames → Muse Spark lists objects → SAM 3.1 tracks and masks them 
 _Last updated: Object mode CLI build + API verification session._
 
 **What works:** `/pipeline` has a full `worldkit` package (frames, meta_api,
-detect, segment, Modal SAM 3D app, printprep, render, CLI) with 21/21 unit
+detect, segment, Modal SAM 3D app, printprep, render, CLI) with 24/24 unit
 tests passing against synthetic data. Modal is authenticated (workspace
 `no6name8`) and confirmed reachable with a live remote call. `pipeline/.env`
 exists with a real `MODEL_API_KEY`, and the key loads correctly.
@@ -92,6 +92,39 @@ usage `{prompt_tokens: 150, completion_tokens: 5, total_tokens: 155,
 cached_tokens: 128}` (same empty-content-at-max_tokens=5 artifact as
 above). No billing/credit-balance endpoint is documented for either
 provider -- Meta only exposes a web dashboard, Baseten's docs don't mention
+one at all.
+
+**Genuine Meta detection + SAM 3.1 segmentation tested on the real mug
+video (2026-10-27).** One frame (`sharp_01.png`, handle visible). No Modal/
+GPU involved. Not fallback -- `used_fallback=False` confirmed on both calls.
+
+- **Muse Spark detection (1 real call, no `--object` override, to see its
+  genuine judgment):** HTTP 200, 9.48s, 2525 total tokens (1801 reasoning).
+  **Named the main object "side table", not "mug"** -- its own reasoning:
+  "The table fills and centers the frame while the mug and coin are small
+  items on top." A real, measured limitation of single-frame detection
+  without a hint, not a fabricated success and not treated as one.
+- **SAM 3.1 segmentation (2 real calls, concept forced to "mug" per this
+  round's task), result: genuinely isolates the mug, INCLUDING the
+  handle.** 14,394px, bbox 32%/16% of frame width/height -- tighter than
+  and strictly better than the local GrabCut fallback (11,516px, which
+  misses the handle entirely). See
+  `runs/mug_local/REAL_SAM31_mask_overlay.png` (gitignored, local only).
+
+**Bug found and fixed while verifying this: mask placement.** SAM 3.1's
+mask raster is sized to its own bounding box (confirmed: a 155x140 mask for
+box (164,254,319,394) on a 480x856 frame -- 155 and 140 match the box
+exactly), not the full frame. The old `save_mask_overlay`/
+`save_rgba_with_mask` stretched any differently-shaped mask to fill the
+*whole* image, smearing a small correct mug mask across most of the frame
+(visually confirmed before the fix, then corrected -- see commit history).
+Fixed with `_place_mask_on_canvas()`, which pastes a box-shaped mask at its
+real position instead of stretching it; the fallback path (always
+full-frame-sized) is unaffected. 3 new regression tests added
+(`tests/test_segment.py`), 24/24 total passing. This also means
+`object_rgba.png` (SAM 3D Objects' real input, once Modal runs) would have
+been silently wrong before this fix -- worth knowing even though SAM 3D
+hasn't been run yet.
 one at all; neither was checked via a paid call.
 
 Both `MODEL_API_KEY` and `BASETEN_API_KEY` confirmed present and loading
@@ -183,21 +216,30 @@ is no automatic real-world scale recovery for this video at all.**
   real Meta API/SAM 3.1 output.
 
 **Known issues / next steps:**
-1. ~~Billing needs resolving~~ **RESOLVED 2026-10-27** -- a real Meta API call
-   now succeeds (HTTP 200). The actual pipeline (`detect.py`/`segment.py`
-   real paths) has not yet been run against this -- only a standalone
-   minimal test call was made, per this round's safety constraints (no
-   pipeline changes, no repeated calls).
-2. The fallback local mask now isolates the mug from the table reasonably
-   well (GrabCut refinement), but still excludes its white rim/interior --
-   still not a real stand-in for SAM 3.1 in the actual demo.
-3. Fallback frame selection still just picks the sharpest frame, which can
+1. ~~Billing needs resolving~~ **RESOLVED 2026-10-27**, and genuine Muse
+   Spark + SAM 3.1 calls now confirmed working against the real video (see
+   above). `detect.py`/`segment.py`'s real paths have each been exercised
+   once directly; the full `object.py` CLI has not been run end-to-end with
+   the real API yet (only ad hoc direct calls, per each round's "keep calls
+   limited" constraint).
+2. **Muse Spark's own object-naming judgment picked "side table", not
+   "mug", when given one frame with no hint.** `detect_object()` without
+   `--object` would currently misname this object if run as-is. Passing
+   `--object "mug"` sidesteps it; whether this generalizes to other framing/
+   objects is untested.
+3. The fallback local mask isolates the mug from the table reasonably well
+   (GrabCut refinement) but still misses the handle and the white rim/
+   interior -- real SAM 3.1 gets both; fallback remains dev-only, not a
+   stand-in for the actual demo.
+4. Fallback frame selection still just picks the sharpest frame, which can
    (and here, does) pick an angle where the handle is rotated out of view,
    even though better frames exist in the same kept set. No reliable local
-   fix was found (see Frame selection investigated, above); needs Muse Spark
-   once billing works, or a smarter sampling/selection strategy later.
-4. No coin-based (or any non-A4) scale recovery exists; add it, or keep
+   fix was found (see Frame selection investigated, above). Now that Muse
+   Spark works, its real best-frame judgment hasn't been tested on the full
+   12-frame set yet (only ever run 1 frame at a time, to keep calls
+   limited).
+5. No coin-based (or any non-A4) scale recovery exists; add it, or keep
    requiring `--height-cm` for this kind of shot.
-5. SAM 3D Objects on Modal is still completely unexercised against a real
+6. SAM 3D Objects on Modal is still completely unexercised against a real
    checkpoint/image -- first real run will also build the container image
    and download gated checkpoints (slow, costs Modal credits).
