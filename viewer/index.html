@@ -17,6 +17,10 @@
   }
   #top-left { top: 14px; left: 14px; width: 280px; }
   #top-right { top: 14px; right: 14px; width: 220px; }
+  #bottom-right { bottom: 14px; right: 14px; width: 260px; }
+  #bottom-right video { width: 100%; border-radius: 6px; margin-top: 6px; display: none; }
+  #provenance-readout { font-size: 11px; line-height: 1.5; color: #a8adba; white-space: pre-wrap; margin-top: 8px; }
+  input[type=file].small { font-size: 11px; width: 100%; color: #a8adba; margin-top: 4px; }
   #top-left h1 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
   #scale-banner {
     font-size: 11.5px; line-height: 1.4; padding: 8px; border-radius: 6px; margin-bottom: 10px;
@@ -75,6 +79,16 @@
   </div>
   <div id="sim-readout" style="font-size:11px; line-height:1.6; color:#a8adba; white-space:pre; display:none;">off</div>
   <div id="sim-hint" style="font-size:11px; color:#6b7080; display:none; margin-top:4px;">WASD move · Q/E down/up</div>
+</div>
+
+<div id="bottom-right" class="panel">
+  <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Provenance (optional)</div>
+  <label style="font-size:11px; color:#a8adba;">pipeline report.json</label>
+  <input id="file-report" class="small" type="file" accept=".json,application/json" />
+  <label style="font-size:11px; color:#a8adba; margin-top:8px; display:block;">source video</label>
+  <input id="file-video" class="small" type="file" accept="video/*" />
+  <video id="provenance-video" controls></video>
+  <div id="provenance-readout">No report loaded. This panel shows report.json fields read-only -- it does not change the loaded mesh.</div>
 </div>
 
 <div id="bottom-left" class="panel">
@@ -479,6 +493,45 @@ window.addEventListener("keydown", (ev) => {
     const [ux, uy, uz] = simKeys[k];
     simMove(ux * SIM_STEP, uy * SIM_STEP, uz * SIM_STEP);
   }
+});
+
+// --- Provenance panel: optional report.json / source video, read-only -----
+// Purely informational -- never alters the loaded mesh or its transform.
+// Surfaces the pipeline's own real report fields (mesh_backend, print_ready,
+// etc.) next to the live model so a viewer can see backend/validation
+// provenance without leaving this page.
+document.getElementById("file-report").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  file.text().then((text) => {
+    let report;
+    try {
+      report = JSON.parse(text);
+    } catch (err) {
+      document.getElementById("provenance-readout").textContent = `Could not parse ${file.name} as JSON: ${err}`;
+      return;
+    }
+    const lines = [
+      `mesh_backend: ${report.mesh_backend ?? "(not recorded)"}`,
+      `mesh_method: ${report.mesh_method ?? "(not recorded)"}`,
+      `print_ready: ${report.print_ready ?? "(not recorded)"}`,
+    ];
+    if (report.print_prep) {
+      lines.push(`watertight: ${report.print_prep.watertight}`);
+      lines.push(`thin_wall_warnings: ${report.print_prep.thin_wall_warning_count ?? "?"}/${report.print_prep.thin_wall_sample_count ?? "?"}`);
+      lines.push(`height_source: ${report.print_prep.height_source} (is_estimate=${report.print_prep.is_estimate})`);
+    }
+    document.getElementById("provenance-readout").textContent = lines.join("\n");
+    window.__lastLoadedReport = report;
+  });
+});
+
+document.getElementById("file-video").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const video = document.getElementById("provenance-video");
+  video.src = URL.createObjectURL(file);
+  video.style.display = "block";
 });
 
 // --- Render loop -----------------------------------------------------------

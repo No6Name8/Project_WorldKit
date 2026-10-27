@@ -224,6 +224,25 @@ function check(name, cond, detail) {
     `before.y=${simInfo.beforeFree[1]} after.y=${simInfo.afterFree[1]}`
   );
 
+  // 9. Provenance panel: loading a report.json surfaces its real fields
+  // read-only, without touching the loaded mesh's transform.
+  const fakeReport = JSON.stringify({
+    mesh_backend: "hosted",
+    mesh_method: "hosted_space_hunyuan3d:frogleo/Image-to-3D",
+    print_ready: false,
+    print_prep: { watertight: true, thin_wall_warning_count: 1151, thin_wall_sample_count: 1500, height_source: "default_fallback", is_estimate: true },
+  });
+  const reportPath = require("path").join(require("os").tmpdir(), "fake_report.json");
+  require("fs").writeFileSync(reportPath, fakeReport);
+  await page.setInputFiles("#file-report", reportPath);
+  await page.waitForTimeout(150);
+  const provenanceText = await page.locator("#provenance-readout").innerText();
+  check(
+    "provenance panel shows the loaded report's real fields",
+    provenanceText.includes("hosted") && provenanceText.includes("print_ready: false"),
+    provenanceText
+  );
+
   await browser.close();
 
   const failed = results.filter((r) => !r.pass);
