@@ -170,6 +170,44 @@ sam3d_image = (
         "cd /opt/sam3d-objects && ./patching/hydra || true",
     )
     .pip_install("pillow", "numpy<2")
+    # Real defect found on the first GPU launch (2026-10-28): the repo's notebook/inference.py does
+    # os.environ["CUDA_HOME"] = os.environ["CONDA_PREFIX"] at import time, and this image is not conda.
+    # Point it at the image's CUDA toolkit (what CUDA_HOME should be anyway).
+    # Third real defect (2026-10-28, found by the CPU preflight): `lightning`, imported by
+    # sam3d_objects/model/io.py, needs pkg_resources, which setuptools >= 81 no longer ships. Our own earlier
+    # `pip install --upgrade setuptools` (done to build nvidia-pyindex) had pulled in 84.x. Pin a late layer
+    # so the heavy earlier layers are not rebuilt.
+    .run_commands("pip install --no-cache-dir 'setuptools==80.9.0'")
+    # Fourth real defect (found by the CPU preflight): the repo's mesh post-processing calls
+    # utils3d.torch.RastContext(backend="cuda"), which needs nvdiffrast -- never mentioned in the repo's own
+    # requirements or docs. Its CUDA plugin JIT-compiles on first use; pre-compile it here on CPU
+    # (nvcc is in the image; sm_80 = the A100) so a compile error surfaces cheaply and the GPU run
+    # doesn't pay for compilation. CONDA_PREFIX/CUDA_HOME are set explicitly for this layer.
+    .run_commands(
+        "pip install --no-cache-dir --no-build-isolation 'git+https://github.com/NVlabs/nvdiffrast.git@v0.3.3'",
+        # nvdiffrast's _get_plugin() deliberately blanks TORCH_CUDA_ARCH_LIST (assuming a visible GPU), which
+        # crashes torch's arch detection on a GPU-less build host. Emit exactly the flags torch would derive
+        # on an A100 (8.0+PTX) so the build is validated here and its cached .so matches the runtime build.
+        "CUDA_HOME=/usr/local/cuda python -c "
+        "\"import torch.utils.cpp_extension as ce; "
+        "ce._get_cuda_arch_flags = lambda cflags=None: ['-gencode=arch=compute_80,code=sm_80', '-gencode=arch=compute_80,code=compute_80']; "
+        "import nvdiffrast.torch.ops as o; o._get_plugin(gl=False); print('nvdiffrast CUDA plugin precompiled')\"",
+    )
+    # Fifth real defect -- the first one the A100 itself exposed (2026-10-28 GPU run; model sampling and decoding
+    # had already run on the GPU): texture baking renders multi-view Gaussians through
+    # gaussian_render.render(backend="inria"), which needs `diff_gaussian_rasterization` -- the mip-splatting
+    # fork (it takes kernel_size/subpixel_offset), the same dependency TRELLIS-style code uses. The repo's own
+    # requirements omit it and its import is try/except-guarded, which is why my first CPU preflight wrongly
+    # treated it as optional. The CUDA build honours TORCH_CUDA_ARCH_LIST, so build it here for the A100 (8.0).
+    .run_commands(
+        "git clone --recursive --depth 1 https://github.com/autonomousvision/mip-splatting.git /opt/mip-splatting",
+        "cd /opt/mip-splatting/submodules/diff-gaussian-rasterization && "
+        "CXX=g++ CC=gcc CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.0 pip install --no-cache-dir --no-build-isolation .",  # g++: python's sysconfig links with a clang++ this image lacks
+    )
+    .env({"CONDA_PREFIX": "/usr/local/cuda"})
+    # Second real defect (2026-10-28, found on the A100 after the first fix): open3d, imported by
+    # sam3d_objects.pipeline.inference_utils, needs libGL.so.1 and friends, absent from the CUDA base image.
+    .apt_install("libgl1", "libglib2.0-0", "libsm6", "libxext6", "libxrender1")
 )
 
 
@@ -211,9 +249,373 @@ def _ensure_checkpoints() -> None:
 
 @app.function(
     image=sam3d_image,
+    volumes={CHECKPOINT_DIR: checkpoint_volume},
+    timeout=60 * 60,
+    secrets=[modal.Secret.from_name("huggingface")],
+)
+def download_checkpoints() -> str:
+    """CPU-only: fetch the 13 GB gated checkpoints into the Volume once.
+
+    Runs WITHOUT a GPU so the download is billed at CPU rates instead of A100
+    rates (previously this happened inside the GPU function). Idempotent.
+    """
+    import os
+
+    _ensure_checkpoints()
+    return ", ".join(sorted(os.listdir(f"{CHECKPOINT_DIR}/hf")))
+
+
+@app.function(image=sam3d_image, volumes={CHECKPOINT_DIR: checkpoint_volume}, timeout=15 * 60)
+def check_environment() -> str:
+    """CPU-ONLY preflight of everything the GPU run needs, collecting ALL failures (not just the first).
+
+    Same image and Volume as ``reconstruct_mesh``, but no GPU and NO Hugging Face secret, so it cannot
+    download anything or spend GPU money. Verifies: CUDA_HOME/CONDA_PREFIX, system libs (libGL),
+    every Python import the inference + mesh/texture-baking path touches, that the Volume checkpoints
+    exist and every path pipeline.yaml references resolves, the hydra safety check the repo runs, and
+    that the entry-point signatures match what ``reconstruct_mesh`` calls.
+    """
+    import importlib
+    import inspect
+    import os
+    import subprocess
+    import sys
+    import traceback
+
+    report: dict = {"errors": []}
+
+    def attempt(label, fn):
+        try:
+            report[label] = fn()
+        except BaseException as exc:  # noqa: BLE001 - a preflight must survive and report every failure
+            report["errors"].append(f"{label}: {type(exc).__name__}: {exc}")
+            report[label] = "FAILED: " + traceback.format_exc()
+
+    # 1. environment
+    def env():
+        cp = os.environ.get("CONDA_PREFIX")
+        return {
+            "CONDA_PREFIX": cp,
+            "exists": bool(cp) and os.path.isdir(cp),
+            "nvcc": bool(cp) and os.path.exists(os.path.join(cp, "bin", "nvcc")),
+            "include_cuda_runtime_h": bool(cp) and os.path.exists(os.path.join(cp, "include", "cuda_runtime.h")),
+        }
+
+    attempt("env", env)
+    attempt("libGL", lambda: subprocess.run("ldconfig -p | grep -E 'libGL\.so\.1|libglib-2'", shell=True, capture_output=True, text=True).stdout.strip() or "NOT FOUND")
+
+    attempt("pip_info", lambda: subprocess.run(
+        "python -m pip list 2>/dev/null | grep -iE '^(setuptools|wheel|utils3d|pkg.resources|pip) ' ; "
+        "python -m pip show -f utils3d 2>&1 | head -40; ls -la /usr/local/lib/python3.11/site-packages/utils3d 2>&1 | head -20",
+        shell=True, capture_output=True, text=True).stdout)
+
+    attempt("nvdiffrast_plugin_built", lambda: subprocess.run(
+        "find /root/.cache/torch_extensions -name '*.so' 2>/dev/null; echo ---; python -m pip show nvdiffrast 2>&1 | head -3",
+        shell=True, capture_output=True, text=True).stdout)
+    attempt("ninja_and_nvcc", lambda: subprocess.run("which ninja nvcc; nvcc --version | tail -2", shell=True, capture_output=True, text=True).stdout)
+
+    def utils3d_api():
+        # every utils3d function the repo calls (found by grepping sam3d_objects/ and notebook/)
+        import utils3d
+
+        need = [
+            "torch.rasterize_triangle_faces", "torch.RastContext", "torch.intrinsics_from_fov_xy", "torch.extrinsics_look_at",
+            "torch.compute_connected_components", "io.write_ply", "torch.view_look_at", "torch.remove_unreferenced_vertices",
+            "torch.perspective_from_fov_xy", "torch.intrinsics_to_perspective", "torch.intrinsics_from_focal_center",
+            "torch.extrinsics_to_view", "torch.depth_to_points", "torch.compute_edges", "torch.compute_edge_connected_components",
+            "torch.compute_dual_graph",
+        ]
+        missing = []
+        for dotted in need:
+            obj = utils3d
+            try:
+                for part in dotted.split("."):
+                    obj = getattr(obj, part)
+            except BaseException as exc:  # noqa: BLE001
+                missing.append(f"{dotted} ({type(exc).__name__}: {exc})")
+        if missing:
+            report["errors"].append(f"utils3d API missing: {missing}")
+        return {"checked": len(need), "missing": missing}
+
+    attempt("utils3d_api", utils3d_api)
+
+    def gaussian_renderer():
+        # The exact condition the A100 run failed on: the repo's gaussian_render module must have the name
+        # `GaussianRasterizationSettings` bound, with the fields it passes (kernel_size, subpixel_offset).
+        sys.path.append("/opt/sam3d-objects/notebook")
+        importlib.import_module("inference")  # same order as the real run: sets LIDRA_SKIP_INIT before sam3d_objects loads
+        mod = importlib.import_module("sam3d_objects.model.backbone.tdfy_dit.renderers.gaussian_render")
+        bound = hasattr(mod, "GaussianRasterizationSettings")
+        fields = list(getattr(getattr(mod, "GaussianRasterizationSettings", None), "_fields", []))
+        needed = {"kernel_size", "subpixel_offset", "image_height", "image_width", "tanfovx", "tanfovy", "bg",
+                  "scale_modifier", "viewmatrix", "projmatrix", "sh_degree", "campos", "prefiltered", "debug"}
+        missing = sorted(needed - set(fields))
+        # The repo calls  GaussianRasterizer(raster_settings=...)(means3D=, means2D=, shs=, colors_precomp=, opacities=,
+        # scales=, rotations=, cov3D_precomp=)  and unpacks  (rendered_image, radii).  Check the installed fork's
+        # real forward() signature and that its compiled extension exposes the kernel entry point.
+        import diff_gaussian_rasterization as dgr
+
+        fwd = set(inspect.signature(dgr.GaussianRasterizer.forward).parameters)
+        call_kwargs = {"means3D", "means2D", "shs", "colors_precomp", "opacities", "scales", "rotations", "cov3D_precomp"}
+        fwd_missing = sorted(call_kwargs - fwd)
+        has_kernel = hasattr(dgr._C, "rasterize_gaussians")
+        if not bound or missing or fwd_missing or not has_kernel:
+            report["errors"].append(
+                f"gaussian_render: bound={bound} missing_fields={missing} forward_missing={fwd_missing} kernel={has_kernel}"
+            )
+        return {
+            "GaussianRasterizationSettings_bound": bound, "fields": fields, "missing_fields": missing,
+            "forward_params": sorted(fwd), "forward_missing_kwargs": fwd_missing, "compiled_kernel_rasterize_gaussians": has_kernel,
+            "package_file": dgr.__file__,
+        }
+
+    attempt("gaussian_renderer", gaussian_renderer)
+
+    # 2. imports the inference + baking path needs
+    versions = {}
+    for mod in [
+        "torch", "torchvision", "kaolin", "pytorch3d", "open3d", "flash_attn", "gsplat", "utils3d", "xatlas",
+        "pyvista", "pymeshfix", "igraph", "hydra", "omegaconf", "seaborn", "gradio", "trimesh", "cv2", "spconv",
+        "moge", "loguru", "safetensors", "lightning", "pkg_resources", "nvdiffrast.torch",
+        "diff_gaussian_rasterization",  # REQUIRED: baked-texture multi-view render (the GPU run failed without it)
+    ]:
+        try:
+            m = importlib.import_module(mod)
+            try:
+                versions[mod] = str(getattr(m, "__version__", "ok"))
+            except BaseException:  # noqa: BLE001 - e.g. utils3d's module __getattr__ tries to import a submodule
+                versions[mod] = "ok (imported; no __version__)"
+        except BaseException as exc:  # noqa: BLE001
+            versions[mod] = f"FAILED {type(exc).__name__}: {exc} || {traceback.format_exc()}"
+            report["errors"].append(f"import {mod}: {type(exc).__name__}: {exc}")
+    report["imports"] = versions
+    try:
+        import torch
+
+        report["torch_cuda"] = {"built_for": torch.version.cuda, "available_here(expected False on CPU)": torch.cuda.is_available()}
+    except BaseException:  # noqa: BLE001
+        pass
+
+    # 3. the repo's own inference module (also sets CUDA_HOME from CONDA_PREFIX) and baking utils
+    sys.path.append("/opt/sam3d-objects/notebook")
+
+    def inference_module():
+        inf = importlib.import_module("inference")
+        importlib.import_module("sam3d_objects.model.backbone.tdfy_dit.utils.postprocessing_utils")
+        return {"CUDA_HOME_after_import": os.environ.get("CUDA_HOME"), "has_Inference": hasattr(inf, "Inference")}
+
+    attempt("inference_module", inference_module)
+
+    # 4. entry-point signatures vs. what reconstruct_mesh calls
+    def signatures():
+        inf = importlib.import_module("inference")
+        pm = importlib.import_module("sam3d_objects.pipeline.inference_pipeline_pointmap")
+        run_params = set(inspect.signature(pm.InferencePipelinePointMap.run).parameters)
+        used = {"image", "mask", "seed", "with_mesh_postprocess", "with_texture_baking", "decode_formats"}
+        init_params = set(inspect.signature(inf.Inference.__init__).parameters)
+        return {
+            "Inference.__init__": sorted(init_params),
+            "run_accepts_all_args_we_pass": used <= run_params,
+            "run_missing": sorted(used - run_params),
+        }
+
+    attempt("signatures", signatures)
+
+    # 5. Volume checkpoints (NOT downloaded here) + every path pipeline.yaml references
+    def checkpoints():
+        root = f"{CHECKPOINT_DIR}/hf"
+        files = {f: os.path.getsize(os.path.join(root, f)) for f in sorted(os.listdir(root))}
+        cfg_path = os.path.join(root, "pipeline.yaml")
+        from omegaconf import OmegaConf
+
+        cfg = OmegaConf.load(cfg_path)
+        container = OmegaConf.to_container(cfg, resolve=False)
+        refs = []
+
+        def walk(x):
+            if isinstance(x, dict):
+                for v in x.values():
+                    walk(v)
+            elif isinstance(x, list):
+                for v in x:
+                    walk(v)
+            elif isinstance(x, str) and any(x.endswith(e) for e in (".ckpt", ".yaml", ".safetensors", ".pt", ".pth")):
+                refs.append(x)
+
+        walk(container)
+        missing = [r for r in refs if not (os.path.exists(r) or os.path.exists(os.path.join(root, r)))]
+        return {
+            "files_MB": {k: round(v / 1e6, 1) for k, v in files.items()},
+            "total_GB": round(sum(files.values()) / 1e9, 2),
+            "referenced_paths": refs,
+            "referenced_but_missing": missing,
+            "top_level_keys": list(container)[:40],
+            "rendering_engine_in_yaml": container.get("rendering_engine"),
+            "depth_model_config": container.get("depth_model"),  # the one model that may fetch weights at runtime
+            "optional_diff_gaussian_rasterization_importable": importlib.util.find_spec("diff_gaussian_rasterization") is not None,
+        }
+
+    attempt("checkpoints", checkpoints)
+
+    def hydra_safety():
+        inf = importlib.import_module("inference")
+        from omegaconf import OmegaConf
+
+        cfg = OmegaConf.load(f"{CHECKPOINT_DIR}/hf/pipeline.yaml")
+        cfg.rendering_engine = "pytorch3d"
+        cfg.workspace_dir = f"{CHECKPOINT_DIR}/hf"
+        inf.check_hydra_safety(cfg, inf.WHITELIST_FILTERS, inf.BLACKLIST_FILTERS)
+        return "passed (same check Inference.__init__ runs before instantiating)"
+
+    attempt("hydra_safety_check", hydra_safety)
+    report["ok"] = not report["errors"]
+    import json
+
+    # Plain JSON text: returning objects such as torch.__version__ pickles torch types the (torch-less)
+    # local client cannot unpickle.
+    return json.dumps(report, default=str)
+
+
+@app.function(image=sam3d_image, gpu=GPU_TYPE, timeout=15 * 60, max_containers=1)
+def gpu_smoke_test() -> str:
+    """A100 smoke test of every CUDA extension on the real inference path -- WITHOUT loading the 13 GB models.
+
+    Successful imports do not prove a compiled CUDA extension runs on the actual GPU, so this exercises each
+    one through the repo's own call sites, on synthetic data: nvdiffrast (via utils3d), flash_attn, spconv, the
+    Gaussian rasterizer (via the repo's render_multiview), and finally the repo's complete to_glb() -- mesh
+    post-processing, UV parametrization, 100-view Gaussian rendering and the 2500-step texture bake -- on a
+    synthetic sphere. That is the exact stage the first real GPU run died in, so a pass here means the
+    expensive model run should get through baking. No secrets are attached and no checkpoints are read.
+    """
+    import importlib
+    import json
+    import os
+    import sys
+    import time
+    import traceback
+
+    results: dict = {}
+
+    def run(name, fn):
+        t0 = time.time()
+        try:
+            out = fn()
+            results[name] = {"ok": True, "seconds": round(time.time() - t0, 1), "detail": out}
+        except BaseException as exc:  # noqa: BLE001 - keep going so ONE run reports every broken extension
+            results[name] = {"ok": False, "seconds": round(time.time() - t0, 1), "error": f"{type(exc).__name__}: {exc}",
+                             "traceback": traceback.format_exc()[-1800:]}
+
+    import torch
+
+    sys.path.append("/opt/sam3d-objects/notebook")
+    importlib.import_module("inference")  # sets CUDA_HOME / LIDRA_SKIP_INIT exactly like the real run
+
+    run("cuda", lambda: {
+        "device": torch.cuda.get_device_name(0), "capability": list(torch.cuda.get_device_capability(0)),
+        "torch": torch.__version__, "cuda": torch.version.cuda,
+    })
+
+    def nvdiffrast_via_utils3d():
+        import utils3d
+
+        ctx = utils3d.torch.RastContext(backend="cuda")
+        verts = torch.tensor([[[-0.8, -0.8], [0.8, -0.8], [0.0, 0.8]]], device="cuda")
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int32, device="cuda")
+        out = utils3d.torch.rasterize_triangle_faces(ctx, verts, faces, 64, 64)
+        covered = float(out["mask"].sum())
+        assert covered > 100, f"triangle rasterized to only {covered} pixels"
+        return {"covered_pixels": covered}
+
+    run("nvdiffrast_via_utils3d", nvdiffrast_via_utils3d)
+
+    def flash_attention():
+        from flash_attn import flash_attn_func
+
+        q = torch.randn(1, 16, 4, 64, device="cuda", dtype=torch.float16)
+        out = flash_attn_func(q, q, q)
+        assert torch.isfinite(out).all()
+        return {"shape": list(out.shape)}
+
+    run("flash_attn", flash_attention)
+
+    def spconv_conv():
+        import spconv.pytorch as spconv
+
+        coords = torch.randint(0, 8, (200, 4), dtype=torch.int32, device="cuda")
+        coords[:, 0] = 0
+        coords = torch.unique(coords, dim=0)
+        feats = torch.randn(len(coords), 8, device="cuda")
+        x = spconv.SparseConvTensor(feats, coords, [8, 8, 8], 1)
+        y = spconv.SubMConv3d(8, 8, 3, indice_key="smoke").cuda()(x)
+        assert torch.isfinite(y.features).all()
+        return {"voxels": int(len(coords))}
+
+    run("spconv", spconv_conv)
+
+    def synthetic_scene():
+        import numpy as np
+        import trimesh
+
+        from sam3d_objects.model.backbone.tdfy_dit.representations.gaussian import Gaussian
+        from sam3d_objects.model.backbone.tdfy_dit.representations.mesh.cube2mesh import MeshExtractResult
+
+        sphere = trimesh.creation.icosphere(subdivisions=4, radius=0.5)
+        verts = torch.tensor(np.asarray(sphere.vertices), dtype=torch.float32, device="cuda")
+        faces = torch.tensor(np.asarray(sphere.faces), dtype=torch.int32, device="cuda")
+        attrs = torch.rand(len(verts), 6, device="cuda")
+        mesh = MeshExtractResult(verts, faces, vertex_attrs=attrs)
+
+        g = Gaussian(aabb=[-1.0, -1.0, -1.0, 2.0, 2.0, 2.0], sh_degree=0, device="cuda")
+        pts = torch.tensor(np.asarray(sphere.sample(3000)), dtype=torch.float32, device="cuda")
+        aabb = g.aabb
+        g._xyz = (pts - aabb[None, :3]) / aabb[None, 3:]
+        g._features_dc = (pts / 1.0 + 0.5).clamp(0, 1)[:, None, :].contiguous()
+        g._features_rest = None
+        g._scaling = torch.full((len(pts), 3), 0.7, device="cuda")
+        g._rotation = torch.zeros(len(pts), 4, device="cuda")
+        g._opacity = torch.full((len(pts), 1), 3.0, device="cuda")
+        return g, mesh
+
+    def gaussian_multiview():
+        from sam3d_objects.model.backbone.tdfy_dit.utils.render_utils import render_multiview
+
+        g, _ = synthetic_scene()
+        obs, extr, intr = render_multiview(g, resolution=256, nviews=4)
+        nonblank = [float((o > 0).any(axis=-1).mean()) for o in obs]
+        assert max(nonblank) > 0.05, f"gaussian render is blank: {nonblank}"
+        return {"views": len(obs), "nonblank_fraction": [round(n, 3) for n in nonblank]}
+
+    run("gaussian_render_multiview_(diff_gaussian_rasterization)", gaussian_multiview)
+
+    def full_to_glb():
+        import io
+
+        from sam3d_objects.model.backbone.tdfy_dit.utils import postprocessing_utils
+
+        g, mesh = synthetic_scene()
+        glb = postprocessing_utils.to_glb(
+            g, mesh, simplify=0.95, texture_size=1024, verbose=False,
+            with_mesh_postprocess=True, with_texture_baking=True, rendering_engine="pytorch3d",
+        )
+        buf = glb.export(file_type="glb")
+        tex = glb.visual.material.baseColorTexture
+        import numpy as np
+
+        arr = np.array(tex)
+        return {"faces": int(len(glb.faces)), "vertices": int(len(glb.vertices)), "glb_bytes": len(buf),
+                "texture_size": list(tex.size), "texture_std": round(float(arr.std()), 2)}
+
+    run("to_glb_full_stage_(postprocess+uv+bake)", full_to_glb)
+    results["all_ok"] = all(v.get("ok") for k, v in results.items() if isinstance(v, dict))
+    return json.dumps(results, default=str)
+
+
+@app.function(
+    image=sam3d_image,
     gpu=GPU_TYPE,
     volumes={CHECKPOINT_DIR: checkpoint_volume},
-    timeout=30 * 60,
+    timeout=30 * 60,  # enforced by Modal: worst case 30 min x $2.10/h = $1.05 of GPU time
+    max_containers=1,  # never more than one A100 at a time
     secrets=[modal.Secret.from_name("huggingface")],
 )
 def reconstruct_mesh(rgba_png_bytes: bytes) -> bytes:
@@ -274,11 +676,32 @@ def reconstruct_mesh(rgba_png_bytes: bytes) -> bytes:
 
 
 @app.local_entrypoint()
+def check_env() -> None:
+    """CPU-only preflight: `modal run modal_app/sam3d.py::check_env`. Prints the full report."""
+    import json
+
+    report = json.loads(check_environment.remote())
+    print(json.dumps(report, indent=1, default=str))
+    print("PREFLIGHT_OK" if report["ok"] else f"PREFLIGHT_FAILED ({len(report['errors'])} errors)")
+
+
+@app.local_entrypoint()
+def gpu_smoke() -> None:
+    """A100 smoke test of the CUDA extensions (no models loaded): `modal run modal_app/sam3d.py::gpu_smoke`."""
+    import json
+
+    report = json.loads(gpu_smoke_test.remote())
+    print(json.dumps(report, indent=2))
+    print("GPU_SMOKE_OK" if report.get("all_ok") else "GPU_SMOKE_FAILED")
+
+
+@app.local_entrypoint()
 def main(input_image: str, output_glb: str = "model.glb") -> None:
     """CLI smoke test: `modal run pipeline/modal_app/sam3d.py --input-image path.png`."""
     from pathlib import Path
 
     image_bytes = Path(input_image).read_bytes()
+    print("checkpoints (CPU step):", download_checkpoints.remote())
     glb_bytes = reconstruct_mesh.remote(image_bytes)
     Path(output_glb).write_bytes(glb_bytes)
     print(f"wrote {output_glb} ({len(glb_bytes)} bytes)")
