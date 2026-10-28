@@ -74,3 +74,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# --- Bundled demo assets + vendored libraries (tracked on purpose: the viewer must work offline with no GPU/API key) ---
+!viewer/assets/demo/
+!viewer/assets/demo/**
+!viewer/vendor/**
+!pipeline/samples/mug_on_table.mp4
