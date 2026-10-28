@@ -1,0 +1,635 @@
+{
+  "timings_sec": {
+    "frames": 2.27,
+    "detect": 22.84,
+    "segment": 2.42,
+    "reconstruct": 0.0,
+    "appearance": 371.92,
+    "printprep": 0.6,
+    "preview": 7.66
+  },
+  "warnings": [
+    "A4 sheet not found/segmented: SAM 3.1 found no mask for concept 'A4 sheet of paper' in runs\\sam3d_run7_fidelity\\frames\\sharp_11.png. Try a different --object name, or check the frame actually shows it.",
+    "Fidelity stage applied: applied: held-out agreement improved; geometry unchanged except as listed under geometry"
+  ],
+  "frames_extracted": 12,
+  "object_name": "mug",
+  "detect_reason": "Mug is fully in frame, in focus, with handle and pattern clearly visible.",
+  "used_fallback_detect": false,
+  "api_usage": {
+    "muse_spark_detect_tokens": {
+      "completion_tokens": 3896,
+      "prompt_tokens": 6308,
+      "total_tokens": 10204,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": null,
+        "reasoning_tokens": 3849,
+        "rejected_prediction_tokens": null,
+        "text_tokens": null
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": null,
+        "cache_write_tokens": null,
+        "cached_tokens": 0,
+        "image_tokens": null,
+        "text_tokens": null
+      }
+    },
+    "note": "The Meta Model API does not return a dollar cost per call, only token usage (shown here where the API provided it). No per-request pricing was found in the docs, so a dollar cost cannot be computed."
+  },
+  "chosen_frame": "runs\\sam3d_run7_fidelity\\chosen_frame.png",
+  "used_fallback_segment": false,
+  "segment_from_cache": true,
+  "segment_source": "sam-3.1_cached",
+  "mask_overlay": "runs\\sam3d_run7_fidelity\\mask_overlay.png",
+  "mesh_method": "imported_external_mesh:model.glb",
+  "mesh_backend": "import",
+  "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+  },
+  "mesh_source": {
+    "source_report": "runs\\sam3d_run4_e2e_crop\\report.json",
+    "source_mesh_backend": "modal",
+    "source_mesh_method": "modal_sam3d_builtin_mesh_postprocess_and_texture_baking",
+    "mesh_sha256": "897687b1478a0c4ebc0df0b39f6616ccc78a5b62f60ba060d37c89e41de244bd",
+    "note": "model attribution inherited from the source report; the mesh file is byte-identical to the one it records"
+  },
+  "fidelity": {
+    "frames_without_genuine_mask": [],
+    "applied": true,
+    "geometry": {
+      "before": {
+        "axis_tilt_from_y_deg": 0.1654692676758239,
+        "rim_tilt_vs_base_deg": 0.2598845473302759,
+        "rim_planarity_resid_over_radius": 0.008698580880387932,
+        "rim_circularity_std_over_radius": 0.009780307422148778,
+        "base_circularity_std_over_radius": 0.050994132343073144,
+        "height": 1.452564001083374
+      },
+      "axis_alignment": {
+        "apply": false,
+        "tilt_deg": 0.1654692676758239,
+        "reason": "axis tilt 0.17 deg from +Y; rim/base planes are 0.13/0.13 deg off the axis -> no rotation: tilt below threshold",
+        "axis": [
+          -0.00014148808534591368,
+          0.9999958297784585,
+          -0.0028845115382123802
+        ]
+      },
+      "rim_regularization": {
+        "apply": false,
+        "planarity": 0.008698580880387932,
+        "circularity": 0.009780307422148778,
+        "reason": "no rim correction: measured rim is within tolerance"
+      },
+      "modified": false
+    },
+    "decisions": [
+      "applied: held-out agreement improved; geometry unchanged except as listed under geometry"
+    ],
+    "plan": {
+      "texture_model": true,
+      "rim_constraint_permitted": false,
+      "reasons": [
+        "geometry: axis tilt 0.2 deg, rim circularity 0.010 -> body of revolution",
+        "vision: category 'mug' (conf 0.95), body of revolution=True, pattern=vertical stripes (conf 0.9)"
+      ]
+    },
+    "understanding": {
+      "observations": {
+        "object_category": "mug",
+        "category_confidence": 0.95,
+        "body_of_revolution": true,
+        "body_of_revolution_confidence": 0.9,
+        "has_handle": true,
+        "handle_shape": "loop",
+        "rim": {
+          "visible": true,
+          "shape": "oval",
+          "level": "level",
+          "confidence": 0.85
+        },
+        "pattern": {
+          "present": true,
+          "type": "vertical stripes",
+          "stripe_shape": "wavy",
+          "colors": [
+            "white",
+            "dark blue"
+          ],
+          "visible_stripe_count_per_frame": [
+            7,
+            5,
+            6,
+            7,
+            6,
+            6
+          ],
+          "estimated_total_stripes_around": 12,
+          "region_top_fraction_of_body_height": 0.6,
+          "region_bottom_fraction_of_body_height": 0.0,
+          "confidence": 0.9
+        },
+        "material": "glazed ceramic",
+        "unobserved_regions": [
+          "underside of base"
+        ],
+        "frame_notes": [
+          {
+            "frame": 0,
+            "handle_visible": false,
+            "interior_visible": true
+          },
+          {
+            "frame": 1,
+            "handle_visible": true,
+            "interior_visible": true
+          },
+          {
+            "frame": 2,
+            "handle_visible": true,
+            "interior_visible": true
+          },
+          {
+            "frame": 3,
+            "handle_visible": true,
+            "interior_visible": true
+          },
+          {
+            "frame": 4,
+            "handle_visible": true,
+            "interior_visible": true
+          },
+          {
+            "frame": 5,
+            "handle_visible": true,
+            "interior_visible": true
+          }
+        ]
+      },
+      "frames": [
+        "sharp_00.png",
+        "sharp_02.png",
+        "sharp_04.png",
+        "sharp_07.png",
+        "sharp_09.png",
+        "sharp_11.png"
+      ],
+      "from_cache": false,
+      "usage": {
+        "completion_tokens": 3097,
+        "prompt_tokens": 2616,
+        "total_tokens": 5713,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 2741,
+          "rejected_prediction_tokens": null,
+          "text_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cache_write_tokens": null,
+          "cached_tokens": 0,
+          "image_tokens": null,
+          "text_tokens": null
+        }
+      },
+      "used_fallback": false,
+      "notes": []
+    },
+    "frames_skipped": {},
+    "qc": {
+      "held_out_frames": [
+        "sharp_08",
+        "sharp_09",
+        "sharp_05",
+        "sharp_02"
+      ],
+      "train_frames": [
+        "sharp_00",
+        "sharp_03",
+        "sharp_07",
+        "sharp_11",
+        "sharp_04",
+        "sharp_01",
+        "sharp_10",
+        "sharp_06"
+      ],
+      "baseline_held_out": {
+        "sharp_08": {
+          "ncc": 0.647,
+          "mae": 33.7,
+          "stripe_iou": 0.483,
+          "silhouette_iou": 0.919
+        },
+        "sharp_09": {
+          "ncc": 0.733,
+          "mae": 31.9,
+          "stripe_iou": 0.577,
+          "silhouette_iou": 0.938
+        },
+        "sharp_05": {
+          "ncc": 0.746,
+          "mae": 36.5,
+          "stripe_iou": 0.595,
+          "silhouette_iou": 0.86
+        },
+        "sharp_02": {
+          "ncc": 0.75,
+          "mae": 30.9,
+          "stripe_iou": 0.621,
+          "silhouette_iou": 0.707
+        }
+      },
+      "candidate_held_out": {
+        "sharp_08": {
+          "ncc": 0.852,
+          "mae": 31.6,
+          "stripe_iou": 0.775,
+          "silhouette_iou": 0.945
+        },
+        "sharp_09": {
+          "ncc": 0.85,
+          "mae": 31.7,
+          "stripe_iou": 0.777,
+          "silhouette_iou": 0.937
+        },
+        "sharp_05": {
+          "ncc": 0.867,
+          "mae": 35.4,
+          "stripe_iou": 0.789,
+          "silhouette_iou": 0.862
+        },
+        "sharp_02": {
+          "ncc": 0.814,
+          "mae": 28.4,
+          "stripe_iou": 0.705,
+          "silhouette_iou": 0.837
+        }
+      },
+      "baseline_summary": {
+        "ncc": 0.719,
+        "mae": 33.25,
+        "stripe_iou": 0.569,
+        "silhouette_iou": 0.856,
+        "n_frames": 4
+      },
+      "candidate_summary": {
+        "ncc": 0.84575,
+        "mae": 31.775,
+        "stripe_iou": 0.7615000000000001,
+        "silhouette_iou": 0.8952500000000001,
+        "n_frames": 4
+      },
+      "accepted": true,
+      "reasons": [
+        "held-out NCC 0.719 -> 0.846, stripe IoU 0.569 -> 0.762"
+      ],
+      "criteria": {
+        "min_ncc_gain": 0.03,
+        "min_stripe_iou_gain": 0.03,
+        "max_single_frame_ncc_drop": 0.1
+      },
+      "metric_notes": "NCC/stripe IoU/silhouette IoU: see worldkit/qc.py; MAE is reported but not used (exposure dependent)"
+    },
+    "final": {
+      "info": {
+        "registration": [
+          {
+            "frame": "sharp_02",
+            "cluster": 0,
+            "role": "anchor",
+            "dtheta_deg": 0.0,
+            "dh_px": 0,
+            "ncc": null
+          },
+          {
+            "frame": "sharp_06",
+            "cluster": 0,
+            "role": "registered",
+            "dtheta_deg": -1.0,
+            "dh_px": 7,
+            "ncc": 0.711,
+            "overlap_weight": 20445.1
+          },
+          {
+            "frame": "sharp_04",
+            "cluster": 1,
+            "role": "cluster anchor (gauge from silhouette pose only)",
+            "dtheta_deg": 0.0,
+            "dh_px": 0,
+            "ncc": null
+          },
+          {
+            "frame": "sharp_09",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -0.5,
+            "dh_px": -1,
+            "ncc": 0.969,
+            "overlap_weight": 26558.7
+          },
+          {
+            "frame": "sharp_11",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -0.5,
+            "dh_px": -1,
+            "ncc": 0.942,
+            "overlap_weight": 30543.2
+          },
+          {
+            "frame": "sharp_07",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -1.5,
+            "dh_px": -3,
+            "ncc": 0.862,
+            "overlap_weight": 30800.1
+          },
+          {
+            "frame": "sharp_08",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -3.0,
+            "dh_px": -3,
+            "ncc": 0.853,
+            "overlap_weight": 30335.1
+          },
+          {
+            "frame": "sharp_00",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -2.0,
+            "dh_px": 0,
+            "ncc": 0.672,
+            "overlap_weight": 31279.3
+          },
+          {
+            "frame": "sharp_03",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -4.0,
+            "dh_px": -3,
+            "ncc": 0.69,
+            "overlap_weight": 31381.3
+          },
+          {
+            "frame": "sharp_01",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": -0.5,
+            "dh_px": -3,
+            "ncc": 0.802,
+            "overlap_weight": 20928.4
+          },
+          {
+            "frame": "sharp_05",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": 0.0,
+            "dh_px": 0,
+            "ncc": 0.875,
+            "overlap_weight": 19390.8
+          },
+          {
+            "frame": "sharp_10",
+            "cluster": 1,
+            "role": "registered",
+            "dtheta_deg": 1.5,
+            "dh_px": -5,
+            "ncc": 0.862,
+            "overlap_weight": 18491.2
+          }
+        ],
+        "frames_unwrapped": [
+          "sharp_02",
+          "sharp_06",
+          "sharp_04",
+          "sharp_11",
+          "sharp_01",
+          "sharp_10",
+          "sharp_05",
+          "sharp_09",
+          "sharp_08",
+          "sharp_07",
+          "sharp_03",
+          "sharp_00"
+        ],
+        "pattern_model": {
+          "stripes_observed_for_lattice": 9,
+          "spacing_cv": 0.05441357901544809,
+          "spacing_deg_mean": 26.5,
+          "implied_count": 13.584905660377359,
+          "stripe_count_chosen": 14,
+          "lattice_rel_residual": 0.11364903761272123,
+          "lattice_rms_residual_deg": 2.922403824327117,
+          "position_mode": "observed",
+          "slots_with_observed_position": 9,
+          "slots_from_lattice": 5,
+          "single_frame_stripe_observations": 43,
+          "waveform_shared_std_cols": 2.589519917362318,
+          "waveform_amplitude_cols": 13.191023239879287,
+          "stripe_width_deg": 12.06618791156345,
+          "vertical_extent_h": [
+            0.046875,
+            0.71875
+          ]
+        },
+        "pattern_centres_deg": [
+          9.643590999606312,
+          35.357876713892026,
+          61.07216242817774,
+          84.0,
+          110.0,
+          136.0,
+          162.5,
+          189.0,
+          216.0,
+          242.5,
+          266.7864481424635,
+          299.0,
+          321.5,
+          343.9293052853206
+        ],
+        "pattern_n_stripes": 14,
+        "pattern_extent_h": [
+          0.046875,
+          0.71875
+        ],
+        "albedo": {
+          "method": "stripe lattice + canonical waveform (measured from the frames)",
+          "white_rgb": [
+            187.0,
+            189.0,
+            188.0
+          ],
+          "dark_rgb": [
+            30.393211077088917,
+            32.015305404149,
+            45.19462612276012
+          ],
+          "model_vs_observation_mae": 0.14801341397006823,
+          "model_vs_observation_rmse": 0.31475851844459285,
+          "observed_theta_fraction": 0.9305555555555556
+        },
+        "uv_stats": {
+          "texels_on_body_fraction": 0.3942681207764817,
+          "observed_fraction": 0.3666175267937847,
+          "inferred_fraction": 0.027650593982697026,
+          "generated_fraction": 0.6057318792235182
+        }
+      },
+      "all_frames_agreement": {
+        "sharp_00": {
+          "ncc": 0.843,
+          "mae": 32.0,
+          "stripe_iou": 0.762,
+          "silhouette_iou": 0.948
+        },
+        "sharp_03": {
+          "ncc": 0.858,
+          "mae": 31.9,
+          "stripe_iou": 0.774,
+          "silhouette_iou": 0.948
+        },
+        "sharp_08": {
+          "ncc": 0.859,
+          "mae": 31.3,
+          "stripe_iou": 0.789,
+          "silhouette_iou": 0.944
+        },
+        "sharp_07": {
+          "ncc": 0.865,
+          "mae": 31.9,
+          "stripe_iou": 0.791,
+          "silhouette_iou": 0.933
+        },
+        "sharp_11": {
+          "ncc": 0.863,
+          "mae": 31.7,
+          "stripe_iou": 0.794,
+          "silhouette_iou": 0.935
+        },
+        "sharp_09": {
+          "ncc": 0.866,
+          "mae": 31.3,
+          "stripe_iou": 0.797,
+          "silhouette_iou": 0.932
+        },
+        "sharp_04": {
+          "ncc": 0.855,
+          "mae": 31.3,
+          "stripe_iou": 0.781,
+          "silhouette_iou": 0.928
+        },
+        "sharp_01": {
+          "ncc": 0.861,
+          "mae": 33.9,
+          "stripe_iou": 0.787,
+          "silhouette_iou": 0.848
+        },
+        "sharp_05": {
+          "ncc": 0.879,
+          "mae": 34.7,
+          "stripe_iou": 0.81,
+          "silhouette_iou": 0.862
+        },
+        "sharp_10": {
+          "ncc": 0.827,
+          "mae": 33.7,
+          "stripe_iou": 0.723,
+          "silhouette_iou": 0.889
+        },
+        "sharp_06": {
+          "ncc": 0.734,
+          "mae": 30.4,
+          "stripe_iou": 0.597,
+          "silhouette_iou": 0.889
+        },
+        "sharp_02": {
+          "ncc": 0.784,
+          "mae": 29.3,
+          "stripe_iou": 0.673,
+          "silhouette_iou": 0.849
+        }
+      },
+      "summary": {
+        "ncc": 0.8411666666666667,
+        "mae": 31.95,
+        "stripe_iou": 0.7565000000000001,
+        "silhouette_iou": 0.9087499999999998,
+        "n_frames": 12
+      }
+    },
+    "understanding_crosscheck": {
+      "used_for": [
+        "decided whether the stripe model may be attempted",
+        "decided whether a rim constraint is permitted"
+      ],
+      "flags": [],
+      "stripe_count": {
+        "measured": 14,
+        "vision_estimate": 12
+      },
+      "stripe_top_fraction": {
+        "measured": 0.71875,
+        "vision_estimate": 0.6
+      }
+    },
+    "texture_provenance": {
+      "observed_fraction_of_surface": 0.3666175267937847,
+      "inferred_fraction_of_surface": 0.027650593982697026,
+      "generated_fraction_of_surface": 0.6057318792235182,
+      "meaning": "observed = body texels whose angle was seen by real frames (pattern parameters measured from them; the albedo is a two-colour pattern model, lighting not baked in); inferred = body texels at unseen angles filled from the measured lattice; generated = everything else (interior, rim, handle, base) keeps the reconstruction model's texture"
+    }
+  },
+  "appearance": {
+    "textured": true,
+    "fidelity_applied": true,
+    "texture_source": "generated by the reconstruction model",
+    "finalize": {
+      "metallic_factor_set_to_zero": [],
+      "vertex_normals_added": true,
+      "scale_normalized": {
+        "from_max_extent": 2.0,
+        "to_max_extent": 2.0,
+        "note": "arbitrary scene units for viewer compatibility; NOT a real-world calibration"
+      }
+    }
+  },
+  "print_prep": {
+    "scale_factor": 6.88438,
+    "target_height_cm": 10.0,
+    "upright_height_cm": 10.0,
+    "height_source": "default_fallback",
+    "is_estimate": true,
+    "dimensions_cm_after_print_orientation": [
+      11.464,
+      14.457,
+      10.16
+    ],
+    "volume_cm3": 134.94,
+    "watertight": true,
+    "watertight_repair_used": "none",
+    "min_wall_mm_checked": 1.2,
+    "thin_wall_warning_count": 0,
+    "thin_wall_sample_count": 1500,
+    "thin_wall_warnings": [],
+    "geometry_checks_passed": true,
+    "print_ready": false
+  },
+  "print_ready": false,
+  "preview_renders": [
+    "runs\\sam3d_run7_fidelity\\previews\\preview_000.png",
+    "runs\\sam3d_run7_fidelity\\previews\\preview_090.png",
+    "runs\\sam3d_run7_fidelity\\previews\\preview_180.png",
+    "runs\\sam3d_run7_fidelity\\previews\\preview_270.png"
+  ],
+  "model_mesh": "runs\\sam3d_run7_fidelity\\model.glb",
+  "model_stl": "runs\\sam3d_run7_fidelity\\model_print.stl"
+}

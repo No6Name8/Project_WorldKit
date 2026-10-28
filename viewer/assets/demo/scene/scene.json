@@ -1,0 +1,95 @@
+{
+  "worldkit_scene": 1,
+  "source_video": "WhatsApp Video 2026-10-26 at 9.32.38 PM.mp4",
+  "frame": "sharp_00",
+  "units": "scene units = the parent object's finalised mesh units (arbitrary, not a real-world unit)",
+  "cm_per_scene_unit": null,
+  "scale_calibration": null,
+  "objects": [
+    {
+      "id": "round_side_table",
+      "name": "round side table",
+      "mesh": "objects/round_side_table/model.glb",
+      "report": "objects/round_side_table/report.json",
+      "role": "parent",
+      "reconstruction_model": {
+        "name": "SAM 3D Objects",
+        "vendor": "Meta",
+        "is_meta_model": true
+      },
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation_deg": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "layout": {
+        "method": "parent defines the world frame",
+        "silhouette_iou": 0.744
+      }
+    },
+    {
+      "id": "mug",
+      "name": "mug",
+      "mesh": "objects/mug/model.glb",
+      "report": "objects/mug/report.json",
+      "role": "child",
+      "reconstruction_model": {
+        "name": "SAM 3D Objects",
+        "vendor": "Meta",
+        "is_meta_model": true
+      },
+      "transform": {
+        "position": [
+          -0.2664843698795927,
+          0.9504033385318753,
+          -0.04672831090108131
+        ],
+        "rotation_deg": [
+          0.0,
+          -126.0,
+          0.0
+        ],
+        "scale": [
+          0.2603588465916747,
+          0.2603588465916747,
+          0.2603588465916747
+        ]
+      },
+      "layout": {
+        "method": "scale=px/unit ratio, yaw=azimuth difference, position=base-centre ray meets parent top plane",
+        "silhouette_iou": 0.939,
+        "assumption": "object rests on the top surface of the parent"
+      }
+    }
+  ],
+  "layout_iou": {
+    "parent": 0.744,
+    "mug": 0.887,
+    "all": 0.828
+  },
+  "aabb_overlaps": [
+    {
+      "a": "round_side_table",
+      "b": "mug",
+      "penetration": [
+        0.5036560685700948,
+        0.004067897796630859,
+        0.49107316512217036
+      ],
+      "intersects": true
+    }
+  ],
+  "layout_note": "Children are placed on the parent's top plane using one frame's weak-perspective pose fits."
+}
