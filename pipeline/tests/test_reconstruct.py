@@ -283,3 +283,54 @@ def test_hunyuan_path_also_explains_an_exhausted_quota(monkeypatch):
 
     with pytest.raises(reconstruct.ReconstructionError, match="resets daily"):
         reconstruct.reconstruct_via_hosted_space(img)
+
+
+def test_modal_input_is_cropped_to_the_object_not_the_full_frame():
+    """SAM 3D must receive the object crop (validated input), not a tiny subject in a big transparent frame."""
+    import io
+
+    from PIL import Image
+
+    from worldkit import object as obj
+
+    frame = Image.new("RGBA", (480, 856), (0, 0, 0, 0))
+    frame.paste(Image.new("RGBA", (110, 140), (200, 50, 50, 255)), (190, 200))
+    buf = io.BytesIO()
+    frame.save(buf, format="PNG")
+    out = Image.open(io.BytesIO(obj.prepare_modal_input(buf.getvalue()))).convert("RGBA")
+    assert out.size == (1024, 1024)
+    bbox = out.getbbox()
+    assert (bbox[2] - bbox[0]) > 600  # the subject now fills most of the input instead of ~23% of its width
+
+
+def test_inherit_model_from_source_report_requires_identical_mesh(tmp_path):
+    import json
+
+    import pytest
+
+    from worldkit import object as obj
+
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "model.glb").write_bytes(b"glb-bytes-A")
+    (run / "report.json").write_text(json.dumps({
+        "reconstruction_model": {"name": "SAM 3D Objects", "vendor": "Meta", "is_meta_model": True},
+        "model_mesh": "runs\some\where\model.glb", "mesh_backend": "modal", "mesh_method": "m",
+    }))
+    copy = tmp_path / "copy.glb"
+    copy.write_bytes(b"glb-bytes-A")
+    model, source = obj.inherit_model_from_source_report(copy, run / "report.json")
+    assert model["is_meta_model"] is True and source["source_mesh_backend"] == "modal"
+
+    other = tmp_path / "other.glb"
+    other.write_bytes(b"different mesh")
+    with pytest.raises(obj.PipelineError):
+        obj.inherit_model_from_source_report(other, run / "report.json")
+
+
+def test_fidelity_stage_is_opt_in_and_the_default_cli_path_is_unchanged():
+    from worldkit import object as obj
+
+    assert obj.parse_args(["v.mp4", "--out", "o"]).fidelity == "off"
+    assert obj.parse_args(["v.mp4", "--out", "o", "--fidelity", "auto"]).fidelity == "auto"
+    assert obj.parse_args(["v.mp4", "--out", "o"]).mesh_backend == "modal"  # default backend untouched
