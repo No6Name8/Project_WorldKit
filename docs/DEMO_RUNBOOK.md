@@ -1,124 +1,48 @@
 # WorldKit demo runbook (3 minutes)
 
-This runbook is tied to the current prototype and the Meta Global AI Developer Hackathon rubric. It deliberately avoids claiming features that are still roadmap work. Every claim below was verified this session (automated browser tests, real API calls, or direct inspection) — see "What was tested" at the end for exact evidence.
+Everything in the script below runs from a fresh clone with no GPU and no Modal account; only the natural-language edit needs a Meta API key and internet. Rehearse once with the exact commands.
 
 ## Before recording
 
-- [ ] Open the repository at the current main commit and confirm the working tree / latest commits are correct.
-- [ ] From the local gitignored run directory, confirm these real artifacts exist (from a `worldkit.object` run, e.g. `pipeline/runs/quality_e2e/`): `model.glb`, `model_print.stl`, `report.json`, and `previews/preview_000.png`, `preview_090.png`, `preview_180.png`, `preview_270.png`. The bundled `viewer/assets/sample_mug.glb` is that run's `model.glb`.
-- [ ] Start the viewer's backend: `pipeline\.venv\Scripts\python.exe viewer\server.py`, then open `http://127.0.0.1:5050/` (it loads the bundled `viewer/assets/sample_mug.glb` automatically; use "Load GLB" to pick a different local file, e.g. your own `pipeline/runs/.../model.glb`).
-- [ ] Orbit around the model and confirm the mug/handle/interior are recognizable.
-- [ ] Load `report.json` (and the original phone video) in the "Provenance" panel on the right; confirm it shows the real backend/validation fields.
-- [ ] Apply a clearly visible move, rotate, or scale with the gizmo. Type a natural-language instruction (e.g. "move it 10 cm to the left") and confirm it moves correctly and shows a real explanation.
-- [ ] Enable the collision probe, move it toward the mug with WASD, and confirm it stops at the surface instead of passing through.
-- [ ] Export the edited GLB and reload that exported file to prove the export works.
-- [ ] Capture the real SAM 3.1 mask image and the actual Muse Spark result/log for provenance. Do not invent an AI response for the demo.
-- [ ] Keep a local backup recording of the genuine successful workflow in case the hosted Space, the live Muse Spark call, or internet access fails during recording.
-- [ ] Do not show API keys, tokens, private account details, or the contents of `pipeline/.env`.
+1. `pipeline\.venv\Scripts\python.exe viewer\server.py` -> open <http://127.0.0.1:5050/>. The console line says whether the Muse Spark key is configured.
+2. Click **Demo: mug + table**: two objects appear, the provenance panel names SAM 3D Objects (Meta). Click **Demo: mug** to see the single-object result with the fidelity decision in the provenance panel.
+3. Dry run the edit: select the mug, type "move it 10 cm to the left" (needs `pipeline/.env` with `MODEL_API_KEY`; if the API is down the box shows a real error and the gizmo still works).
+4. Do not show `pipeline/.env`, tokens or the Modal dashboard credentials.
+5. Optional live run (a few minutes, a few cents): `cd pipeline; .venv\Scripts\python.exe -m worldkit.object samples\mug_on_table.mp4 --out runs\live --mesh-backend modal --fidelity auto`, then `viewer\server.py --open pipeline\runs\live`. Keep the demo assets as the fallback if Modal is slow.
+6. Keep a screen recording of one successful complete run as a backup.
 
-**Status: the viewer, natural-language editing, the collision probe, and the manual/AI edit interaction all work together, not just individually** (102 automated checks across `pytest`, `viewer/tests/browser_test.js`, and `viewer/tests/integration_test.js` — see "What was tested"), verified against real pipeline output, not just committed source. If re-verifying before recording, re-run the test suites (see each file's header comment for setup) rather than assuming they still pass.
+## Script
 
-## Suggested 3-minute story
+| Time | Show | Say (all of it is verified; do not add claims) |
+|---|---|---|
+| 0:00-0:20 | the 16 s source video (`pipeline/samples/mug_on_table.mp4`) | Footage holds the spatial information developers need, but turning it into editable 3D is a fragmented workflow. WorldKit goes from a phone video to a 3D scene you can edit and simulate. |
+| 0:20-0:45 | `docs/viewer_demo_scene.png` or a run's `mask_overlay.png` | Muse Spark names the main object ("coffee mug" from 12 frames) and picks the best frame; SAM 3.1 isolates it including the handle; SAM 3D Objects (Meta, on a Modal A100) builds the textured 3D model from that single view. |
+| 0:45-1:15 | `docs/fidelity_heldout_real_vs_baseline_vs_improved.png` (real / generated / improved) | The generator's stripes are straight; the real mug's are wavy. Muse Spark's structured analysis says "vertical stripes on a cup", which lets WorldKit measure the pattern from the video: 14 wavy stripes. It is only accepted because it beat the generated texture on frames it never saw (held-out correlation 0.68 to 0.84, cross-validated). 37% of the surface is observed angles, 3% inferred, 61% still generated; all geometry is generated. |
+| 1:15-2:00 | viewer, **Demo: mug + table** | Each object is separate with its own provenance. Select and move the mug; **Check overlaps**; ask Muse Spark "move it 10 cm to the left" (validated server-side before it touches the model). Scale is not calibrated until you type a real height: type the mug's measured height and the banner says it is your number. |
+| 2:00-2:30 | **Simulate** then **Reset sim** | Real rigid-body physics (Rapier): gravity and mass, the table as its exact mesh, the mug as a convex hull; the editor's objects are never touched; reset restores them. Approximation, not engineering accuracy. |
+| 2:30-3:00 | **Export scene**, then the limitations | One GLB with both objects and their provenance reloads exactly. Honest limits: one object in one video, geometry is generated, scale needs a measurement, scenes are two objects. Vision: observed vs inferred stays explicit as this grows to whole environments. |
 
-### 0:00–0:20 — Impact and problem
+## What each test suite covers (all run against real reconstructed meshes)
 
-Say: "Real-world footage contains useful spatial information, but turning it into a scene that developers can actually manipulate is still a fragmented workflow. WorldKit is exploring one path from footage to editable 3D worlds and eventually scenario testing."
+| Suite | What it covers |
+|---|---|
+| `pytest pipeline/tests` | geometry, scale, scene and fidelity logic on synthetic ground truth, mocked network calls, web server, CLI flags |
+| `viewer/tests/browser_test.js` | bundled sample: load, material, orbit, gizmo, export/reload, Muse Spark edit and its failure path, collision probe, provenance |
+| `integration_test.js` | the full viewer flow on one real pipeline artifact |
+| `sam3d_browser_test.js` | real SAM 3D mug: orientation from vertices, lighting, camera, edits, handle collision, export/reload, provenance |
+| `scene_physics_browser_test.js` | two-object scene: selection, independent edits, overlap, scene export/reload, missing mesh, calibration, physics engine self-tests, mug-on-table drop, UI |
+| `demo_readiness_test.js` | offline (no external requests), `server.py --open`, bundled demos, physics and export on the demo scene |
 
-Target audience for this demo: developers prototyping 3D environments from reference footage. Do not imply it already serves every long-term audience.
+Not covered by an automated test: the live Modal GPU path (verified by real runs: `pipeline/runs/sam3d_*`, `final_e2e`), the hosted TRELLIS Space (no recent live call; free quota), other videos or objects.
 
-### 0:20–0:45 — Real source and Meta perception
+## Do not claim
 
-Show the original 16-second phone video and the genuine SAM 3.1 mask overlay.
+Accurate real-world scale (unverified: the coin and mug were never measured); measured geometry (it is generated); generalisation beyond the mug; engineering-grade physics; use of Muse Wonder, Muse Image or VGGT; print readiness (`print_ready` is false without a measured height).
 
-Say: "Muse Spark provides scene/object understanding, and SAM 3.1 isolates the target object. In this example, the model's initial object label was imperfect, so the target is explicitly set to 'mug' rather than pretending the detection was flawless."
+## If something fails live
 
-This is a useful, honest example of how model outputs are grounded and corrected.
-
-### 0:45–1:10 — Genuine reconstruction
-
-Show the actual GLB (the viewer's bundled mug) orbiting, then `docs/reconstruction_quality.jpg` for before/after. Identify the model and what is real vs generated:
-
-"The mesh was generated by TRELLIS through a community-hosted Space — a Microsoft model, not a Meta one; SAM 3D Objects, Meta's, isn't running yet because Modal requires a payment method for A100 functions. TRELLIS invents its texture, so I then projected real pixels from eight frames of the video onto it: 69% of the surface is now real video pixels and 31%, the sides the camera never saw, is still generated. All of the geometry is generated. On frames I held out, stripe correlation with the real photos went from 0.47 to 0.92."
-
-Say plainly what is still wrong if asked: the dent at the handle base and the smudged, least-observed side. Do not present the mug as a complete video reconstruction or claim the hidden surfaces are accurate. The older Hunyuan3D-2 backend (`--mesh-backend hosted`) is only the 'before' picture: an untextured, paper-thin shell.
-
-### 1:10–2:00 — Interactive edit, real AI instruction, and collision probe
-
-Orbit, drag the gizmo to visibly move/rotate/scale the model, then type a real instruction into the natural-language box — e.g. "move it 10 cm to the left" or "make it 20% bigger" — and show the real Muse Spark response and the resulting transform.
-
-Say: "This is a real call to Muse Spark, validated server-side before it ever touches the model — if the response were malformed or out of range, it would be rejected, not applied. Scale isn't physically calibrated for this mesh, so I'm showing that honestly with the on-screen banner rather than claiming an exact real-world centimeter."
-
-Then enable the collision probe and move it toward the mug: "This is real ray-triangle collision detection against the actual mesh geometry — not an animation. It stops here because there's real geometry in the way."
-
-Export the edited GLB and, if time allows, reload it to show the round trip works.
-
-### 2:00–2:30 — Verification and limits
-
-Show the report JSON and wall-thickness validation.
-
-Say: "The pipeline records provenance and checks mesh properties. This mug is watertight and none of the 1,500 sampled points are thinner than 1.2 mm — but only at an assumed size: its 10 cm height is a placeholder, not a measurement. So the report says `geometry_checks_passed: true` and `print_ready: false`, and we don't call it print-ready until a real height is supplied."
-
-Use only numbers present in the real report.
-
-### 2:30–3:00 — Roadmap and close
-
-Say: "The next milestone is to extend this from one object to a real scene — multiple reconstructed objects, calibrated scale, and a packaged app around this same viewer. The goal isn't to claim a full simulator today, but to prove a trustworthy, tested path toward editable worlds."
-
-## Rubric mapping
-
-| Judging category | Weight | Evidence to show |
-|---|---:|---|
-| Impact | 30% | Clear audience, why converting footage to editable 3D matters, concrete next workflow |
-| Meta AI tooling | 25% | Genuine SAM 3.1 mask, genuine Muse Spark segmentation, and a real Muse Spark natural-language edit call with honest provenance |
-| Technical execution | 20% | Real mesh, browser-verified viewer, real transform/export, real collision detection, report/validation |
-| Demo quality | 25% | Fast visual sequence, no dead time, readable labels, measured facts, recording backup |
-
-## Done this session (previously listed as "next milestones")
-
-1. ~~Add a constrained Muse Spark edit-intent step~~ — **done**: `pipeline/worldkit/editcmd.py`, tested against the real API with the brief's exact example instructions.
-2. ~~Apply the parsed transform to the actual mesh and verify numerically~~ — **done**: verified via real-browser checks reading the live `THREE.Object3D` transform back.
-3. ~~Real collision-aware simulation~~ — **done**, scoped honestly: ray/triangle collision detection against the one reconstructed mug (not a multi-object scene, and not physics/forces) — see "Known limitations."
-
-## Next milestones
-
-1. Calibrate real-world scale (A4 or coin reference) instead of the current unmeasured placeholder.
-2. Re-run the productized `--mesh-backend trellis` call live once the free GPU quota resets (it was verified live as a prototype but not after productization), and supply a measured `--height-cm` so `print_ready` can actually be evaluated.
-3. Extend from one object to a real multi-object scene, which the collision probe and simulation story currently can't demonstrate.
-4. Package the viewer into the planned `/app` Next.js PWA (currently a standalone Flask-served page).
-5. Record, review, and rehearse the final demo. Submission deadline: Nov 4, 2026, 9:00 PM Eastern / Nov 5, 2026, 5:00 AM Riyadh.
-
-## Known limitations
-
-- The first genuine mesh is one object generated from a single cropped image, not a complete environment reconstructed from video.
-- Reconstruction used TRELLIS (Microsoft) via a community Space, not a Meta model. Every report records the model and whether it is Meta's.
-- SAM 3D Objects inference is blocked by Modal's payment-method requirement. Do not add a payment method or launch paid GPU compute without explicit user approval.
-- **The bundled sample is textured, but partly generated**: TRELLIS mesh + real video pixels where observed (69%). It displays correctly (dielectric material, normals) — the earlier textured output rendered near-black because glTF's implicit `metallicFactor` is 1.0.
-- **Scale is not physically calibrated.** No real-world measurement exists for this mesh; the viewer and Muse Spark's "cm" instructions use an explicitly-flagged 10 cm placeholder, shown as a persistent on-screen warning. Passing `--height-cm` makes print prep use a real scale.
-- **`print_ready` is false**, for one reason: no real height was measured. The geometry checks themselves pass at the assumed scale (watertight, 0/1500 thin-wall samples). The older Hunyuan3D shell failed them outright.
-- **All geometry is generated**, including the whole unseen side; only the *appearance* of observed surfaces comes from real video pixels (about 69% of the surface for this mug). The unobserved remainder keeps the generator's invented colours — including a stray brown stain on the least-observed side.
-- **The collision probe is not physics** — real ray/triangle collision detection against the actual mesh, with no gravity, mass, or forces. Described as "collision-aware movement," never "physics simulation."
-
-## What was tested
-
-**Reconstruction-quality round (latest):** every claim below was checked on real artifacts from the real mug video.
-
-- **Held-out texture quality** (frames none of the compared textures were built from; identical per-frame alignment for every variant): TRELLIS as generated 0.467 stripe correlation / 32.9 luminance error -> real-pixel projection **0.915 / 10.3** (8 frames given to the API, 7 used; frame 00 auto-rejected because its silhouette cannot constrain azimuth), 70.8% of the surface observed. TRELLIS's own multi-image mode was tested in 3 variants and did **not** help (hallucinated ground slab; no better on held-out frames), so it is not used.
-- **Full CLI on the real video**, ~3 min: frames -> real Muse Spark -> real SAM 3.1 on all 12 frames -> projection -> material finalize -> print prep -> previews. The mesh for this run came from `--mesh-backend import` of the real TRELLIS GLB (the free GPU quota was exhausted), **not** from a fresh generation.
-- **Bugs this uncovered, fixed with regression tests**: a camera pitch sign that rendered the mug from below (invisible to silhouette scores), `printprep` scaling the wrong axis for Y-up GLBs (9.5 cm requested -> 9.84 cm on the real mug), a crash on any non-watertight input, UV seams read as holes (convex-hull fallback risk), `print_ready` being true for a hull-filled solid, and the print path leaving the base slab vertical with the mug on its side.
-- **Counts:** 122 Python tests, 29 browser checks, 11 integration checks (162 total). The texture-projection tests use synthetic ground truth and were mutation-checked.
-
-**Earlier rounds:**
-
-**Verified as one product (latest session), not just as separate parts:**
-a genuine, fresh, non-mocked `python -m worldkit.object <real mug video> --object mug --mesh-backend hosted` run (`pipeline/runs/integration_test/`) exercised frame extraction, a real Muse Spark detection call, a real SAM 3.1 segmentation call, a real Hunyuan3D-2 reconstruction, and print-prep end to end for the first time as one command (previously only exercised as separate manual calls). The resulting `model.glb` and `report.json` were then loaded into the running viewer and driven through one continuous real sequence: load -> real Muse Spark edit -> manual gizmo edit on top of it (edits compose, not overwrite) -> collision probe re-targeted at the edited object's real position -> export -> reload (geometry survives) -> provenance panel with the real report. **11/11** integration checks passed (`viewer/tests/integration_test.js`).
-
-**A real bug was found and fixed by this exercise**: `object.py`'s CLI report never actually set a `print_ready` field — the viewer's provenance panel expected one and silently showed "(not recorded)" instead of `false`. Fixed by adding `PrintPrepReport.print_ready` (a real property: `watertight and no thin-wall warnings`) as the single source of truth, used by both `report.json` and the viewer. 3 new unit tests cover it directly.
-
-**API-failure robustness was verified directly**, not assumed: a real-browser test intercepts `/api/edit` to simulate a backend outage, confirms the UI shows a real error (not a silent failure or a crash) and does NOT mutate the object's transform, then confirms manual gizmo editing still works immediately afterward.
-
-- **23/23** automated real-browser checks (`viewer/tests/browser_test.js`, Playwright + Chromium — a real page, real three.js modules, the real sample mesh, no mocking): model load, canvas actually renders varied pixel content (not just "no exception"), orbit controls don't move the model, dragging the gizmo genuinely mutates the live transform, programmatic translate/rotate/scale apply exact expected numbers, GLB export produces real non-trivial bytes and reloading them recovers the real baked geometry (vertex count checked), a **real Muse Spark API call** through the local backend correctly moves the object, a simulated API failure degrades gracefully and manual editing still works afterward, the collision probe is genuinely blocked near the mesh and genuinely free in open space, and the provenance panel renders a loaded `report.json`'s real fields.
-- **68/68** Python unit tests (`pipeline/tests/`, `pytest`).
-- **102 automated checks total** across the three suites above.
-- **Several real Muse Spark API calls** against the exact instruction examples from the brief ("move 10cm left", "rotate 30 degrees", "make it 20% bigger") — all returned correctly structured, validated transforms, both in standalone checks and inside the integration test.
-- A real orientation bug was found and fixed via screenshot-driven debugging (previous session): an initial attempt to force a "Z-up" convention (reasoning from `printprep`'s post-reorientation output) actually broke the mesh's displayed orientation; three.js/glTF's default Y-up was correct all along and is what's shipped.
-- A real test-targeting issue (not a product bug) was found and fixed: a gizmo-drag test assumed the model always renders at the canvas's geometric center, which drifts once a differently-sized mesh is loaded (e.g. after an export/reload of a scaled object). Fixed by adding `window.__getModelScreenPosition()` (real camera-projection math) instead of assuming center, both in the test and as a reusable utility.
+| Symptom | Do |
+|---|---|
+| Muse Spark edit errors | the box shows the real error; use the gizmo; say so |
+| Viewer blank | start the server from the repo root and hard-refresh; the vendored libraries need no internet |
+| Live reconstruction slow or Modal error | the error message names the checklist; switch to the bundled demo assets |

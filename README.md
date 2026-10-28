@@ -1,112 +1,86 @@
-# WorldKit — Film reality. Build worlds. Run simulations.
+# WorldKit — Film it. Build it.
 
-**WorldKit's goal:** transform real-world video into editable 3D environments that people can inspect, modify, and eventually use to test scenarios.
+**WorldKit turns a phone video into editable 3D objects and scenes.** Film a mug on a table: WorldKit finds the objects with Meta's Muse Spark and SAM 3.1, rebuilds each as a textured 3D model with Meta's SAM 3D Objects, composes them into one scene, corrects what the video can prove (stripe pattern, scale from a reference object), and opens the result in a browser viewer where you can select and edit each object, ask Muse Spark to move things in plain language, drop objects under real rigid-body physics, and export the scene.
 
-This repository is a hackathon prototype, not a finished city simulator or engineering tool. The current verified milestone is a single-object pipeline demonstrated on a mug: Meta Muse Spark scene/object understanding and SAM 3.1 segmentation feed a reconstruction fallback that uses **Hunyuan3D-2 through a community-hosted Hugging Face Space**. That reconstruction backend is from Tencent's open-weights model family; it is **not a Meta model and not SAM 3D Objects**.
+Built solo for the Meta Global AI Developer Hackathon 2026. This is a working prototype demonstrated on **one real video** (a striped mug on a round side table); see *Limitations* for exactly what that does and does not show.
 
-Built for the Meta Global AI Developer Hackathon 2026 (Indie Developer track, Push the Frontier theme). Build period: Oct 27–Nov 4, 2026. Submission deadline: Nov 4, 9:00 PM Eastern / Nov 5, 5:00 AM Riyadh.
+![WorldKit viewer with the reconstructed mug and table](docs/viewer_demo_scene.png)
 
-## What exists now
-
-- **Python object pipeline:** video frame extraction, Muse Spark object understanding with explicit-object override, SAM 3.1 segmentation, reconstruction backend selection, mesh print-prep, and preview rendering.
-- **Reconstruction (no Modal needed):** `--mesh-backend trellis` produces a **textured** mug (TRELLIS, Microsoft -- not a Meta model) with real wall thickness and a handle loop, and `--project-frames N` then replaces the texture's *invented* colours with **real pixels from the source video** wherever the frames can see the surface (geometry is never modified; the unseen remainder stays generated and is reported). The earlier Hunyuan3D-2 backend (`--mesh-backend hosted`) only returns an untextured, paper-thin shell. See *Reconstruction quality* below.
-- **Print-prep validation:** the textured mug is watertight with 0 of 1500 sampled points below the 1.2 mm wall threshold *at the assumed scale* (`geometry_checks_passed: true`), but it is **not reported print-ready**: no real height was measured, so its 10 cm size is an explicitly flagged placeholder (`print_ready` requires a measured `--height-cm`). The older Hunyuan3D shell fails the wall-thickness check outright.
-- **Interactive, browser-verified viewer:** `viewer/index.html` (+ `viewer/server.py`, a small Flask backend) loads a GLB, orbits around it, applies a real object transform via a move/rotate/scale gizmo, exports/reloads the edited GLB, and optionally loads a run's `report.json`/source video for provenance. **Verified with 29 automated real-browser checks** (Playwright + Chromium, `viewer/tests/browser_test.js`) — not just committed, unverified source.
-- **Real natural-language editing:** type an instruction like "move it 10 cm to the left" and it's interpreted by a real Muse Spark API call (`pipeline/worldkit/editcmd.py`), validated server-side (malformed/out-of-range responses are rejected before they can touch the model), and applied to the live object. The API key never reaches the browser. Manual gizmo editing works identically with or without a configured key.
-- **A real, scoped collision-detection demo:** the viewer's collision probe uses genuine ray/triangle intersection tests (`THREE.Raycaster`) against the actual loaded mesh — it stops at real geometry rather than passing through. Not physics (no gravity/mass/forces), and scoped to the one reconstructed object, not a multi-object scene.
-- **Verified as one product, not just as separate parts:** a real, fresh `python -m worldkit.object ... --mesh-backend hosted` run (video -> frames -> Muse Spark -> SAM 3.1 -> Hunyuan3D-2 -> print-prep) produced a genuine mesh and `report.json`, which was then loaded into the running viewer and driven through a full real edit sequence (AI edit -> manual gizmo edit on top of it -> collision probe against the edited model -> export -> reload) and the provenance panel, in one single automated integration test.
-- **Automated tests:** 122/122 Python tests (`pytest`), 29/29 real-browser checks (`viewer/tests/browser_test.js`; includes a simulated-API-failure path and checks that the bundled sample is textured, dielectric and not near-black) and 11/11 end-to-end integration checks (`viewer/tests/integration_test.js`) -- 162 automated checks. Hosted-model tests mock the network call for determinism; the texture-projection tests use synthetic scenes with known ground truth and were mutation-checked. Real API calls (Muse Spark, SAM 3.1, the hosted Spaces) were made and verified separately.
-
-## What is not yet implemented or verified
-
-- Full multi-object or room/city reconstruction from video — the collision demo and viewer both operate on one reconstructed object.
-- SAM 3D Objects inference: the Modal image builds, but Modal blocks A100 functions until a payment method is added. No payment method was added.
-- Calibrated real-world scale — the current mesh's dimensions use an explicitly-flagged, unmeasured placeholder.
-- Measured real-world scale, so no model is reported print-ready; engineering-grade geometry accuracy (**all geometry is generated**, including the entire unseen side -- only the *appearance* of observed surfaces comes from real pixels); or reliable export to Unity/Unreal/CAD.
-- A live re-run of the productized `--mesh-backend trellis` call: the free daily GPU quota for the hosted Space was used up while developing it (it resets daily; a paid plan was deliberately not used). The CLI was verified end to end on the real video with the real TRELLIS GLB via `--mesh-backend import --project-frames 8`.
-- Muse Wonder, VGGT, or Muse Image integration in the verified mug run.
-- A deployed, production-ready web application, the planned `/app` Next.js PWA wrapper, or account/device sync — the viewer runs standalone via `viewer/server.py` today.
-
-## Run the Python pipeline
-
-From the repository root on Windows, using Python 3.10 and the environment in `pipeline/.venv`:
+## Try it in one minute (no GPU, no API key)
 
 ```powershell
-pipeline\.venv\Scripts\python.exe -m worldkit.object "pipeline\samples\<video>" --out "pipeline\runs\<run-name>" --object "mug" --mesh-backend hosted
-```
-
-For a **textured** result (recommended while Modal is blocked), use the TRELLIS Space; it projects up to 8 real video frames onto the texture by default:
-
-```powershell
-pipeline\.venv\Scripts\python.exe -m worldkit.object "pipeline\samples\<video>" --out "pipeline\runs\<run-name>" --object "mug" --mesh-backend trellis
-```
-
-Use `--mesh-backend modal` only if Modal GPU execution is available and its cost has been explicitly approved. The hosted Spaces are third-party infrastructure on a small **free daily GPU quota** (an exhausted quota is reported as such, with the working alternative `--mesh-backend import`); they may also be unavailable, queued, or change their API. Pass `--height-cm <measured height>` to get a real (non-placeholder) scale.
-
-To process a previously generated mesh without making a reconstruction request (add `--project-frames 8` to re-paint a textured GLB with real video pixels):
-
-```powershell
-pipeline\.venv\Scripts\python.exe -m worldkit.object "pipeline\samples\<video>" --out "pipeline\runs\<run-name>" --object "mug" --mesh-backend import --mesh-file "pipeline\runs\<run-name>\model.glb"
-```
-
-Inspect `report.json` for actual backend provenance, stage timings, warnings, and print-prep validation. Do not infer print readiness from watertightness alone.
-
-## Open the interactive viewer
-
-```powershell
+cd pipeline
+py -3.10 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd ..
 pipeline\.venv\Scripts\python.exe viewer\server.py
 ```
 
-Then open `http://127.0.0.1:5050/` (needs internet access — it loads three.js from a CDN). It loads the bundled `viewer/assets/sample_mug.glb` automatically; use "Load GLB" to pick a different local file, e.g. your own `pipeline/runs/.../model.glb`. Optionally load `report.json` and the source video in the provenance panel. Use the gizmo or the natural-language box to move/rotate/scale the model, enable the collision probe, and export an edited GLB.
+Open <http://127.0.0.1:5050/> and click **Demo: mug + table** (or **Demo: mug**). The bundled demo assets are real pipeline output; three.js and the physics engine are vendored, so this works offline. Select the mug or the table (click or list), move/rotate/scale each with the gizmo, **Check overlaps**, type the mug's real height in **Set real height** to calibrate, press **Simulate** to drop the mug on the table (Rapier physics), **Reset sim**, then **Export scene**. Natural-language editing ("move it 10 cm to the left") needs a Meta API key in `pipeline/.env`; everything else does not.
 
-The viewer edits the loaded object's transform, not its internal topology. The collision probe is real ray/triangle collision detection, not a physics simulation.
+## Run it on your own video
 
-## Meta AI tooling and provenance
+```powershell
+copy pipeline\.env.example pipeline\.env      # then put your Meta Model API key in MODEL_API_KEY
+cd pipeline
+.venv\Scripts\python.exe -m worldkit.object samples\mug_on_table.mp4 --out runs\my_mug --mesh-backend modal --fidelity auto
+cd ..
+pipeline\.venv\Scripts\python.exe viewer\server.py --open pipeline\runs\my_mug
+```
 
-| Tool | Intended/verified role |
-|---|---|
-| Muse Spark (Meta Model API) | Scene/object understanding. A real call succeeded, but an unprompted sample misidentified the mug as a side table; an explicit object override is supported. |
-| SAM 3.1 (Meta Model API) | Real mug segmentation including the handle; verified on the source frame. |
-| SAM 3D Objects (Meta open weights) | Intended reconstruction route; not yet run because Modal requires a payment method for A100 functions. |
-| TRELLIS (Microsoft open weights, hosted community Space) | Textured mug mesh backend. Not a Meta model; every report records the model and whether it is Meta's. |
-| Hunyuan3D-2 (Tencent open weights, hosted community Space) | Earlier untextured shape-only backend (the baseline in *Reconstruction quality*). Not a Meta model. |
-| Muse Wonder, VGGT, Muse Image | Future/optional integrations; do not claim they were used in the verified run. |
+- `--mesh-backend modal` (default) runs SAM 3D Objects on a Modal A100 (a few minutes, cents of GPU time). One-time setup: `modal setup`, a Modal secret `huggingface` with a token that has access to the gated `facebook/sam-3d-objects` weights, and a CPU preflight `modal run "modal_app/sam3d.py::check_env"` (see `pipeline/README.md`). Without a GPU use `--mesh-backend trellis` (a hosted community Space with a small free daily quota).
+- `--fidelity auto` additionally measures stripe-like patterns from the frames and keeps them only if they beat the generated texture on held-out frames (details below). Off by default.
+- `--ref-diameter-cm D` (a circular reference such as a coin, with its real diameter) or `--height-cm H` (a real measured height) give real-world scale. Without either, scale is a flagged placeholder and `print_ready` stays false.
+- Several objects in one video: `python -m worldkit.scene VIDEO --out DIR --objects mug "round side table"`, then `viewer\server.py --open DIR`.
+- Every run writes `report.json` (models used, what is observed vs generated, validation results, timings, warnings). Failures are written there too, with an actionable message.
 
-## Reconstruction quality
+## How it works
 
-![Before / TRELLIS as generated / after real-pixel projection](docs/reconstruction_quality.jpg)
+`video -> frames -> Muse Spark names the object and picks the best frame -> SAM 3.1 masks it -> SAM 3D Objects builds a textured mesh -> [optional] Muse Spark analyses the frames, a stripe model is measured from them and accepted only if it wins on held-out frames -> scale from a reference or measurement -> print prep + previews -> viewer (select, edit, physics, export)`
 
-Same source video, same SAM 3.1 masks. Measured on **held-out frames** (frames none of the compared textures were built from; each texture gets the identical per-frame alignment, so this scores texture quality, not pose estimation):
-
-| Mug texture | stripe correlation (NCC) | luminance error |
+| Meta technology | What it does here | Verified |
 |---|---|---|
-| TRELLIS as generated (invented) | 0.467 | 32.9 |
-| + real video pixels, **8 frames given / 7 used** (frame 00 auto-rejected: handle hidden, azimuth unconstrained) | **0.915** | **10.3** |
+| Muse Spark (Meta Model API) | names the main object and picks the best frame (a 12-frame call returned "coffee mug"); structured analysis of the frames (category, rim, stripe type, count, region) that gates the fidelity stage; natural-language edits in the viewer, validated server-side | real calls |
+| SAM 3.1 (Meta Model API) | segments the object (handle included), the coin reference and each scene object in every frame | real calls |
+| SAM 3D Objects (Meta open weights, Modal A100) | reconstructs each object's textured mesh from one masked view | real GPU runs |
+| Not used | Muse Wonder, Muse Image, VGGT | |
 
-70.8% of the surface was observed that way; the rest is generated. Also measured: TRELLIS's own multi-image mode was **not** better (it hallucinated a ground slab and scored no higher on held-out frames), so it is not used. Caveats: one object, one video; geometry is entirely generated (note the dent at the handle base and the smudged, least-observed side); weak-perspective poses from silhouettes plus stripe registration. Details and the bugs this uncovered are in `CLAUDE.md`.
+Non-Meta pieces, recorded as such in every report: TRELLIS (Microsoft, hosted Space) as a no-GPU fallback, Hunyuan3D-2 (Tencent) as an older baseline, Rapier (physics), three.js (viewer), trimesh/manifold3d (geometry).
 
-## Judging-focused next milestones
+## Results (all on the one mug video)
 
-See [the three-minute demo runbook](docs/DEMO_RUNBOOK.md) for the recording checklist, suggested narrative, rubric mapping, and milestone gates.
+| | Result |
+|---|---|
+| Geometry | SAM 3D mug: watertight, single component, a real handle loop, level circular rim (rim plane within 0.9% of its radius, 0.26 deg from the base plane; upper outline within 1.4% of object height of the SAM masks in all 12 frames). The TRELLIS fallback is lumpier with an uneven rim. All geometry is generated, not measured. |
+| Stripe texture | The generator draws near-straight stripes; the real mug has 14 wavy ones. 3-fold cross-validated held-out stripe correlation (every frame held out once): generated 0.68, existing UV pixel projection 0.80 (0.74-0.92 depending on fold), new cylindrical stripe model 0.84 (0.84-0.86 every fold). In the final model 37% of the surface is at observed angles, 3% is inferred from the measured stripe pattern, 61% (interior, rim, handle, base, unseen angles) is still generated. |
+| Scene | Mug + table from one video, both SAM 3D; layout overlap with the real masks 0.83 overall (table 0.74, mug 0.89). The mug is assumed to rest on the table top. |
+| Scale | Method validated on synthetic scenes with known sizes (mean error 3.7%, worst 11.5%); on the real video the coin gives a self-consistent estimate, **but the real coin and mug were never measured, so real-world accuracy is unverified.** |
+| Physics | Rapier: gravity, mass, contacts; the table collides as its exact triangle mesh, the mug as a convex hull (handle opening filled in). Engine self-tests match 1/2 g t^2 within 1%. Not engineering accuracy. |
 
-1. Calibrate real-world scale (A4 or coin reference) instead of today's unmeasured placeholder.
-2. Re-run the productized `--mesh-backend trellis` call live once the free GPU quota resets, and pass a measured `--height-cm` so `print_ready` can actually be evaluated (the wall-thickness check already passes at the assumed scale).
-3. Extend from one object to a real multi-object scene.
-4. Package the viewer into the planned `/app` Next.js PWA wrapper.
-5. Record a concise, truthful three-minute demo: source footage → genuine reconstruction → actual edit (gizmo + natural language) → collision demo → validation/export → broader vision. Report measured results only.
+Side-by-side: `docs/fidelity_heldout_real_vs_baseline_vs_improved.png` (real frame, generated texture, improved texture at held-out views), `docs/fidelity_views_baseline_vs_improved.png`, `docs/sam3d_vs_trellis.png`. Full numbers, diagnosis and the experiments that did not work are in `docs/TECHNICAL_NOTES.md`.
 
-The hackathon judges impact (30%), Meta AI tooling (25%), technical execution (20%), and demo quality (25%). The priority is one complete, credible, *tested* workflow — not a list of unimplemented features.
+## Limitations (read before judging)
 
-## Repo structure
+- One object type (a mug) in one video; nothing here shows it generalises. The stripe model only handles periodic vertical stripes on bodies of revolution; per-stripe irregularities and gloss are not reproduced.
+- All 3-D geometry, including every unseen side, is generated by the reconstruction model. Appearance is only "observed" where stated.
+- Scale is a placeholder unless you provide a measured height or a reference diameter; a reference-based scale is an estimate and never makes a model print-ready. Scene objects use the generated texture (the fidelity stage runs in the single-object CLI only).
+- Scenes: two objects demonstrated; the smaller one is assumed to rest on the larger one's top surface.
+- Natural-language edits need a Meta API key and internet; the Modal path needs a Modal account with credits and access to the gated SAM 3D weights.
+- Earlier SAM 3D texture numbers in this project's history were wrong (an evaluation helper reused another mesh's camera poses) and were corrected; see `docs/TECHNICAL_NOTES.md`.
 
+## Tests
+
+```powershell
+pipeline\.venv\Scripts\python.exe -m pytest pipeline\tests          # Python tests (about 4 minutes)
+cd viewer\tests; npm install; npx playwright install chromium; cd ..\..
+pipeline\.venv\Scripts\python.exe viewer\server.py                   # in another terminal, for the browser suites
+cd viewer\tests; npm run test:all
 ```
-/pipeline Python AI pipeline (video -> mesh -> print-ready STL)
-/viewer   Browser 3D viewer + editor (three.js + a small Flask backend)
-/docs     Architecture notes, benchmark results, docs/DEMO_RUNBOOK.md
-```
 
-(`/app`, a Next.js PWA wrapping the viewer, is a planned next step — not built yet. The viewer runs standalone today via `viewer/server.py`.)
+Hosted-model and Muse Spark calls are mocked in the Python tests; the browser suites run real Chromium against real reconstructed meshes (the Muse Spark edit checks make one real API call and need a key). `docs/DEMO_RUNBOOK.md` has the demo script and what each suite covers; `docs/SUBMISSION.md` has the project description.
 
-## License and author
+## Repository
 
-See [LICENSE](LICENSE). Created by Abdullah Ali Alanazi ([@No6Name8](https://github.com/No6Name8)).
+`pipeline/worldkit/` Python pipeline (CLI `object.py`, `scene.py`; `detect`, `segment`, `understand` for Muse Spark / SAM 3.1; `reconstruct`, `modal_app/sam3d.py` for reconstruction; `fidelity`, `cyl_texture`, `pattern_model`, `qc`, `mesh_qc` for the quality stage; `scale_cal`, `printprep`) · `viewer/` browser viewer, Flask server, vendored libraries, bundled demo assets, Playwright tests · `docs/` notes, runbook, comparison images · `CLAUDE.md` working notes for the coding agent.
+
+Created by Abdullah Ali Alanazi ([@No6Name8](https://github.com/No6Name8)). See [LICENSE](LICENSE). Vendored: three.js (MIT), Rapier (Apache-2.0), in `viewer/vendor/`.

@@ -1,103 +1,70 @@
-# WorldKit pipeline — Object mode
+# WorldKit pipeline
 
-Command-line pipeline: a phone video of an object in, a print-ready STL out.
-No web app involved; this is the `/pipeline` Python package, `worldkit`.
+Python package `worldkit` (command line): video in, textured 3D model(s) + `report.json` out. The viewer lives in `../viewer`.
 
 ## Setup
 
-This machine has two Pythons installed; always use 3.10 (`py -3.10`), never
-the bare `python3` alias, which points to a different, unrelated install.
-
-```bash
+```powershell
 cd pipeline
 py -3.10 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
-
-copy .env.example .env
-rem edit .env and set MODEL_API_KEY to your Meta Model API key
+copy .env.example .env        # put your Meta Model API key in MODEL_API_KEY
 ```
 
-Frame extraction uses a bundled ffmpeg binary (via `imageio-ffmpeg`) — no
-system ffmpeg install needed.
+Use Python 3.10. Frame extraction uses a bundled ffmpeg (`imageio-ffmpeg`); no system install. Without a key the pipeline still runs
+with clearly tagged fallbacks (local masks, sharpest frame; you must pass `--object`), but real SAM 3.1 / Muse Spark results need
+`MODEL_API_KEY` from <https://dev.meta.ai>.
 
-### SAM 3D Objects / Modal (one-time setup)
+### SAM 3D Objects on Modal (one-time, needs a GPU account)
 
-The mesh-reconstruction stage runs on a Modal GPU, not locally (SAM 3D
-Objects needs an NVIDIA GPU with >= 32GB VRAM).
+SAM 3D Objects needs a large NVIDIA GPU, so the reconstruction stage runs on Modal (A100-40GB, one container, 30 min timeout).
 
-1. `.venv\Scripts\python.exe -m pip install modal` (already in
-   requirements.txt), then `.venv\Scripts\python.exe -m modal setup` once to
-   authenticate.
-2. SAM 3D Objects' checkpoints are **gated** on Hugging Face. Request access
-   to [facebook/sam-3d-objects](https://huggingface.co/facebook/sam-3d-objects),
-   create an HF access token, then store it as a Modal secret:
-   ```bash
-   modal secret create huggingface HF_TOKEN=hf_xxxxxxxxxxxx
-   ```
-3. First real run builds the container image and downloads checkpoints into
-   a cached Modal Volume (`worldkit-sam3d-checkpoints`) — slow once, fast
-   after.
+1. `.venv\Scripts\python.exe -m modal setup` (authenticate once).
+2. Request access to the gated weights [facebook/sam-3d-objects](https://huggingface.co/facebook/sam-3d-objects), then store a token as a Modal secret: `modal secret create huggingface HF_TOKEN=hf_...`
+3. Preflight, free (CPU only): `modal run "modal_app/sam3d.py::check_env"` must end with `PREFLIGHT_OK`. Optional GPU check of the CUDA extensions without loading the models (about $0.12): `modal run "modal_app/sam3d.py::gpu_smoke"`.
+4. The first real run builds the container image and downloads about 13 GB of checkpoints into a Modal Volume (slow once, fast after). Check usage with `modal billing summary`.
 
-## Run
+No GPU or Modal account? `--mesh-backend trellis` uses a hosted community Space (small free daily quota) and `--mesh-backend import --mesh-file X.glb` reuses an existing mesh.
 
-```bash
-.venv\Scripts\python.exe -m worldkit.object path\to\video.mp4 --out runs\my_object --object "mug" --height-cm 9.5
+## Commands
+
+```powershell
+# one object
+.venv\Scripts\python.exe -m worldkit.object samples\mug_on_table.mp4 --out runs\my_mug --mesh-backend modal --fidelity auto [--object mug] [--ref-diameter-cm D | --height-cm H]
+# several objects in one scene
+.venv\Scripts\python.exe -m worldkit.scene samples\mug_on_table.mp4 --out runs\my_scene --objects mug "round side table"
+# look at the result
+..\pipeline\.venv\Scripts\python.exe ..\viewer\server.py --open runs\my_mug
 ```
 
-Each run writes to `--out`:
+Output of `worldkit.object` in `--out`:
 
 | File | Contents |
 |---|---|
-| `chosen_frame.png` | the frame used to reconstruct the object |
-| `mask_overlay.png` (or `FALLBACK_mask_overlay.png`) | the chosen frame with the object mask overlaid |
-| `object_rgba.png` | chosen frame + mask, as the RGBA image fed to SAM 3D Objects |
-| `model.glb` | textured mesh from SAM 3D Objects (via Modal) |
-| `model_print.stl` | scaled, repaired, based, oriented, print-ready STL |
-| `previews/preview_{000,090,180,270}.png` | 4-angle renders of the final STL |
-| `report.json` | object name, dimensions, watertight/volume, thin-wall warnings, per-stage timings, mesh method, fallback flags, API token usage |
-| `frames/`, `_all_frames/` | the sharp frames kept, and every frame ffmpeg extracted |
+| `model.glb` | the viewer-ready textured mesh (display-correct material, normals; scale units are arbitrary) |
+| `report.json` | models used (and whether Meta's), observed vs generated texture shares, `fidelity` decisions and held-out numbers, scale calibration, print-prep checks, per-stage timings, warnings |
+| `model_print.stl`, `previews/` | scaled, repaired, based STL and 4-angle renders (`print_ready` is true only with a measured height and passing checks) |
+| `chosen_frame.png`, `mask_overlay.png`, `object_rgba.png`, `frames/` | the inputs each stage actually used |
+| `fidelity/` | the frame crops sent to Muse Spark for the structured analysis |
 
-## If the Meta API key isn't active yet
+`worldkit.scene` writes `scene.json` (objects, transforms, layout overlap with the real masks, overlaps), `objects/<id>/{model.glb,report.json}` and `layout_check.png`.
 
-`detect.py` and `segment.py` fall back automatically (no flag needed) when
-`pipeline/.env` is missing or the API rejects the key for a billing/auth
-reason (HTTP 401/402/403):
+Runs are cached where it is safe: SAM 3.1 results and Muse Spark analyses are stored by content hash in `pipeline/.cache/` (gitignored), so re-running on the same frames makes no new API calls.
 
-- Object naming falls back to the sharpest extracted frame + whatever you
-  passed with `--object` (pass it, or the name stays a generic placeholder).
-- Segmentation falls back to a local background-removal model (`rembg`/u2net,
-  runs on CPU). It can't target a named concept, so A4-sheet detection is
-  skipped in this mode — pass `--height-cm` instead of relying on the A4
-  estimate.
+## Backends
 
-Every fallback is marked unmistakably: `used_fallback_detect` /
-`used_fallback_segment` in `report.json`, and the mask overlay filename gets
-a `FALLBACK_` prefix. **This path is for unblocking development only — it
-cannot appear in the submitted demo**, since the hackathon requires real use
-of the Meta API/SAM 3.1.
+| `--mesh-backend` | Model | Notes |
+|---|---|---|
+| `modal` (default) | SAM 3D Objects (Meta) | best geometry here; needs Modal |
+| `trellis` | TRELLIS (Microsoft) | no GPU of your own; lumpier handle/rim; hosted-Space quota |
+| `hosted` | Hunyuan3D-2 (Tencent) | untextured thin shell; baseline only |
+| `import` | whatever you pass | `--mesh-file`, optionally `--mesh-source-report` to keep the original model attribution (verified by file hash) |
 
-Any other API failure (bad request, persistent 5xx, real network outage) is
-NOT treated as a fallback trigger — it stops the run with a clear error,
-since silently masking a real bug or outage would be worse than stopping.
+## Troubleshooting
 
-## Mesh output: built-in SAM 3D Objects mesh, not a custom conversion
+- `SAM 3D Objects on Modal failed ...`: the message lists the checklist (Modal auth, the `huggingface` secret and gated-weights access, credits, `check_env`). Fall back to `--mesh-backend trellis`.
+- `no frame shows all of [...] with a genuine SAM 3.1 mask` (scene): the concept names must be things SAM 3.1 can find in the same frame; try shorter nouns.
+- `print_ready: false`: expected unless you pass `--height-cm`; reference-based scale is an estimate.
+- Failures are also written to `report.json` (`error`, `error_type`).
 
-`facebookresearch/sam-3d-objects`' demo notebook (`demo.py`,
-`demo_single_object.ipynb`) only shows a Gaussian-splat (`.ply`) export, via
-a convenience wrapper (`Inference.__call__`) that explicitly disables mesh
-postprocessing and texture baking. The underlying pipeline
-(`InferencePipelinePointMap.run` / `sam3d_objects/pipeline/inference_pipeline.py`)
-defaults those to `True` and, when enabled, returns a ready textured mesh in
-`outputs["glb"]` (built via `postprocessing_utils.to_glb(...)`, with a plain
-`.export(path)`). `modal_app/sam3d.py` bypasses the convenience wrapper and
-calls the pipeline directly to get this built-in mesh — no custom
-splat-to-mesh conversion (e.g. Poisson reconstruction) was needed or written.
-
-## Tests
-
-```bash
-.venv\Scripts\python.exe -m pytest tests/ -v
-```
-
-`test_frames.py` and `test_printprep.py` run against a synthetic generated
-video / mesh — no network, GPU, or API key required.
+Tests: `python -m pytest tests` from this folder (about 4 minutes).
