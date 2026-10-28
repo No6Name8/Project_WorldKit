@@ -2,7 +2,7 @@
 // gizmo controls, the collision probe, export/reload, and the provenance
 // panel, all exercised together against ONE real pipeline artifact (not the
 // bundled default sample) -- the output of a genuine, fresh, non-mocked
-// `python -m worldkit.object ... --mesh-backend hosted` run.
+// `python -m worldkit.object ... --fidelity auto` run (the bundled demo mug; override with INTEGRATION_RUN=<run dir>).
 //
 // This is deliberately NOT a fresh reconstruction itself (that's expensive:
 // ~90s of Muse Spark detection + a live SAM 3.1 call + a hosted-Space
@@ -19,8 +19,9 @@ const path = require("path");
 const { chromium } = require("playwright");
 
 const URL = "http://127.0.0.1:5050/";
-const MODEL_PATH = path.resolve(__dirname, "..", "..", "pipeline", "runs", "integration_test", "model.glb");
-const REPORT_PATH = path.resolve(__dirname, "..", "..", "pipeline", "runs", "integration_test", "report.json");
+const DEMO = path.resolve(__dirname, "..", "assets", "demo", "mug"); // bundled real pipeline output (SAM 3D), present in a fresh clone
+const MODEL_PATH = process.env.INTEGRATION_RUN ? path.resolve(process.env.INTEGRATION_RUN, "model.glb") : path.join(DEMO, "model.glb");
+const REPORT_PATH = process.env.INTEGRATION_RUN ? path.resolve(process.env.INTEGRATION_RUN, "report.json") : path.join(DEMO, "report.json");
 
 const results = [];
 function check(name, cond, detail) {
@@ -155,7 +156,7 @@ function check(name, cond, detail) {
   const provenanceText = await page.locator("#provenance-readout").innerText();
   check(
     "provenance panel renders the REAL report.json from the fresh pipeline run",
-    provenanceText.includes("hosted_space_hunyuan3d") && provenanceText.includes("print_ready: false"),
+    provenanceText.includes("SAM 3D Objects") && provenanceText.includes("print_ready: false"),
     provenanceText
   );
 

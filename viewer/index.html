@@ -37,6 +37,15 @@
   label.file-btn { display: inline-block; }
   input[type=file] { display: none; }
 
+  #scene-panel { top: 96px; right: 14px; width: 250px; max-height: 34vh; overflow-y: auto; }
+  #physics-panel { top: calc(96px + 34vh + 20px); right: 14px; width: 250px; }
+  .ptitle { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+  #object-list button { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
+  #object-list button.missing { color: #ff8080; border-color: #7a3a3a; }
+  #overlap-readout, #phys-readout { font-size: 11px; line-height: 1.5; color: #a8adba; white-space: pre-wrap; margin-top: 6px; }
+  #overlap-readout .warn { color: #ffcf7a; }
+  .num { width: 56px; background: #1b1e25; border: 1px solid #3a3f4b; border-radius: 6px; color: #e6e8ee; padding: 4px; font-size: 12px; }
+  #scale-banner.ok { background: #10301f; border-color: #1f7a45; color: #8ff0b5; }
   #bottom-left { bottom: 14px; left: 14px; width: 420px; }
   #edit-log { font-size: 12px; max-height: 110px; overflow-y: auto; margin-top: 8px; color: #c3c7d1; }
   #edit-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
@@ -70,6 +79,10 @@
     <button id="btn-reset">Reset view</button>
     <button id="btn-reset-transform">Reset transform</button>
   </div>
+  <div class="row" title="Manual calibration: type the REAL height of the selected object, measured by you">
+    <input id="calib-height" class="num" type="number" min="0.1" step="0.1" placeholder="cm" />
+    <button id="btn-calibrate">Set real height</button>
+  </div>
   <div id="transform-readout">loading…</div>
 </div>
 
@@ -79,6 +92,34 @@
   </div>
   <div id="sim-readout" style="font-size:11px; line-height:1.6; color:#a8adba; white-space:pre; display:none;">off</div>
   <div id="sim-hint" style="font-size:11px; color:#6b7080; display:none; margin-top:4px;">WASD move · Q/E down/up</div>
+</div>
+
+<div id="scene-panel" class="panel">
+  <div class="ptitle">Scene objects</div>
+  <div id="object-list"></div>
+  <div class="row" style="margin-top:6px;">
+    <label class="file-btn"><button id="btn-load-scene" type="button">Load scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
+    <button id="btn-export-scene">Export scene</button>
+    <button id="btn-check-overlap">Check overlaps</button>
+  </div>
+  <div class="row" title="Bundled real reconstructions (no GPU or API key needed)">
+    <button id="btn-demo-mug">Demo: mug</button>
+    <button id="btn-demo-scene">Demo: mug + table</button>
+  </div>
+  <div id="overlap-readout">single object loaded</div>
+</div>
+
+<div id="physics-panel" class="panel">
+  <div class="ptitle">Physics (Rapier rigid body)</div>
+  <div class="row">
+    <label style="font-size:11px;color:#a8adba;">drop cm <input id="phys-drop" class="num" type="number" value="15" min="0" step="1" /></label>
+    <label style="font-size:11px;color:#a8adba;">mass kg <input id="phys-mass" class="num" type="number" value="0.3" min="0.01" step="0.05" /></label>
+  </div>
+  <div class="row">
+    <button id="btn-phys-start">Simulate</button>
+    <button id="btn-phys-reset">Reset sim</button>
+  </div>
+  <div id="phys-readout">Off. Simulates gravity on a cloned copy; your edited objects are untouched. Collider: convex hull (approximation).</div>
 </div>
 
 <div id="bottom-right" class="panel">
@@ -103,8 +144,8 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
   }
 }
 </script>
@@ -126,7 +167,8 @@ import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 // on-screen banner and CLAUDE.md. If a future mesh carries a real measured
 // height, set CALIBRATED = true and REAL_HEIGHT_CM accordingly.
 const PLACEHOLDER_HEIGHT_CM = 10.0;
-const CALIBRATED = false;
+let calibrated = false; // true only when a reference/report/user-entered height set the scale
+let calibrationInfo = null;
 let cmPerSceneUnit = 1.0; // recomputed once the model loads, from its real bounding box
 
 // --- Renderer / scene / camera -------------------------------------------
@@ -134,6 +176,8 @@ const wrap = document.getElementById("canvas-wrap");
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 wrap.appendChild(renderer.domElement);
 
@@ -157,10 +201,19 @@ camera.position.set(2.5, 2, 2.5);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.2));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
 dirLight.position.set(3, 5, 2);
+dirLight.castShadow = true;  // contact shadows make it obvious whether an object rests on another or floats
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -4; dirLight.shadow.camera.right = 4; dirLight.shadow.camera.top = 4; dirLight.shadow.camera.bottom = -4;
+dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 20;
+dirLight.shadow.bias = -0.0004; dirLight.shadow.normalBias = 0.02;
 scene.add(dirLight);
 
 const grid = new THREE.GridHelper(10, 20, 0x3a3f4b, 0x24272f);
 scene.add(grid);
+const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.4 }));
+shadowFloor.rotation.x = -Math.PI / 2;
+shadowFloor.receiveShadow = true;
+scene.add(shadowFloor);
 
 const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.enableDamping = true;
@@ -168,8 +221,14 @@ orbit.enableDamping = true;
 // modelGroup is the stable object we attach TransformControls to; its
 // single child is whatever GLTF scene is currently loaded, so "load GLB"
 // can swap content without re-wiring any controls.
-const modelGroup = new THREE.Group();
-scene.add(modelGroup);
+const objectsRoot = new THREE.Group();
+objectsRoot.name = "worldkit_objects";
+scene.add(objectsRoot);
+const primaryGroup = new THREE.Group();
+objectsRoot.add(primaryGroup);
+let modelGroup = primaryGroup; // the ACTIVE (selected) object; a single-object session has exactly one
+const primaryEntry = { id: "model", name: "model", group: primaryGroup, role: "single", initial: null, meta: null, missing: false, unitHeight: 1 };
+const sceneObjects = [primaryEntry];
 
 const gizmo = new TransformControls(camera, renderer.domElement);
 gizmo.addEventListener("dragging-changed", (e) => { orbit.enabled = !e.value; });
@@ -180,7 +239,15 @@ gizmo.attach(modelGroup);
 // --- Loading ---------------------------------------------------------------
 const loader = new GLTFLoader();
 
+// Objects cast and receive shadows; the grid and shadow floor sit at the lowest point of whatever is loaded.
+function settleFloorAndShadows(object3d) {
+  object3d.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const b = new THREE.Box3().setFromObject(objectsRoot);
+  if (isFinite(b.min.y)) { grid.position.y = b.min.y; shadowFloor.position.y = b.min.y - 0.001; }
+}
+
 function frameCameraOn(object3d) {
+  settleFloorAndShadows(objectsRoot);
   const box = new THREE.Box3().setFromObject(object3d);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
@@ -211,10 +278,18 @@ function loadGLBFromArrayBuffer(arrayBuffer, label) {
       arrayBuffer,
       "",
       (gltf) => {
+        if (adoptSceneGLTF(gltf, label)) { resolve(gltf); return; }
+        collapseToSingle();
         clearModelGroupChildren();
         modelGroup.add(gltf.scene);
         const { size } = frameCameraOn(modelGroup);
-        cmPerSceneUnit = CALIBRATED ? cmPerSceneUnit : PLACEHOLDER_HEIGHT_CM / Math.max(size.y, 1e-6);
+        cmPerSceneUnit = PLACEHOLDER_HEIGHT_CM / Math.max(size.y, 1e-6);
+        calibrated = false; calibrationInfo = null;
+        primaryEntry.unitHeight = size.y;
+        const ud = gltf.scene.userData && gltf.scene.userData.worldkit_scale;
+        if (ud && ud.calibrated && ud.cm_per_scene_unit) { cmPerSceneUnit = ud.cm_per_scene_unit; calibrated = true; calibrationInfo = { ...ud.info, restored_from_export: true }; }
+        updateBanner();
+        refreshObjectList();
         window.__sceneReady = true;
         window.__lastLoadLabel = label; // precise re-load signal: __sceneReady alone stays true across a second load, so a test waiting to confirm THIS load finished (not the first) needs this instead
         logEntry(`Loaded ${label} (bbox ${size.x.toFixed(3)} x ${size.y.toFixed(3)} x ${size.z.toFixed(3)} scene units)`);
@@ -233,7 +308,7 @@ function loadGLBFromURL(url, label) {
     .catch((err) => { window.__lastLoadError = String(err); logEntry(`Failed to load ${label}: ${err}`, true); });
 }
 
-loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
+// startup() below decides what to show first: an opened run directory, else the bundled sample
 
 // --- Gizmo mode buttons ----------------------------------------------------
 const modeButtons = {
@@ -265,7 +340,8 @@ function currentTransform() {
     rotation_deg: [THREE.MathUtils.radToDeg(r.x), THREE.MathUtils.radToDeg(r.y), THREE.MathUtils.radToDeg(r.z)],
     scale: [s.x, s.y, s.z],
     cm_per_scene_unit: cmPerSceneUnit,
-    calibrated: CALIBRATED,
+    calibrated,
+    calibration: calibrationInfo,
   };
 }
 function updateReadout() {
@@ -300,6 +376,22 @@ window.__getMaterialInfo = function () {
   return info;
 };
 
+// World-space vertex positions of the loaded model (test hook: lets a test check orientation/proportions from the real geometry).
+window.__getMeshWorldVertices = function () {
+  modelGroup.updateMatrixWorld(true);
+  const out = [];
+  const v = new THREE.Vector3();
+  modelGroup.traverse((o) => {
+    if (!o.isMesh) return;
+    const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      out.push(v.x, v.y, v.z);
+    }
+  });
+  return out;
+};
+
 window.__getModelScreenPosition = function () {
   const ndc = modelGroup.position.clone().project(camera);
   const rect = renderer.domElement.getBoundingClientRect();
@@ -330,6 +422,7 @@ const exporter = new GLTFExporter();
 window.__lastExportedGLB = null;
 
 function exportGLB() {
+  modelGroup.userData.worldkit_scale = { calibrated, cm_per_scene_unit: cmPerSceneUnit, info: calibrationInfo };
   return new Promise((resolve, reject) => {
     exporter.parse(
       modelGroup,
@@ -363,12 +456,14 @@ document.getElementById("file-load").addEventListener("change", (e) => {
 });
 window.__loadGLBFromArrayBuffer = loadGLBFromArrayBuffer;
 
-document.getElementById("btn-reset").onclick = () => frameCameraOn(modelGroup);
+document.getElementById("btn-reset").onclick = () => frameCameraOn(objectsRoot);
 
 function resetTransform() {
-  modelGroup.position.set(0, 0, 0);
-  modelGroup.rotation.set(0, 0, 0);
-  modelGroup.scale.set(1, 1, 1);
+  const entry = sceneObjects.find((o) => o.group === modelGroup);
+  const t = entry && entry.initial;
+  modelGroup.position.set(...(t ? t.position : [0, 0, 0]));
+  modelGroup.rotation.set(0, THREE.MathUtils.degToRad(t ? t.rotation_deg[1] : 0), 0);
+  modelGroup.scale.set(...(t ? t.scale : [1, 1, 1]));
   updateReadout();
 }
 document.getElementById("btn-reset-transform").onclick = () => { resetTransform(); logEntry("Reset transform to identity"); };
@@ -459,7 +554,7 @@ function simSetEnabled(enabled) {
   document.getElementById("sim-hint").style.display = enabled ? "block" : "none";
   document.getElementById("btn-sim-toggle").textContent = enabled ? "Disable collision probe" : "Enable collision probe";
   if (enabled) {
-    const box = new THREE.Box3().setFromObject(modelGroup);
+    const box = new THREE.Box3().setFromObject(objectsRoot);
     probe.position.set(box.max.x + 0.3, (box.min.y + box.max.y) / 2, 0);
     updateSimReadout();
   }
@@ -491,7 +586,7 @@ function simMove(dx, dy, dz) {
   raycaster.set(probe.position, dir);
   raycaster.far = dist + PROBE_RADIUS;
   raycaster.near = 0;
-  const hits = raycaster.intersectObject(modelGroup, true);
+  const hits = raycaster.intersectObject(objectsRoot, true);
 
   let blocked = false;
   let hitDistance = null;
@@ -513,6 +608,9 @@ function simMove(dx, dy, dz) {
 }
 window.__simMove = simMove;
 window.__simProbePosition = () => probe.position.toArray();
+// Test hooks: place the probe anywhere (so a test can aim it through the handle opening), and read the orbit camera.
+window.__simSetProbePosition = (x, y, z) => { probe.position.set(x, y, z); lastSimResult = { blocked: false, hitDistance: null }; updateSimReadout(); };
+window.__getCameraState = () => ({ position: camera.position.toArray(), target: orbit.target.toArray() });
 
 const SIM_STEP = 0.12;
 const simKeys = { w: [0, 0, -1], s: [0, 0, 1], a: [-1, 0, 0], d: [1, 0, 0], q: [0, -1, 0], e: [0, 1, 0] };
@@ -541,6 +639,12 @@ document.getElementById("file-report").addEventListener("change", (e) => {
       document.getElementById("provenance-readout").textContent = `Could not parse ${file.name} as JSON: ${err}`;
       return;
     }
+    renderProvenance(report);
+  });
+});
+
+function renderProvenance(report) {
+  {
     const lines = [
       `mesh_backend: ${report.mesh_backend ?? "(not recorded)"}`,
       `mesh_method: ${report.mesh_method ?? "(not recorded)"}`,
@@ -550,15 +654,28 @@ document.getElementById("file-report").addEventListener("change", (e) => {
       const m = report.reconstruction_model;
       lines.push(`model: ${m.name} (${m.vendor}${m.is_meta_model === true ? ", Meta model" : m.is_meta_model === false ? ", NOT a Meta model" : ""})`);
     }
+    if (report.mesh_source) {
+      lines.push(`mesh source: ${report.mesh_source.source_mesh_backend ?? "?"} run (model attribution inherited; mesh bytes verified identical)`);
+    }
     if (report.appearance && report.appearance.textured) {
       const a = report.appearance;
-      lines.push(`texture: ${a.texture_source}`);
+      if (a.texture_source) lines.push(`texture: ${a.texture_source}`);
       if (a.projection) {
         lines.push(`  real video pixels: ${Math.round(a.projection.observed_fraction * 100)}% of surface, generated: ${Math.round(a.projection.generated_fraction * 100)}%`);
         lines.push(`  frames used: ${a.projection.frames_used.length}, geometry modified: ${a.projection.geometry_modified}`);
       }
     } else if (report.appearance) {
       lines.push("texture: none (untextured mesh)");
+    }
+    if (report.fidelity) {
+      const f = report.fidelity;
+      lines.push(`fidelity stage: ${f.applied ? "APPLIED" : "not applied"} (${(f.decisions || []).slice(-1)[0] || "no decision recorded"})`);
+      if (f.applied && f.texture_provenance) {
+        const t = f.texture_provenance;
+        lines.push(`  stripe model: ${Math.round(t.observed_fraction_of_surface * 100)}% of surface at observed angles, ${Math.round(t.inferred_fraction_of_surface * 100)}% inferred from the measured lattice, ${Math.round(t.generated_fraction_of_surface * 100)}% still generated`);
+        const q = f.qc;
+        if (q) lines.push(`  held-out check: NCC ${q.baseline_summary.ncc.toFixed(2)} -> ${q.candidate_summary.ncc.toFixed(2)}, stripe IoU ${q.baseline_summary.stripe_iou.toFixed(2)} -> ${q.candidate_summary.stripe_iou.toFixed(2)}`);
+      }
     }
     lines.push(`print_ready: ${report.print_ready ?? "(not recorded)"}`);
     if (report.print_prep && report.print_prep.geometry_checks_passed !== undefined) {
@@ -569,10 +686,12 @@ document.getElementById("file-report").addEventListener("change", (e) => {
       lines.push(`thin_wall_warnings: ${report.print_prep.thin_wall_warning_count ?? "?"}/${report.print_prep.thin_wall_sample_count ?? "?"}`);
       lines.push(`height_source: ${report.print_prep.height_source} (is_estimate=${report.print_prep.is_estimate})`);
     }
+    const applied = applyReportScale(report);
+    if (applied) lines.push(applied);
     document.getElementById("provenance-readout").textContent = lines.join("\n");
     window.__lastLoadedReport = report;
-  });
-});
+  }
+}
 
 document.getElementById("file-video").addEventListener("change", (e) => {
   const file = e.target.files[0];
@@ -582,6 +701,426 @@ document.getElementById("file-video").addEventListener("change", (e) => {
   video.style.display = "block";
 });
 
+
+// --- Scale: banner, report-derived and manual calibration ------------------------------------------------------------
+function updateBanner() {
+  const el = document.getElementById("scale-banner");
+  if (!el) return;
+  if (calibrated && calibrationInfo) {
+    el.classList.add("ok");
+    const i = calibrationInfo;
+    el.textContent = i.source === "manual"
+      ? `Scale set manually: ${i.object} = ${i.height_cm} cm (your number, applied to the whole scene; not verified by WorldKit).`
+      : i.source === "reference_calibrated"
+        ? `Scale estimated from a reference object (${i.reference || "reference"}, ±${i.spread_pct ?? "?"}% self-consistency). An estimate, not a measurement.`
+        : i.source === "user"
+          ? "Scale from the user-measured height in the report."
+          : `Scale restored from ${i.source}.`;
+  } else {
+    el.classList.remove("ok");
+    el.textContent = sceneObjects.length > 1
+      ? "⚠ Scene scale is NOT calibrated: 1 scene unit is shown as 1 cm, which is arbitrary. Type a real height for the selected object to calibrate."
+      : "⚠ Scale is NOT physically calibrated. This mesh's size comes from a placeholder estimate (10 cm), not a real measurement. Numbers below are consistent within this scene, not guaranteed physical centimeters.";
+  }
+}
+
+// A report only sets the scale if it demonstrably describes the loaded model (its upright height at the report's scale
+// factor must equal the height the report claims) and the scale came from the user or a reference, never a placeholder.
+function applyReportScale(report) {
+  const pp = report.print_prep;
+  if (!pp || !["user", "reference_calibrated"].includes(pp.height_source)) return null;
+  const entry = sceneObjects.length === 1 ? sceneObjects[0] : null;
+  if (!entry) return "scale: report not applied (several objects loaded)";
+  const implied = entry.unitHeight * pp.scale_factor;
+  if (Math.abs(implied - pp.upright_height_cm) / pp.upright_height_cm > 0.02) {
+    return `scale: report NOT applied (loaded model height × report scale = ${implied.toFixed(2)} cm, report says ${pp.upright_height_cm.toFixed(2)} cm: different model?)`;
+  }
+  cmPerSceneUnit = pp.scale_factor;
+  calibrated = true;
+  const sc = report.scale_calibration;
+  calibrationInfo = pp.height_source === "user"
+    ? { source: "user", height_cm: pp.upright_height_cm }
+    : { source: "reference_calibrated", reference: sc && sc.reference, spread_pct: sc ? +(100 * sc.relative_spread_mad).toFixed(1) : null, height_cm: pp.upright_height_cm };
+  updateBanner(); updateReadout();
+  return `scale: applied from report (${pp.height_source}), 1 unit = ${cmPerSceneUnit.toFixed(2)} cm`;
+}
+
+function calibrateManual(heightCm) {
+  const entry = sceneObjects.find((o) => o.group === modelGroup);
+  if (!entry || !(heightCm > 0)) return false;
+  entry.group.updateMatrixWorld(true);
+  const size = new THREE.Box3().setFromObject(entry.group).getSize(new THREE.Vector3());
+  cmPerSceneUnit = heightCm / Math.max(size.y, 1e-9);
+  calibrated = true;
+  calibrationInfo = { source: "manual", object: entry.name, height_cm: heightCm };
+  updateBanner(); updateReadout();
+  logEntry(`Scale set: ${entry.name} height ${heightCm} cm → 1 scene unit = ${cmPerSceneUnit.toFixed(3)} cm`);
+  return true;
+}
+document.getElementById("btn-calibrate").onclick = () => calibrateManual(parseFloat(document.getElementById("calib-height").value));
+window.__calibrateManual = calibrateManual;
+
+// --- Scene: several independently selectable objects -----------------------------------------------------------------
+function collapseToSingle() {
+  for (const o of sceneObjects.slice()) if (o.group !== primaryGroup) objectsRoot.remove(o.group);
+  sceneObjects.length = 0;
+  sceneObjects.push(primaryEntry);
+  primaryEntry.missing = false; primaryEntry.initial = null; primaryEntry.meta = null; primaryEntry.role = "single";
+  if (!primaryGroup.parent) objectsRoot.add(primaryGroup);
+  modelGroup = primaryGroup;
+  gizmo.attach(modelGroup);
+  document.getElementById("overlap-readout").textContent = "single object loaded";
+}
+
+function refreshObjectList() {
+  const box = document.getElementById("object-list");
+  box.textContent = "";
+  for (const o of sceneObjects) {
+    const b = document.createElement("button");
+    b.textContent = `${o.name}${o.role === "parent" ? " · parent" : ""}${o.missing ? " · MISSING MESH" : ""}`;
+    b.dataset.id = o.id;
+    if (o.missing) b.classList.add("missing");
+    if (o.group === modelGroup) b.classList.add("active");
+    b.onclick = () => selectObject(o.id);
+    box.appendChild(b);
+  }
+}
+
+function selectObject(id) {
+  const o = sceneObjects.find((x) => x.id === id);
+  if (!o || o.missing) return false;
+  if (physics && physics.isRunning()) return false;
+  modelGroup = o.group;
+  gizmo.attach(modelGroup);
+  window.__selectedId = o.id;
+  refreshObjectList();
+  updateReadout();
+  if (o.meta && o.meta.report) renderProvenance(o.meta.report);
+  return true;
+}
+window.__selectObject = selectObject;
+window.__objectScreenPosition = (id) => {
+  const o = sceneObjects.find((x) => x.id === id);
+  const c = new THREE.Box3().setFromObject(o.group).getCenter(new THREE.Vector3()).project(camera);
+  const r = renderer.domElement.getBoundingClientRect();
+  return { x: r.left + ((c.x + 1) / 2) * r.width, y: r.top + ((1 - c.y) / 2) * r.height };
+};
+window.__getSceneObjects = () => sceneObjects.map((o) => ({
+  id: o.id, name: o.name, role: o.role, missing: o.missing, selected: o.group === modelGroup, visible: o.group.visible,
+  position: o.group.position.toArray(), rotation_deg_y: THREE.MathUtils.radToDeg(o.group.rotation.y), scale: o.group.scale.toArray(),
+  model: o.meta && o.meta.report && o.meta.report.reconstruction_model ? o.meta.report.reconstruction_model.name : null,
+}));
+
+// pick an object by clicking it (not when the click was a camera drag or a gizmo drag)
+{
+  let down = null;
+  const dom = renderer.domElement;
+  dom.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, axis: gizmo.axis }; });
+  dom.addEventListener("pointerup", (e) => {
+    if (!down || sceneObjects.length < 2 || down.axis || gizmo.dragging) { down = null; return; }
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    down = null;
+    if (moved > 4) return;
+    const r = dom.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(ndc, camera);
+    const hit = rc.intersectObject(objectsRoot, true)[0];
+    if (!hit) return;
+    let n = hit.object;
+    while (n && !sceneObjects.some((o) => o.group === n)) n = n.parent;
+    const o = sceneObjects.find((x) => x.group === n);
+    if (o) selectObject(o.id);
+  });
+}
+
+async function loadSceneFromFiles(fileList) {
+  const files = Array.from(fileList);
+  const rel = (f) => (f.webkitRelativePath || f.name).replace(/\\/g, "/");
+  const manifests = files.filter((f) => rel(f).endsWith("scene.json")).sort((a, b) => rel(a).length - rel(b).length);
+  if (!manifests.length) { logEntry("No scene.json in the selected folder", true); return false; }
+  const manifestFile = manifests[0];
+  const root = rel(manifestFile).slice(0, -"scene.json".length);
+  const byPath = new Map(files.map((f) => [rel(f), f]));
+  let manifest;
+  try { manifest = JSON.parse(await manifestFile.text()); } catch (e) { logEntry(`scene.json is not valid JSON: ${e}`, true); return false; }
+  if (manifest.worldkit_scene !== 1 || !Array.isArray(manifest.objects)) { logEntry("scene.json is not a WorldKit scene (version 1)", true); return false; }
+
+  collapseToSingle();
+  gizmo.detach();
+  objectsRoot.remove(primaryGroup);
+  sceneObjects.length = 0;
+  calibrated = false; calibrationInfo = null;
+  for (const spec of manifest.objects) {
+    const g = new THREE.Group();
+    g.name = spec.id;
+    const t = spec.transform;
+    g.position.set(...t.position);
+    g.rotation.set(0, THREE.MathUtils.degToRad(t.rotation_deg[1]), 0);
+    g.scale.set(...t.scale);
+    const entry = { id: spec.id, name: spec.name || spec.id, group: g, role: spec.role, initial: t, meta: { spec, report: null }, missing: false, unitHeight: 1 };
+    const meshFile = byPath.get(root + spec.mesh);
+    if (!meshFile) { entry.missing = true; logEntry(`Mesh for "${entry.name}" not found (${spec.mesh}); the rest of the scene still loads`, true); }
+    else {
+      try {
+        const gltf = await loader.parseAsync(await meshFile.arrayBuffer(), "");
+        g.add(gltf.scene);
+        entry.unitHeight = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3()).y;
+      } catch (e) { entry.missing = true; logEntry(`Mesh for "${entry.name}" could not be parsed: ${e}`, true); }
+    }
+    const repFile = spec.report ? byPath.get(root + spec.report) : null;
+    if (repFile) { try { entry.meta.report = JSON.parse(await repFile.text()); } catch (e) { /* provenance is optional */ } }
+    g.userData.worldkit = { id: spec.id, name: entry.name, role: spec.role, mesh: spec.mesh, report: spec.report, reconstruction_model: spec.reconstruction_model, initial: t };
+    if (!entry.missing) objectsRoot.add(g); // a missing mesh is a gap in the scene, not an empty node
+    sceneObjects.push(entry);
+  }
+  if (manifest.cm_per_scene_unit) {
+    cmPerSceneUnit = manifest.cm_per_scene_unit;
+    calibrated = true;
+    const sc = manifest.scale_calibration || {};
+    calibrationInfo = { source: "reference_calibrated", reference: sc.reference, spread_pct: sc.relative_spread_mad != null ? +(100 * sc.relative_spread_mad).toFixed(1) : null };
+  } else {
+    cmPerSceneUnit = 1.0;
+  }
+  window.__sceneManifest = manifest;
+  const first = sceneObjects.find((o) => !o.missing);
+  frameCameraOn(objectsRoot);
+  if (first) { modelGroup = first.group; gizmo.attach(modelGroup); }
+  window.__sceneReady = true;
+  window.__lastLoadLabel = "scene:" + manifest.frame;
+  logEntry(`Loaded scene: ${sceneObjects.map((o) => o.name + (o.missing ? " (missing)" : "")).join(", ")}`);
+  updateBanner(); refreshObjectList(); updateReadout();
+  checkOverlaps();
+  if (first && first.meta.report) renderProvenance(first.meta.report);
+  return true;
+}
+document.getElementById("btn-load-scene").onclick = () => document.getElementById("file-scene").click();
+document.getElementById("file-scene").addEventListener("change", (e) => loadSceneFromFiles(e.target.files));
+window.__loadSceneFromFiles = loadSceneFromFiles;
+
+// A GLB exported by "Export scene" carries every object as a named node with its provenance in glTF extras.
+function adoptSceneGLTF(gltf, label) {
+  let root = null;
+  gltf.scene.traverse((n) => { if (!root && n.userData && n.userData.worldkit_scene) root = n; });
+  if (!root) return false;
+  collapseToSingle();
+  gizmo.detach();
+  objectsRoot.remove(primaryGroup);
+  sceneObjects.length = 0;
+  for (const child of root.children.slice()) {
+    const w = child.userData && child.userData.worldkit;
+    if (!w) continue;
+    objectsRoot.add(child);
+    sceneObjects.push({ id: w.id, name: w.name, group: child, role: w.role, initial: w.initial || null, meta: { spec: w, report: null }, missing: false, unitHeight: 1 });
+  }
+  const meta = root.userData.worldkit_scene;
+  calibrated = !!meta.calibrated;
+  cmPerSceneUnit = meta.cm_per_scene_unit || 1.0;
+  calibrationInfo = meta.calibration ? { ...meta.calibration, restored_from_export: true } : null;
+  for (const m of meta.missing || []) sceneObjects.push({ id: m.id, name: m.name, group: new THREE.Group(), role: m.role, initial: null, meta: null, missing: true, unitHeight: 1 });
+  modelGroup = (sceneObjects.find((o) => !o.missing) || primaryEntry).group;
+  gizmo.attach(modelGroup);
+  frameCameraOn(objectsRoot);
+  window.__sceneReady = true;
+  window.__lastLoadLabel = label;
+  logEntry(`Loaded scene GLB ${label}: ${sceneObjects.map((o) => o.name).join(", ")}`);
+  updateBanner(); refreshObjectList(); updateReadout(); checkOverlaps();
+  return true;
+}
+
+function exportScene() {
+  objectsRoot.userData.worldkit_scene = {
+    version: 1, calibrated, cm_per_scene_unit: cmPerSceneUnit, calibration: calibrationInfo,
+    missing: sceneObjects.filter((o) => o.missing).map((o) => ({ id: o.id, name: o.name, role: o.role })),
+  };
+  for (const o of sceneObjects) {
+    if (o.missing) continue;
+    o.group.name = o.id;
+    o.group.userData.worldkit = { ...(o.group.userData.worldkit || {}), id: o.id, name: o.name, role: o.role, initial: o.initial };
+  }
+  return new Promise((resolve, reject) => {
+    exporter.parse(objectsRoot, (result) => {
+      const bytes = result instanceof ArrayBuffer ? result : new TextEncoder().encode(JSON.stringify(result));
+      window.__lastExportedScene = bytes;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([bytes], { type: "model/gltf-binary" }));
+      a.download = "worldkit_scene.glb";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      resolve(bytes);
+    }, reject, { binary: true });
+  });
+}
+document.getElementById("btn-export-scene").onclick = () => exportScene().then(() => logEntry("Exported scene GLB"));
+window.__exportScene = exportScene;
+window.__loadSceneGLB = (bytes, label) => loadGLBFromArrayBuffer(bytes.slice(0), label);
+
+// Real overlap test: sampled vertices of one object that lie INSIDE the other's closed surface (ray parity, our own
+// Moller-Trumbore so back faces count). Resting contact is not penetration: points within `tol` of the surface do not count.
+function worldTriangles(group) {
+  group.updateWorldMatrix(true, true);
+  const tris = [];
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  group.traverse((o) => {
+    if (!o.isMesh) return;
+    const pos = o.geometry.attributes.position, idx = o.geometry.index;
+    const n = idx ? idx.count : pos.count;
+    for (let i = 0; i < n; i += 3) {
+      const i0 = idx ? idx.getX(i) : i, i1 = idx ? idx.getX(i + 1) : i + 1, i2 = idx ? idx.getX(i + 2) : i + 2;
+      a.fromBufferAttribute(pos, i0).applyMatrix4(o.matrixWorld); b.fromBufferAttribute(pos, i1).applyMatrix4(o.matrixWorld); c.fromBufferAttribute(pos, i2).applyMatrix4(o.matrixWorld);
+      tris.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    }
+  });
+  return new Float32Array(tris);
+}
+function pointInside(p, tris, dir) {
+  let hits = 0;
+  const [dx, dy, dz] = dir;
+  for (let i = 0; i < tris.length; i += 9) {
+    const e1x = tris[i + 3] - tris[i], e1y = tris[i + 4] - tris[i + 1], e1z = tris[i + 5] - tris[i + 2];
+    const e2x = tris[i + 6] - tris[i], e2y = tris[i + 7] - tris[i + 1], e2z = tris[i + 8] - tris[i + 2];
+    const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+    const det = e1x * px + e1y * py + e1z * pz;
+    if (Math.abs(det) < 1e-12) continue;
+    const inv = 1 / det;
+    const tx = p[0] - tris[i], ty = p[1] - tris[i + 1], tz = p[2] - tris[i + 2];
+    const u = (tx * px + ty * py + tz * pz) * inv;
+    if (u < 0 || u > 1) continue;
+    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+    const v = (dx * qx + dy * qy + dz * qz) * inv;
+    if (v < 0 || u + v > 1) continue;
+    const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
+    if (t > 1e-6) hits++;
+  }
+  return hits % 2 === 1;
+}
+function sampleVertices(group, max) {
+  group.updateWorldMatrix(true, true);
+  const pts = [], v = new THREE.Vector3();
+  group.traverse((o) => {
+    if (!o.isMesh) return;
+    const pos = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(pos.count / max));
+    for (let i = 0; i < pos.count; i += step) { v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); pts.push([v.x, v.y, v.z]); }
+  });
+  return pts;
+}
+function checkOverlaps(opts = {}) {
+  const live = sceneObjects.filter((o) => !o.missing);
+  const out = [];
+  const dir = [0.5773502691896258, 0.5773502691896258, 0.5773502691896258].map((x, i) => x + [0.0013, -0.0007, 0.0021][i]); // off-axis: avoids grazing edges
+  for (let i = 0; i < live.length; i++) {
+    for (let j = 0; j < live.length; j++) {
+      if (i === j) continue;
+      const A = live[i], B = live[j];
+      const boxA = new THREE.Box3().setFromObject(A.group), boxB = new THREE.Box3().setFromObject(B.group);
+      if (!boxA.intersectsBox(boxB)) { out.push({ a: A.id, inside: B.id, fraction: 0 }); continue; }
+      const tris = worldTriangles(B.group);
+      const size = boxA.getSize(new THREE.Vector3()).length();
+      const tol = (opts.tolFraction ?? 0.02) * size;
+      const pts = sampleVertices(A.group, opts.samples ?? 300);
+      let inside = 0;
+      for (const p of pts) {
+        if (pointInside(p, tris, dir) && pointInside([p[0], p[1] - tol, p[2]], tris, dir) && pointInside([p[0], p[1] + tol, p[2]], tris, dir)) inside++;
+      }
+      out.push({ a: A.id, inside: B.id, fraction: +(inside / pts.length).toFixed(3), samples: pts.length });
+    }
+  }
+  const bad = out.filter((r) => r.fraction > 0.01);
+  const el = document.getElementById("overlap-readout");
+  if (sceneObjects.length < 2) el.textContent = "single object loaded";
+  else el.innerHTML = bad.length ? bad.map((r) => `<span class="warn">⚠ ${r.a} overlaps ${r.inside}: ${(r.fraction * 100).toFixed(0)}% of its sampled surface is inside</span>`).join("<br>") : "✓ no penetration between objects (sampled-vertex test; resting contact allowed)";
+  window.__lastOverlaps = out;
+  return out;
+}
+document.getElementById("btn-check-overlap").onclick = () => checkOverlaps();
+window.__checkOverlaps = checkOverlaps;
+gizmo.addEventListener("mouseUp", () => { if (sceneObjects.length > 1) setTimeout(() => checkOverlaps(), 50); });
+
+// --- Physics (lazy: the Rapier WASM engine is only fetched when Simulate is pressed) ---------------------------------
+let physics = null;
+async function ensurePhysics() {
+  if (physics) return physics;
+  const mod = await import("./physics.js");
+  physics = mod.createPhysics({
+    THREE, scene, getObjects: () => sceneObjects, getCmPerUnit: () => cmPerSceneUnit,
+    onStart: () => { gizmo.detach(); },
+    onStop: () => { if (modelGroup) gizmo.attach(modelGroup); },
+  });
+  return physics;
+}
+async function physicsStart(opts = {}) {
+  const ph = await ensurePhysics();
+  const st = await ph.start({ dropHeightCm: parseFloat(document.getElementById("phys-drop").value), massKg: parseFloat(document.getElementById("phys-mass").value), physicalScale: calibrated, ...opts });
+  return st;
+}
+function physicsReadout() {
+  if (!physics) return;
+  const st = physics.state();
+  const el = document.getElementById("phys-readout");
+  if (!st.running) { el.textContent = "Off. Edited objects are untouched."; return; }
+  const b = st.bodies[0];
+  el.textContent = `t=${st.sim_time_s}s ${st.settled ? "· SETTLED" : "· falling/rolling"}\n` +
+    (b ? `${b.id}: y=${b.position_units[1].toFixed(3)} u, ${b.speed_m_s.toFixed(2)} m/s, ${b.mass_kg.toFixed(2)} kg\ncollider: ${b.collider}\n` : "") +
+    `support: ${st.support ? st.support.collider : "-"}\n` +
+    (st.scale_is_physical ? "size: calibrated scale" : "⚠ size is NOT calibrated: simulated at the displayed size (1 unit = " + cmPerSceneUnit.toFixed(2) + " cm)");
+}
+document.getElementById("btn-phys-start").onclick = () => physicsStart().catch((e) => logEntry(`Physics failed to start: ${e}`, true));
+document.getElementById("btn-phys-reset").onclick = () => { if (physics) { physics.reset(); physicsReadout(); } };
+window.__physicsStart = physicsStart;
+window.__physicsStepN = (n) => { physics.stepN(n); physicsReadout(); return physics.state(); };
+window.__physicsState = () => (physics ? physics.state() : null);
+window.__physicsReset = () => { if (physics) { physics.reset(); physicsReadout(); } };
+window.__physicsSelfTest = async () => (await ensurePhysics()).selfTest();
+
+// --- Loading real pipeline output from URLs: opened run directory (server --open) and the bundled demos --------------
+async function loadObjectFromUrls(glbUrl, reportUrl, label) {
+  const r = await fetch(glbUrl);
+  if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${glbUrl}`);
+  await loadGLBFromArrayBuffer(await r.arrayBuffer(), label || glbUrl.split("/").pop());
+  if (reportUrl) {
+    try {
+      const rr = await fetch(reportUrl);
+      if (rr.ok) { const rep = await rr.json(); renderProvenance(rep); logEntry(`Loaded provenance from ${reportUrl.split("/").slice(-2).join("/")}`); }
+    } catch (e) { logEntry(`Could not read ${reportUrl}: ${e}`, true); }
+  }
+}
+
+async function loadSceneFromUrl(baseUrl) {
+  const mk = async (rel, required) => {
+    const r = await fetch(baseUrl + rel);
+    if (!r.ok) { if (required) throw new Error(`HTTP ${r.status} fetching ${baseUrl + rel}`); return null; }
+    const f = new File([await r.blob()], rel.split("/").pop());
+    Object.defineProperty(f, "webkitRelativePath", { value: "scene/" + rel });
+    return f;
+  };
+  const manifestFile = await mk("scene.json", true);
+  const manifest = JSON.parse(await manifestFile.text());
+  const files = [manifestFile];
+  for (const o of manifest.objects) {
+    for (const rel of [o.mesh, o.report]) {
+      if (!rel) continue;
+      const f = await mk(rel, false);
+      if (f) files.push(f); // a missing mesh is reported by the scene loader (it stays a visible gap)
+    }
+  }
+  return loadSceneFromFiles(files);
+}
+document.getElementById("btn-demo-mug").onclick = () => loadObjectFromUrls("/assets/demo/mug/model.glb", "/assets/demo/mug/report.json", "model.glb").catch((e) => logEntry(`Demo failed: ${e}`, true));
+document.getElementById("btn-demo-scene").onclick = () => loadSceneFromUrl("/assets/demo/scene/").catch((e) => logEntry(`Demo failed: ${e}`, true));
+window.__loadObjectFromUrls = loadObjectFromUrls;
+window.__loadSceneFromUrl = loadSceneFromUrl;
+
+async function startup() {
+  try {
+    const cfg = await (await fetch("/api/autoload")).json();
+    if (cfg.kind === "scene") { await loadSceneFromUrl(cfg.base); logEntry(`Opened run ${cfg.name}`); return; }
+    if (cfg.kind === "object") { await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); return; }
+    if (cfg.error) logEntry(cfg.error, true);
+  } catch (e) { logEntry(`Could not open the requested run: ${e}`, true); }
+  loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
+}
+startup();
+
 // --- Render loop -----------------------------------------------------------
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -589,8 +1128,12 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+let lastT = performance.now();
 function animate() {
   requestAnimationFrame(animate);
+  const now = performance.now();
+  if (physics && physics.isRunning()) { physics.tick((now - lastT) / 1000); physicsReadout(); }
+  lastT = now;
   orbit.update();
   renderer.render(scene, camera);
 }

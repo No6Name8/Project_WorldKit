@@ -20,8 +20,10 @@ from . import editcmd
 from .meta_api import MetaAPIError, MetaAPIUnavailable, has_api_key
 
 
-def create_app(viewer_dir: Path) -> Flask:
+def create_app(viewer_dir: Path, open_dir: Path | None = None) -> Flask:
+    """``open_dir``: a pipeline run directory (``scene.json`` or ``model.glb`` + ``report.json``) the viewer loads on start."""
     viewer_dir = Path(viewer_dir)
+    open_dir = Path(open_dir).resolve() if open_dir else None
     app = Flask(__name__, static_folder=None)
 
     @app.get("/")
@@ -31,6 +33,35 @@ def create_app(viewer_dir: Path) -> Flask:
     @app.get("/assets/<path:filename>")
     def assets(filename: str):
         return send_from_directory(viewer_dir / "assets", filename)
+
+    @app.get("/<name>.js")
+    def viewer_module(name: str):
+        # top-level viewer ES modules only (e.g. physics.js); no path traversal, no other file types
+        if not name.replace("_", "").isalnum():
+            return jsonify({"ok": False, "error": "not found"}), 404
+        return send_from_directory(viewer_dir, f"{name}.js")
+
+    @app.get("/vendor/<path:filename>")
+    def vendor(filename: str):
+        return send_from_directory(viewer_dir / "vendor", filename)
+
+    @app.get("/open/<path:filename>")
+    def open_run(filename: str):
+        if open_dir is None:
+            return jsonify({"ok": False, "error": "no run directory was opened"}), 404
+        return send_from_directory(open_dir, filename)
+
+    @app.get("/api/autoload")
+    def autoload():
+        """What the viewer should load on start: the opened run directory, else nothing (it falls back to the bundled sample)."""
+        if open_dir is None or not open_dir.is_dir():
+            return jsonify({"kind": None})
+        if (open_dir / "scene.json").is_file():
+            return jsonify({"kind": "scene", "base": "/open/", "scene": "scene.json", "name": open_dir.name})
+        if (open_dir / "model.glb").is_file():
+            report = (open_dir / "report.json").is_file()
+            return jsonify({"kind": "object", "glb": "/open/model.glb", "report": "/open/report.json" if report else None, "name": open_dir.name})
+        return jsonify({"kind": None, "error": f"{open_dir} has neither scene.json nor model.glb"})
 
     @app.get("/api/health")
     def health():

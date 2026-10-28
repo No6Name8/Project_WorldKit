@@ -111,3 +111,36 @@ def test_edit_endpoint_handles_missing_instruction_field(client, monkeypatch: py
 
     assert captured["instr"] == ""
     assert resp.status_code == 422
+
+
+def test_serves_top_level_viewer_module_and_rejects_traversal(client, viewer_dir: Path):
+    (viewer_dir / "physics.js").write_text("export const x = 1;")
+    r = client.get("/physics.js")
+    assert r.status_code == 200 and b"export const x" in r.data
+    assert client.get("/missing.js").status_code == 404
+    assert client.get("/..%2Findex.js").status_code in (404, 400)
+
+
+def test_open_dir_autoload_vendor_and_traversal(viewer_dir: Path, tmp_path: Path):
+    (viewer_dir / "vendor").mkdir()
+    (viewer_dir / "vendor" / "lib.js").write_text("export const z = 1;")
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "model.glb").write_bytes(b"GLB")
+    (run / "report.json").write_text("{}")
+    c = webserver.create_app(viewer_dir, open_dir=run).test_client()
+    assert c.get("/vendor/lib.js").status_code == 200
+    cfg = c.get("/api/autoload").get_json()
+    assert cfg["kind"] == "object" and cfg["glb"] == "/open/model.glb" and cfg["report"] == "/open/report.json"
+    assert c.get("/open/model.glb").data == b"GLB"
+    assert c.get("/open/../index.html").status_code in (400, 404)
+    assert c.get("/open/%2e%2e/index.html").status_code in (400, 404)
+    (run / "scene.json").write_text("{}")
+    assert c.get("/api/autoload").get_json()["kind"] == "scene"  # a scene takes precedence
+    # no run opened: nothing to autoload and /open is closed
+    c2 = webserver.create_app(viewer_dir).test_client()
+    assert c2.get("/api/autoload").get_json()["kind"] is None and c2.get("/open/model.glb").status_code == 404
+    # empty directory is reported, not crashed on
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert "neither" in webserver.create_app(viewer_dir, open_dir=empty).test_client().get("/api/autoload").get_json()["error"]

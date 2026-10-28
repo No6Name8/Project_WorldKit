@@ -1,0 +1,14 @@
+{
+  "name": "worldkit-viewer-tests",
+  "private": true,
+  "description": "Playwright browser/integration suites for the WorldKit viewer. Start `pipeline\.venv\Scripts\python.exe viewer\server.py` first (demo_readiness_test starts its own servers).",
+  "scripts": {
+    "test:viewer": "node browser_test.js",
+    "test:integration": "node integration_test.js",
+    "test:sam3d": "node sam3d_browser_test.js",
+    "test:scene-physics": "node scene_physics_browser_test.js",
+    "test:demo": "node demo_readiness_test.js",
+    "test:all": "npm run test:viewer && npm run test:integration && npm run test:sam3d && npm run test:scene-physics && npm run test:demo"
+  },
+  "dependencies": { "playwright": "1.64.1" }
+}
