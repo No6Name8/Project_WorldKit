@@ -302,6 +302,7 @@ def project_frames(
     depth_tolerance: float = 0.03,
     full_weight: float = 0.1,
     sharpness: float = 2.0,
+    min_cos: float = 0.0,
 ) -> ProjectionResult:
     """Overwrite the texels the given frames can SEE with the frames' real pixels.
 
@@ -341,7 +342,7 @@ def project_frames(
         dist = cv2.distanceTransform(v.mask.astype(np.uint8), cv2.DIST_L2, 3)
         feather = np.clip((dist[iy, ix] - 1.0) / feather_px, 0.0, 1.0)
         cos_view = np.abs((nrm @ v.pose.rotation().T)[:, 2])
-        weight = np.where(visible, cos_view**sharpness * feather, 0.0)
+        weight = np.where(visible & (cos_view >= min_cos), cos_view**sharpness * feather, 0.0)
         colour = _bilinear(v.rgb, pxy[:, 0] - 0.5, pxy[:, 1] - 0.5)
         accum += weight[:, None] * colour
         wsum += weight
@@ -531,6 +532,7 @@ def reproject_frames_onto_glb(
     max_views: int = 8,
     register_iterations: int = 2,
     texture_format: str = "PNG",
+    projection_kwargs: dict | None = None,
 ) -> tuple[bytes, dict]:
     """Overwrite the texels real frames can see with their real pixels; return (new GLB, report).
 
@@ -573,7 +575,7 @@ def reproject_frames_onto_glb(
     chosen = select_views(fits, {n: fits[n].pose.scale for n in fits}, anchor=anchor, max_views=max_views)
     views = [FrameView(n, by_name[n].rgb, by_name[n].mask, fits[n].pose) for n in chosen]
     registered = register_views(vertices, faces, uvs, base, views, anchor=anchor, iterations=register_iterations)
-    result = project_frames(vertices, faces, uvs, base, registered)
+    result = project_frames(vertices, faces, uvs, base, registered, **(projection_kwargs or {}))
 
     out_img = Image.fromarray(result.texture)
     if texture_format.upper() == "JPEG":
@@ -586,6 +588,7 @@ def reproject_frames_onto_glb(
     report = {
         "method": "silhouette pose fit + photometric (stripe) registration + z-buffer visibility projection",
         "geometry_modified": False,
+        "projection_kwargs": dict(projection_kwargs or {}),
         "anchor_frame": anchor,
         "frames_considered": len(frames),
         "frames_with_pose_fit": len(fits),
