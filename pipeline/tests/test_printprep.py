@@ -320,3 +320,23 @@ def test_print_orientation_keeps_the_object_upright_on_its_base(tmp_path: Path):
     # the slab's large face is the lowest: the lowest 0.1 mm of vertices spread over the whole footprint
     low = stl.vertices[stl.vertices[:, 2] < 1e-3]
     assert np.ptp(low[:, 0]) > 0.9 * stl.extents[0] and np.ptp(low[:, 1]) > 0.9 * stl.extents[1]
+
+
+def test_reference_calibrated_height_is_an_estimate_and_never_print_ready(tmp_path: Path):
+    """A scale recovered from a reference object is recorded as such and cannot make a model print_ready."""
+    glb = _textured_box_with_uv_seams(tmp_path)
+    report = printprep.prepare_for_print(
+        glb, tmp_path / "out.stl", estimated_height_cm=8.6, estimated_height_source="reference_calibrated"
+    )
+    assert report.height_source == "reference_calibrated"
+    assert report.is_estimate is True
+    assert report.target_height_cm == pytest.approx(8.6)
+    assert report.print_ready is False
+
+
+def test_user_height_still_beats_a_reference_estimate(tmp_path: Path):
+    glb = _textured_box_with_uv_seams(tmp_path)
+    report = printprep.prepare_for_print(
+        glb, tmp_path / "out.stl", height_cm=9.0, estimated_height_cm=8.6, estimated_height_source="reference_calibrated"
+    )
+    assert report.height_source == "user" and report.target_height_cm == pytest.approx(9.0)

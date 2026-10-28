@@ -51,7 +51,7 @@ class PrintPrepReport:
     scale_factor: float
     target_height_cm: float
     upright_height_cm: float  # height along the original upright axis, post-scale, pre-reorientation
-    height_source: str  # "user" | "a4_estimate" | "default_fallback"
+    height_source: str  # "user" | "a4_estimate" | "reference_calibrated" | "default_fallback"
     is_estimate: bool
     dimensions_cm: tuple[float, float, float]  # final bbox, after print-orientation
     volume_cm3: float
@@ -253,6 +253,7 @@ def prepare_for_print(
     *,
     height_cm: float | None = None,
     estimated_height_cm: float | None = None,
+    estimated_height_source: str = "a4_estimate",
     min_wall_mm: float = DEFAULT_MIN_WALL_MM,
     up_axis: str = "auto",
 ) -> PrintPrepReport:
@@ -267,7 +268,7 @@ def prepare_for_print(
     if height_cm is not None:
         target_height_cm, height_source, is_estimate = height_cm, "user", False
     elif estimated_height_cm is not None:
-        target_height_cm, height_source, is_estimate = estimated_height_cm, "a4_estimate", True
+        target_height_cm, height_source, is_estimate = estimated_height_cm, estimated_height_source, True
     else:
         target_height_cm, height_source, is_estimate = 10.0, "default_fallback", True
 
