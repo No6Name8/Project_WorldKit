@@ -101,6 +101,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "off (default): unchanged behaviour."
         ),
     )
+    parser.add_argument("--coin", default=None, help="a known reference coin (scale_cal.COINS), e.g. saudi-25-halalas; sets --ref-diameter-cm")
     parser.add_argument("--ref-concept", default="coin", help="what SAM 3.1 should find as the circular reference (default: coin)")
     return parser.parse_args(argv)
 
@@ -525,6 +526,10 @@ def run(args: argparse.Namespace) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.coin and args.ref_diameter_cm is None:
+        from . import scale_cal
+
+        args.ref_diameter_cm = scale_cal.coin_diameter_cm(args.coin)
     out_dir: Path = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "report.json"

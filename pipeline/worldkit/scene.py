@@ -331,7 +331,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Reconstruct several objects from one video and compose them into a scene")
     p.add_argument("video", type=Path)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--objects", nargs="+", required=True, help='SAM 3.1 concepts, e.g. mug "round side table"')
+    p.add_argument("--objects", nargs="+", default=None, help='SAM 3.1 concepts, e.g. mug "round side table". Omit for MAP MODE: Muse Spark discovers the objects')
+    p.add_argument("--coin", default=None, help="a known reference coin (see scale_cal.COINS), e.g. saudi-25-halalas")
+    p.add_argument("--no-spark-verify", action="store_true", help="map mode: skip the Muse Spark correction rounds")
     p.add_argument("--mesh-backend", choices=["modal", "trellis", "import"], default="modal")
     p.add_argument("--mesh-file", action="append", help="with import: <object-id>=<glb path> (repeatable)")
     p.add_argument("--frame", default=None, help="force the shared frame, e.g. sharp_11")
@@ -344,9 +346,17 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    if args.coin and args.ref_diameter_cm is None:
+        args.ref_diameter_cm = scale_cal.coin_diameter_cm(args.coin)
     try:
-        report = run(args)
-    except (SceneError, segment.SegmentationError, frames.FrameExtractionError, reconstruct.ReconstructionError, tp.TextureProjectionError) as exc:
+        if args.objects is None:
+            from . import mapmode
+
+            report = mapmode.run(args)
+            report.setdefault("scene", str(Path(args.out) / "scene.json"))
+        else:
+            report = run(args)
+    except (SceneError, *( [__import__('worldkit.mapmode', fromlist=['MapError']).MapError] ), segment.SegmentationError, frames.FrameExtractionError, reconstruct.ReconstructionError, tp.TextureProjectionError) as exc:
         Path(args.out).mkdir(parents=True, exist_ok=True)
         (Path(args.out) / "scene_report.json").write_text(json.dumps({"error": str(exc), "error_type": type(exc).__name__}, indent=2))
         print(f"FAILED: {exc}", file=sys.stderr)

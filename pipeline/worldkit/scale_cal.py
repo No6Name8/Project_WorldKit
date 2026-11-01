@@ -30,6 +30,18 @@ MIN_FRAMES = 3
 MAX_REL_SPREAD = 0.10
 
 
+# Known reference coins (diameter in cm). The pipeline never guesses a coin: pick one with --coin or give --ref-diameter-cm.
+COINS = {
+    "saudi-25-halalas": {"diameter_cm": 2.15, "source": "Numista (https://en.numista.com/101221): 2016 brass issue, 21.5 mm, gold-coloured; the 1972 copper-nickel issue is silver-coloured and 23 mm"},
+}
+
+
+def coin_diameter_cm(name: str) -> float:
+    if name not in COINS:
+        raise ScaleCalibrationError(f"unknown coin {name!r}; known: {sorted(COINS)}; or pass --ref-diameter-cm")
+    return COINS[name]["diameter_cm"]
+
+
 class ScaleCalibrationError(RuntimeError):
     pass
 

@@ -615,7 +615,7 @@ def gpu_smoke_test() -> str:
     gpu=GPU_TYPE,
     volumes={CHECKPOINT_DIR: checkpoint_volume},
     timeout=30 * 60,  # enforced by Modal: worst case 30 min x $2.10/h = $1.05 of GPU time
-    max_containers=1,  # never more than one A100 at a time
+    max_containers=3,  # Map mode builds several objects in parallel; worst case 3 x 30 min x $2.10/h. Single-object runs still use one.
     secrets=[modal.Secret.from_name("huggingface")],
 )
 def reconstruct_mesh(rgba_png_bytes: bytes) -> bytes:
@@ -717,3 +717,15 @@ def run_remote(rgba_png_bytes: bytes) -> bytes:
     """
     with app.run():
         return reconstruct_mesh.remote(rgba_png_bytes)
+
+
+def run_remote_many(rgba_png_list: list[bytes]) -> list:
+    """Reconstruct several objects in ONE Modal app run, in parallel (up to max_containers A100s).
+
+    Returns one entry per input, in order: the GLB bytes, or the Exception that object raised. One failing object never
+    affects the others (``return_exceptions=True``).
+    """
+    if not rgba_png_list:
+        return []
+    with app.run():
+        return list(reconstruct_mesh.map(rgba_png_list, return_exceptions=True))
