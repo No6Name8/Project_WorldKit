@@ -52,6 +52,18 @@
   #ai-log .ok { color: #8ff0b5; } #ai-log .bad { color: #ff9a9a; } #ai-log .meta { color: #8b90a0; font-size: 11px; }
   #ai-log img { width: 100%; border-radius: 4px; margin-top: 4px; }
   #ai-status { font-size: 11.5px; color: #ffcf7a; min-height: 16px; }
+  #loading { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 50; background: rgba(20,22,27,0.72); color: #e6e8ee; font-size: 15px; }
+  #loading .spin { width: 18px; height: 18px; border: 3px solid #3a3f4b; border-top-color: #3b6fe0; border-radius: 50%; margin-right: 12px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #map-bar { top: 14px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 12px; align-items: center; gap: 8px; white-space: nowrap; }
+  #map-bar label { font-size: 12px; color: #a8adba; }
+  #obj-panel { top: 420px; left: 14px; width: 292px; display: none; }
+  #obj-panel .dims { font-size: 13px; margin: 6px 0; } #obj-panel .small { font-size: 11px; color: #8b90a0; margin-top: 4px; }
+  #obj-panel button:disabled, #map-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #verify-panel { top: 70px; left: 50%; transform: translateX(-50%); width: min(1100px, 92vw); max-height: 78vh; overflow-y: auto; display: none; z-index: 30; }
+  #verify-panel img { width: 100%; border-radius: 6px; margin: 6px 0 10px; }
+  .wk-label { position: fixed; pointer-events: none; transform: translate(-50%, -100%); background: rgba(22,24,30,0.82); color: #e6e8ee; font-size: 11.5px; padding: 2px 7px; border-radius: 5px; border: 1px solid #3a3f4b; white-space: nowrap; z-index: 20; }
+  .wk-label.sel { border-color: #35d0ff; color: #35d0ff; }
   #bottom-left { bottom: 14px; left: 14px; width: 420px; }
   #edit-log { font-size: 12px; max-height: 110px; overflow-y: auto; margin-top: 8px; color: #c3c7d1; }
   #edit-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
@@ -136,6 +148,34 @@
   <input id="file-video" class="small" type="file" accept="video/*" />
   <video id="provenance-video" controls></video>
   <div id="provenance-readout">No report loaded. This panel shows report.json fields read-only -- it does not change the loaded mesh.</div>
+</div>
+
+<div id="loading"><div class="spin"></div><span id="loading-text">Loading…</span></div>
+<div id="wk-labels"></div>
+
+<div id="map-bar" class="panel">
+  <b id="map-title" style="font-size:13px;"></b>
+  <button id="btn-reset-cam">Reset camera</button>
+  <label><input type="checkbox" id="chk-labels" checked /> Labels</label>
+  <button id="btn-verify">Verify images</button>
+  <button id="btn-print-scene" disabled>Print whole scene</button>
+  <span id="print-scene-info" style="font-size:11.5px;color:#a8adba;"></span>
+</div>
+
+<div id="obj-panel" class="panel">
+  <div class="ptitle" id="obj-name">Selected object</div>
+  <div class="dims" id="obj-dims"></div>
+  <div class="row" style="margin:6px 0 0;">
+    <button id="btn-print-obj">Print this</button>
+    <button id="btn-edit-obj">Edit with AI</button>
+  </div>
+  <div class="small" id="obj-note"></div>
+</div>
+
+<div id="verify-panel" class="panel">
+  <div class="ptitle">Verification against the real frames <span id="verify-sum" style="font-weight:400;color:#8b90a0"></span> <button id="btn-verify-close" style="float:right;">Close</button></div>
+  <div style="font-size:11.5px;color:#a8adba;">Each image: real frame | scene before the Muse Spark correction rounds | after. Coloured silhouettes are the reconstructed objects; mean silhouette IoU against the SAM 3.1 masks is in the titles.</div>
+  <div id="verify-imgs"></div>
 </div>
 
 <div id="aiedit-panel" class="panel">
@@ -790,6 +830,7 @@ function collapseToSingle() {
   modelGroup = primaryGroup;
   gizmo.attach(modelGroup);
   document.getElementById("overlap-readout").textContent = "single object loaded";
+  clearOutline(); updateMapBar();
 }
 
 function refreshObjectList() {
@@ -813,6 +854,7 @@ function selectObject(id) {
   modelGroup = o.group;
   gizmo.attach(modelGroup);
   window.__selectedId = o.id;
+  afterSelect(o);
   refreshObjectList();
   updateReadout();
   if (o.meta && o.meta.report) renderProvenance(o.meta.report);
@@ -912,6 +954,9 @@ async function loadSceneFromFiles(fileList) {
   updateBanner(); refreshObjectList(); updateReadout();
   checkOverlaps();
   if (first && first.meta.report) renderProvenance(first.meta.report);
+  const pick = sceneObjects.find((o) => !o.missing && o.meta && o.meta.spec && o.meta.spec.stl) || first;
+  if (pick) selectObject(pick.id);
+  updateMapBar();
   return true;
 }
 document.getElementById("btn-load-scene").onclick = () => document.getElementById("file-scene").click();
@@ -1094,6 +1139,10 @@ window.__physicsSelfTest = async () => (await ensurePhysics()).selfTest();
 
 // --- Loading real pipeline output from URLs: opened run directory (server --open) and the bundled demos --------------
 async function loadObjectFromUrls(glbUrl, reportUrl, label) {
+  setLoading(true, `Loading ${label || "model"}…`);
+  try { await loadObjectFromUrlsInner(glbUrl, reportUrl, label); } finally { setLoading(false); }
+}
+async function loadObjectFromUrlsInner(glbUrl, reportUrl, label) {
   const r = await fetch(glbUrl);
   if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${glbUrl}`);
   await loadGLBFromArrayBuffer(await r.arrayBuffer(), label || glbUrl.split("/").pop());
@@ -1106,7 +1155,12 @@ async function loadObjectFromUrls(glbUrl, reportUrl, label) {
 }
 
 async function loadSceneFromUrl(baseUrl) {
+  setLoading(true, "Loading scene…");
+  try { window.__sceneBase = baseUrl; return await loadSceneFromUrlInner(baseUrl); } finally { setLoading(false); }
+}
+async function loadSceneFromUrlInner(baseUrl) {
   const mk = async (rel, required) => {
+    setLoadingText(`Loading ${rel.split("/").slice(-2).join("/")}…`);
     const r = await fetch(baseUrl + rel);
     if (!r.ok) { if (required) throw new Error(`HTTP ${r.status} fetching ${baseUrl + rel}`); return null; }
     const f = new File([await r.blob()], rel.split("/").pop());
@@ -1142,7 +1196,8 @@ async function startup() {
 startup();
 
 // --- AI Edit panel (only when served by `python -m worldkit.serve <model_dir>`) ---------------------------------------------------
-const ai = { state: null, busy: false };
+const ai = { state: null, busy: false, obj: null };
+const aiQ = () => (ai.obj ? `&obj=${encodeURIComponent(ai.obj)}` : "");
 function aiLog(html, cls) {
   const d = document.createElement("div");
   d.className = "entry " + (cls || "");
@@ -1159,9 +1214,11 @@ function aiRefreshLabel() {
   document.getElementById("ai-send").disabled = ai.busy;
 }
 async function aiReloadModel() {
-  const r = await fetch("/edit/model.glb?t=" + Date.now());
+  const r = await fetch("/edit/model.glb?t=" + Date.now() + aiQ());
   if (!r.ok) throw new Error("could not load the edited model");
-  await loadGLBFromArrayBuffer(await r.arrayBuffer(), `edit v${ai.state.current}`);
+  const buf = await r.arrayBuffer();
+  if (ai.obj) await replaceObjectGeometry(ai.obj, buf);
+  else await loadGLBFromArrayBuffer(buf, `edit v${ai.state.current}`);
 }
 async function aiSend() {
   const input = document.getElementById("ai-input");
@@ -1172,12 +1229,12 @@ async function aiSend() {
   status.textContent = "Muse Wonder is choosing tools, then Muse Spark verifies (about 15-60 s)...";
   const entry = aiLog(`<b>You:</b> ${esc(text)}<div class="meta">working...</div>`);
   try {
-    const resp = await fetch("/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instruction: text }) });
+    const resp = await fetch("/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instruction: text, obj: ai.obj }) });
     const r = await resp.json();
     if (!resp.ok || r.ok === false) throw new Error(r.error || r.detail || `HTTP ${resp.status}`);
     ai.state = r.state;
     const tools = (r.tools || []).map((t) => `${t.name}(${JSON.stringify(t.arguments)})${t.error ? " ERROR: " + t.error : ""}`).join("; ");
-    const img = (r.renders && r.renders.length) ? `<a href="/edit/render/${r.renders[0]}" target="_blank"><img src="/edit/render/${r.renders[0]}"></a>` : "";
+    const img = (r.renders && r.renders.length) ? `<a href="/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}" target="_blank"><img src="/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}"></a>` : "";
     if (r.applied) {
       entry.className = "entry ok";
       entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✓ applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}: ${esc(tools)}<div class="meta">Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks only" : ""))} · ${r.seconds}s</div>${img}`;
@@ -1196,7 +1253,7 @@ async function aiSend() {
 async function aiUndo() {
   if (ai.busy) return;
   try {
-    const r = await (await fetch("/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+    const r = await (await fetch("/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ obj: ai.obj }) })).json();
     if (!r.ok) throw new Error(r.detail || "undo failed");
     ai.state = r.state;
     aiLog(`↶ undo: back to v${r.version}`);
@@ -1207,7 +1264,7 @@ async function aiUndo() {
 document.getElementById("ai-send").onclick = aiSend;
 document.getElementById("ai-input").addEventListener("keydown", (e) => { if (e.key === "Enter") aiSend(); });
 document.getElementById("ai-undo").onclick = aiUndo;
-document.getElementById("ai-download").onclick = () => { window.location.href = "/edit/current.stl"; };
+document.getElementById("ai-download").onclick = () => { window.location.href = "/edit/current.stl?x=1" + aiQ(); };
 window.__aiState = () => ai.state;
 window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return aiSend(); };
 (async () => {
@@ -1216,6 +1273,7 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
     if (!r.ok) return;
     const st = await r.json();
     if (!st.enabled) return;
+    if (st.scene_mode) { ai.sceneMode = true; ai.objects = st.objects || []; return; } // in a scene the panel opens per object ("Edit with AI")
     ai.state = st;
     document.getElementById("aiedit-panel").style.display = "block";
     if (st.scale_note) aiLog(`<span class="meta">Scale: ${esc(st.scale_note)}. Sizes below are the model's own units (mm), not a measurement unless calibrated.</span>`);
@@ -1223,6 +1281,190 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
     if (st.current > 0) { await new Promise((res) => setTimeout(res, 600)); await aiReloadModel(); aiLog(`Opened the current edited version v${st.current}`); }
   } catch (e) { /* the plain viewer server has no /edit: the panel stays hidden */ }
 })();
+
+
+// --- Map mode UI: loading state, hover, selection outline, labels, object panel, print buttons, verification images --------------------
+function setLoading(on, text) {
+  const el = document.getElementById("loading");
+  el.style.display = on ? "flex" : "none";
+  if (text) document.getElementById("loading-text").textContent = text;
+}
+function setLoadingText(t) { document.getElementById("loading-text").textContent = t; }
+window.__isLoading = () => document.getElementById("loading").style.display !== "none";
+
+let labelsOn = true;
+const labelEls = new Map();
+function ensureLabels() {
+  const box = document.getElementById("wk-labels");
+  for (const [id, el] of labelEls) if (!sceneObjects.some((o) => o.id === id && !o.missing)) { el.remove(); labelEls.delete(id); }
+  for (const o of sceneObjects) {
+    if (o.missing || labelEls.has(o.id)) continue;
+    const el = document.createElement("div");
+    el.className = "wk-label";
+    el.textContent = o.name;
+    box.appendChild(el);
+    labelEls.set(o.id, el);
+  }
+}
+function updateLabels() {
+  const multi = sceneObjects.length > 1;
+  ensureLabels();
+  const rect = renderer.domElement.getBoundingClientRect();
+  for (const o of sceneObjects) {
+    const el = labelEls.get(o.id);
+    if (!el) continue;
+    if (!labelsOn || !multi || !o.group.visible) { el.style.display = "none"; continue; }
+    const b = new THREE.Box3().setFromObject(o.group);
+    const p = new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2).project(camera);
+    el.style.display = p.z < 1 ? "block" : "none";
+    el.style.left = rect.left + ((p.x + 1) / 2) * rect.width + "px";
+    el.style.top = rect.top + ((1 - p.y) / 2) * rect.height - 6 + "px";
+    el.classList.toggle("sel", o.group === modelGroup);
+  }
+}
+document.getElementById("chk-labels").onchange = (e) => { labelsOn = e.target.checked; };
+window.__labelsVisible = () => Array.from(labelEls.values()).filter((e) => e.style.display !== "none").map((e) => e.textContent);
+
+// hover highlight
+const hoverBackup = new Map();
+let hoverId = null;
+function setHighlight(entry, on) {
+  entry.group.traverse((m) => {
+    if (!m.isMesh || !m.material || !m.material.emissive) return;
+    if (on) { if (!hoverBackup.has(m)) hoverBackup.set(m, m.material.emissive.clone()); m.material.emissive.set(0x1d3b66); }
+    else if (hoverBackup.has(m)) { m.material.emissive.copy(hoverBackup.get(m)); hoverBackup.delete(m); }
+  });
+}
+function hoverAt(x, y) {
+  if (sceneObjects.length < 2 || (physics && physics.isRunning())) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(ndc, camera);
+  const hit = rc.intersectObject(objectsRoot, true)[0];
+  let id = null;
+  if (hit) { let n = hit.object; while (n && !sceneObjects.some((o) => o.group === n)) n = n.parent; const o = sceneObjects.find((q) => q.group === n); id = o ? o.id : null; }
+  if (id === hoverId) return;
+  if (hoverId) { const prev = sceneObjects.find((o) => o.id === hoverId); if (prev) setHighlight(prev, false); }
+  hoverId = id;
+  if (id) setHighlight(sceneObjects.find((o) => o.id === id), true);
+  renderer.domElement.style.cursor = id ? "pointer" : "";
+}
+renderer.domElement.addEventListener("pointermove", (e) => { if (!e.buttons) hoverAt(e.clientX, e.clientY); });
+window.__hoverAtObject = (id) => { const p = window.__objectScreenPosition(id); hoverAt(p.x, p.y); return hoverId; };
+window.__hoveredId = () => hoverId;
+
+// selection outline (feature edges of the selected object, drawn on top of its surface)
+let outlineLines = [];
+function clearOutline() { for (const l of outlineLines) { l.parent && l.parent.remove(l); l.geometry.dispose(); l.material.dispose(); } outlineLines = []; }
+function setOutline(entry) {
+  clearOutline();
+  if (sceneObjects.length < 2) return;
+  entry.group.traverse((m) => {
+    if (!m.isMesh || m.userData.__outline) return;
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), new THREE.LineBasicMaterial({ color: 0x35d0ff, depthTest: true, transparent: true, opacity: 0.95 }));
+    lines.userData.__outline = true;
+    lines.raycast = () => {};
+    m.add(lines);
+    outlineLines.push(lines);
+  });
+}
+window.__outlineCount = () => outlineLines.length;
+
+// object panel
+function objectDims(o) {
+  const spec = o.meta && o.meta.spec;
+  if (spec && spec.size_cm) return { text: `${spec.size_cm[0]} × ${spec.size_cm[1]} × ${spec.size_cm[2]} cm (W × H × D)`, real: true };
+  const b = new THREE.Box3().setFromObject(o.group).getSize(new THREE.Vector3());
+  if (calibrated) return { text: `${(b.x * cmPerSceneUnit).toFixed(1)} × ${(b.y * cmPerSceneUnit).toFixed(1)} × ${(b.z * cmPerSceneUnit).toFixed(1)} cm (calibrated)`, real: true };
+  return { text: `${b.x.toFixed(2)} × ${b.y.toFixed(2)} × ${b.z.toFixed(2)} scene units (not calibrated)`, real: false };
+}
+function afterSelect(o) {
+  setOutline(o);
+  const panel = document.getElementById("obj-panel");
+  if (sceneObjects.length < 2) { panel.style.display = "none"; return; }
+  panel.style.display = "block";
+  document.getElementById("obj-name").textContent = o.name;
+  document.getElementById("obj-dims").textContent = objectDims(o).text;
+  const spec = (o.meta && o.meta.spec) || {};
+  const base = window.__sceneBase;
+  const stl = spec.stl && base ? base + spec.stl : null;
+  const pb = document.getElementById("btn-print-obj");
+  pb.disabled = !stl;
+  pb.onclick = () => { if (stl) window.location.href = stl; };
+  const eb = document.getElementById("btn-edit-obj");
+  const canEdit = !!(ai.sceneMode && stl && (ai.objects || []).includes(o.id));
+  eb.disabled = !canEdit;
+  eb.onclick = () => openAiForObject(o);
+  document.getElementById("obj-note").textContent = !stl ? (spec.printable === false ? "Not printable (support surface)." : "No STL in this scene folder (open it with `python -m worldkit.serve <scene_dir>`).") :
+    "STL is in millimetres, at the object's real size when the scene was calibrated from the coin." + (canEdit ? "" : " AI Edit needs the edit server.");
+}
+async function openAiForObject(o) {
+  ai.obj = o.id;
+  try {
+    const st = await (await fetch("/edit/state?obj=" + encodeURIComponent(o.id))).json();
+    if (!st.enabled) throw new Error(st.error || "AI Edit is not available for this object");
+    ai.state = st;
+    document.getElementById("aiedit-panel").style.display = "block";
+    document.getElementById("ai-log").textContent = "";
+    aiLog(`<span class="meta">Editing <b>${esc(o.name)}</b> (its own print mesh, millimetres). Other objects are not touched.</span>`);
+    if (st.scale_note) aiLog(`<span class="meta">${esc(st.scale_note)}</span>`);
+    aiRefreshLabel();
+    if (st.current > 0) { await aiReloadModel(); }
+  } catch (e) { aiLog(`✗ ${esc(e.message || e)}`, "bad"); document.getElementById("aiedit-panel").style.display = "block"; }
+}
+async function replaceObjectGeometry(id, arrayBuffer) {
+  const o = sceneObjects.find((x) => x.id === id);
+  if (!o) throw new Error("object not in the scene");
+  const gltf = await loader.parseAsync(arrayBuffer, "");
+  o.group.updateMatrixWorld(true);
+  const oldBottom = new THREE.Box3().setFromObject(o.group).min.y;
+  for (const c of o.group.children.slice()) o.group.remove(c);
+  o.group.add(gltf.scene);
+  o.group.updateMatrixWorld(true);
+  const nb = new THREE.Box3().setFromObject(o.group);
+  o.group.position.y += oldBottom - nb.min.y; // the edited object keeps resting where it was
+  o.unitHeight = nb.getSize(new THREE.Vector3()).y;
+  settleFloorAndShadows(objectsRoot);
+  if (o.group === modelGroup) { setOutline(o); const cur = ai.state && (ai.state.versions || []).find((v) => v.version === ai.state.current);
+    const mm = cur && cur.size_mm;
+    document.getElementById("obj-dims").textContent = (mm ? `${(mm[0] / 10).toFixed(1)} × ${(mm[2] / 10).toFixed(1)} × ${(mm[1] / 10).toFixed(1)} cm` : objectDims(o).text) + "  (edited)"; }
+  updateReadout();
+}
+window.__replaceObjectGeometry = replaceObjectGeometry;
+
+// scene-level controls
+function updateMapBar() {
+  const bar = document.getElementById("map-bar");
+  const m = window.__sceneManifest;
+  const multi = sceneObjects.length > 1;
+  bar.style.display = multi ? "flex" : "none";
+  if (!multi) { document.getElementById("obj-panel").style.display = "none"; return; }
+  document.getElementById("map-title").textContent = m && m.mode === "map" ? "Map" : "Scene";
+  const d = m && m.diorama;
+  const base = window.__sceneBase;
+  const pb = document.getElementById("btn-print-scene");
+  pb.disabled = !(d && d.stl && base);
+  pb.onclick = () => { if (d && d.stl && base) window.location.href = base + d.stl; };
+  document.getElementById("print-scene-info").textContent = d ? `diorama ${d.scale_text}, ${(d.size_mm || []).join(" × ")} mm${(d.warnings || []).length ? " ⚠" : ""}` : "";
+  pb.title = d ? (d.warnings || []).join("\n") : "";
+  const hasVerify = m && m.verify && (m.verify.images || []).length && base;
+  document.getElementById("btn-verify").style.display = hasVerify ? "" : "none";
+}
+document.getElementById("btn-reset-cam").onclick = () => frameCameraOn(objectsRoot);
+document.getElementById("btn-verify").onclick = () => {
+  const panel = document.getElementById("verify-panel");
+  if (panel.style.display === "block") { panel.style.display = "none"; return; }
+  const m = window.__sceneManifest, base = window.__sceneBase;
+  document.getElementById("verify-sum").textContent = m.verify ? `mean IoU ${m.verify.mean_iou_before} → ${m.verify.mean_iou_after}` : "";
+  document.getElementById("verify-imgs").innerHTML = (m.verify.images || []).map((p) => `<img src="${base}${p}" alt="${p}">`).join("");
+  panel.style.display = "block";
+};
+document.getElementById("btn-verify-close").onclick = () => { document.getElementById("verify-panel").style.display = "none"; };
+window.__sceneObjects = () => sceneObjects.map((o) => ({ id: o.id, p: o.group.position.toArray(), s: o.group.scale.toArray(), r: o.group.rotation.toArray().slice(0, 3) }));
+window.__mapUi = () => ({ bar: document.getElementById("map-bar").style.display, objPanel: document.getElementById("obj-panel").style.display, printObjDisabled: document.getElementById("btn-print-obj").disabled,
+  printSceneDisabled: document.getElementById("btn-print-scene").disabled, editDisabled: document.getElementById("btn-edit-obj").disabled, dims: document.getElementById("obj-dims").textContent,
+  name: document.getElementById("obj-name").textContent, verifyVisible: document.getElementById("verify-panel").style.display === "block", info: document.getElementById("print-scene-info").textContent });
 
 // --- Render loop -----------------------------------------------------------
 window.addEventListener("resize", () => {
@@ -1234,6 +1476,7 @@ window.addEventListener("resize", () => {
 let lastT = performance.now();
 function animate() {
   requestAnimationFrame(animate);
+  updateLabels();
   const now = performance.now();
   if (physics && physics.isRunning()) { physics.tick((now - lastT) / 1000); physicsReadout(); }
   lastT = now;

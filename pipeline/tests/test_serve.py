@@ -78,3 +78,27 @@ def test_validation_traversal_and_concurrency(model_dir):
 def test_server_without_stl_is_a_clear_error(tmp_path):
     c = TestClient(serve.create_app(tmp_path))
     assert c.get("/edit/state").json()["enabled"] is False
+
+
+def test_scene_mode_edits_one_object_in_its_own_folder(model_dir, tmp_path):
+    """A scene folder: /edit/state without obj lists editable objects; edits, undo, glb and stl are per object and cannot escape the scene."""
+    scene = tmp_path / "scene"
+    odir = scene / "objects" / "mug"
+    odir.mkdir(parents=True)
+    for f in model_dir.iterdir():
+        if f.is_file():
+            (odir / f.name).write_bytes(f.read_bytes())
+    (odir / "model.glb").write_bytes(serve.stl_to_glb(trimesh.load(odir / "model_print.stl")))
+    (scene / "scene.json").write_text(json.dumps({"worldkit_scene": 1, "objects": [{"id": "desk", "mesh": "x"}, {"id": "mug", "stl": "objects/mug/model_print.stl"}]}))
+    c = TestClient(serve.create_app(scene, client=FakeWonder([reply([tool_call("scale_to", {"height_cm": 12})]), reply(text="Scaled.")]), ask_spark=spark_ok))
+    assert c.get("/api/autoload").json() == {"kind": "scene", "base": "/open/", "name": "scene"}
+    assert c.get("/edit/state").json() == {"enabled": True, "scene_mode": True, "objects": ["mug"]}
+    assert c.get("/edit/state?obj=desk").status_code == 404 and c.post("/edit", json={"instruction": "x", "obj": "../x"}).status_code == 404
+    r = c.post("/edit", json={"instruction": "make it 12 cm tall", "obj": "mug"}).json()
+    assert r["ok"] and r["applied"] and r["state"]["current"] == 1 and (odir / "edits" / "versions.json").is_file()
+    stl = c.get("/edit/current.stl?obj=mug")
+    assert "mug_v1_mm.stl" in stl.headers["content-disposition"] and trimesh.load(__import__("io").BytesIO(stl.content), file_type="stl").extents[2] == pytest.approx(120.0, abs=0.05)
+    g = trimesh.load(__import__("io").BytesIO(c.get("/edit/model.glb?obj=mug").content), file_type="glb")
+    assert list(g.geometry.values())[0].extents.max() > 0  # keeps the object's original GLB scale (not renormalised to 2)
+    assert c.post("/undo", json={"obj": "mug"}).json()["state"]["current"] == 0
+    assert c.get("/open/objects/mug/model_print.stl").status_code == 200

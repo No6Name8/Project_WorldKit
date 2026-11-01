@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import re
 import threading
 from pathlib import Path
@@ -33,12 +34,12 @@ from .meta_api import MetaAPIError, MetaAPIUnavailable, has_api_key
 VIEWER_DIR = Path(__file__).resolve().parents[2] / "viewer"
 
 
-def stl_to_glb(mesh_mm: trimesh.Trimesh) -> bytes:
+def stl_to_glb(mesh_mm: trimesh.Trimesh, units_per_mm: float | None = None) -> bytes:
     """Viewer GLB from a Z-up mm print mesh: Y-up, centred, longest side 2 units (like appearance.finalize), plain gray dielectric."""
     m = mesh_mm.copy()
     m.vertices = np.stack([m.vertices[:, 0], m.vertices[:, 2], -m.vertices[:, 1]], axis=1)
     m.apply_translation(-(m.bounds[0] + m.bounds[1]) / 2)
-    m.apply_scale(2.0 / float(m.extents.max()))
+    m.apply_scale(units_per_mm if units_per_mm else 2.0 / float(m.extents.max()))
     m.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(baseColorFactor=[196, 202, 214, 255], metallicFactor=0.0, roughnessFactor=0.55))
     _ = m.vertex_normals
     return trimesh.Scene(m).export(file_type="glb")
@@ -52,9 +53,35 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
     if ask_spark is not None:
         kw["ask_spark"] = ask_spark
 
-    def state() -> dict:
-        d = edit_mod._load(model_dir)
-        return {"enabled": True, "model": model_dir.name, "units": d["units"], "scale_note": d.get("scale_note"), "current": d["current"],
+    scene_mode = (model_dir / "scene.json").is_file()
+    scene_objs: dict[str, Path] = {}
+    if scene_mode:
+        manifest = json.loads((model_dir / "scene.json").read_text(encoding="utf-8"))
+        for o in manifest.get("objects", []):
+            if o.get("stl") and re.fullmatch(r"[A-Za-z0-9_\-]+", o["id"]) and (model_dir / o["stl"]).is_file():
+                scene_objs[o["id"]] = (model_dir / o["stl"]).parent
+
+    def target(obj: str | None) -> Path:
+        """Directory holding the edit session: the run itself, or one object's folder inside a scene."""
+        if not scene_mode:
+            return model_dir
+        if obj not in scene_objs:
+            raise HTTPException(404, f"no editable object {obj!r} in this scene")
+        return scene_objs[obj]
+
+    def units_per_mm(d: Path) -> float | None:
+        """Scene objects keep their original GLB scale so an edited object stays in proportion with the others."""
+        try:
+            g = trimesh.load(d / "model.glb", force="mesh")
+            base = trimesh.load(d / "model_print.stl")  # v0 print mesh in mm
+            return float(g.extents.max()) / float(base.extents.max())
+        except Exception:
+            return None
+
+    def state(root: Path | None = None) -> dict:
+        root = root or model_dir
+        d = edit_mod._load(root)
+        return {"enabled": True, "model": root.name, "units": d["units"], "scale_note": d.get("scale_note"), "current": d["current"],
                 "versions": [{"version": v["version"], "parent": v["parent"], "instruction": v.get("instruction"), "size_mm": v.get("size_mm"),
                               "reason": (v.get("verdict") or {}).get("reason"), "seconds": v.get("seconds")} for v in d["versions"]],
                 "rejected": len(d.get("rejected", [])), "busy": lock.locked()}
@@ -87,6 +114,8 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
 
     @app.get("/api/autoload")
     def autoload():
+        if scene_mode:
+            return {"kind": "scene", "base": "/open/", "name": model_dir.name}
         if (model_dir / "model.glb").is_file():
             return {"kind": "object", "glb": "/open/model.glb", "report": "/open/report.json" if (model_dir / "report.json").is_file() else None, "name": model_dir.name}
         return {"kind": None}
@@ -104,21 +133,24 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
             return JSONResponse({"ok": False, "error_type": "api_error", "error": str(exc)}, status_code=502)
 
     @app.get("/edit/state")
-    def edit_state():
+    def edit_state(obj: str | None = None):
+        if scene_mode and obj is None:
+            return {"enabled": True, "scene_mode": True, "objects": sorted(scene_objs)}
         try:
-            return state()
+            return state(target(obj))
         except edit_mod.EditFailed as exc:
             return {"enabled": False, "error": str(exc)}
 
     @app.post("/edit")
     def do_edit(body: dict = Body(...)):
+        root = target(body.get("obj"))
         instruction = (body.get("instruction") or "").strip()
         if not instruction or len(instruction) > 400:
             raise HTTPException(422, "instruction must be 1-400 characters")
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "another edit is still running")
         try:
-            r = edit_mod.run_edit(model_dir, instruction, client=client, **kw)
+            r = edit_mod.run_edit(root, instruction, client=client, **kw)
         except (edit_mod.EditFailed, MetaAPIError) as exc:
             return JSONResponse({"ok": False, "applied": False, "error": str(exc)}, status_code=502 if isinstance(exc, MetaAPIError) else 400)
         finally:
@@ -131,34 +163,37 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
         return {"ok": True, "applied": bool(r["applied"]), "version": r.get("version"), "reason": r["verdict"]["reason"], "spark": spark.get("reason"),
                 "spark_verified": r["verdict"].get("spark_verified"), "tools": [{"name": c["name"], "arguments": c["arguments"], "error": c.get("error")} for c in calls],
                 "renders": [Path(p).name for p in images], "seconds": r.get("seconds"), "retries": r.get("retries", len(attempts) - 1 if isinstance(attempts, list) else 0),
-                "tokens": r.get("cost", {}), "state": state()}
+                "tokens": r.get("cost", {}), "state": state(root)}
 
     @app.post("/undo")
     def do_undo(body: dict = Body(default={})):
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "an edit is still running")
+        root = target(body.get("obj"))
         try:
-            v = edit_mod.undo(model_dir, body.get("to"))
+            v = edit_mod.undo(root, body.get("to"))
         except edit_mod.EditFailed as exc:
             raise HTTPException(400, str(exc)) from exc
         finally:
             lock.release()
-        return {"ok": True, "version": v["version"], "state": state()}
+        return {"ok": True, "version": v["version"], "state": state(root)}
 
     @app.get("/edit/model.glb")
-    def edit_glb():
-        return Response(stl_to_glb(edit_mod.current_mesh(model_dir)), media_type="model/gltf-binary", headers={"Cache-Control": "no-store"})
+    def edit_glb(obj: str | None = None):
+        root = target(obj)
+        return Response(stl_to_glb(edit_mod.current_mesh(root), units_per_mm(root) if scene_mode else None), media_type="model/gltf-binary", headers={"Cache-Control": "no-store"})
 
     @app.get("/edit/current.stl")
-    def edit_stl():
-        v = edit_mod.current_version(model_dir)
-        return FileResponse(model_dir / v["stl"], media_type="model/stl", filename=f"{model_dir.name}_v{v['version']}_mm.stl")
+    def edit_stl(obj: str | None = None):
+        root = target(obj)
+        v = edit_mod.current_version(root)
+        return FileResponse(root / v["stl"], media_type="model/stl", filename=f"{obj or root.name}_v{v['version']}_mm.stl")
 
     @app.get("/edit/render/{name}")
-    def edit_render(name: str):
+    def edit_render(name: str, obj: str | None = None):
         if not re.fullmatch(r"[A-Za-z0-9_\-]+\.png", name):
             raise HTTPException(404)
-        return _safe_file(model_dir / "edits", name)
+        return _safe_file(target(obj) / "edits", name)
 
     return app
 
@@ -178,7 +213,7 @@ def main(argv=None) -> None:
     ap.add_argument("model_dir", type=Path, help="a worldkit.object run directory (needs model_print.stl for editing; model.glb to display)")
     ap.add_argument("--port", type=int, default=5060)
     a = ap.parse_args(argv)
-    if not (a.model_dir / "model_print.stl").is_file():
+    if not (a.model_dir / "model_print.stl").is_file() and not (a.model_dir / "scene.json").is_file():
         raise SystemExit(f"{a.model_dir} has no model_print.stl (run worldkit.object first)")
     print(f"Muse Spark / Wonder key configured: {has_api_key()}\nViewer + AI Edit: http://127.0.0.1:{a.port}/   (model: {a.model_dir})")
     uvicorn.run(create_app(a.model_dir), host="127.0.0.1", port=a.port, log_level="warning")
