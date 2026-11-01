@@ -143,3 +143,10 @@ def test_render_view_shows_engraved_text_via_relief_shading():
 
     assert np.abs(np.asarray(a, float) - np.asarray(b, float)).max() > 30  # the engraving is visible, not just numerically present
     assert np.asarray(a).std() < np.asarray(b).std()
+
+
+def test_mm_stl_from_a_current_run_is_not_rescaled(tmp_path):
+    mug = make_mug()  # millimetres already
+    mug.export(tmp_path / "model_print.stl")
+    (tmp_path / "report.json").write_text(json.dumps({"print_prep": {"stl_units": "mm", "height_source": "user", "is_estimate": False}}))
+    assert edit.current_mesh(tmp_path).extents[2] == pytest.approx(100.0, abs=0.05)

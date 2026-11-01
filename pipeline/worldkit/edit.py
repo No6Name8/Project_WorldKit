@@ -173,7 +173,10 @@ def _load(model_dir: Path) -> dict:
         raise EditFailed(f"{model_dir} has no model_print.stl (run worldkit.object first)")
     ed.mkdir(parents=True, exist_ok=True)
     mesh = trimesh.load(src, force="mesh")
-    mesh.apply_scale(10.0)  # printprep writes centimetres; the edit tools work in millimetres
+    rp0 = Path(model_dir) / "report.json"
+    stl_units = (json.loads(rp0.read_text(encoding="utf-8")).get("print_prep", {}).get("stl_units") if rp0.is_file() else None) or "cm"
+    if stl_units != "mm":
+        mesh.apply_scale(10.0)  # runs made before the units fix wrote centimetres; the edit tools work in millimetres
     mesh.apply_translation([0, 0, -mesh.bounds[0][2]])
     mesh.export(ed / "v0.stl")
     scale_note = None
@@ -181,7 +184,7 @@ def _load(model_dir: Path) -> dict:
     if rp.is_file():
         pp = json.loads(rp.read_text(encoding="utf-8")).get("print_prep", {})
         scale_note = f"height source: {pp.get('height_source')}" + (" (a PLACEHOLDER size, not a measurement)" if pp.get("is_estimate") else "")
-    data = {"units": "mm", "source": "model_print.stl x10", "scale_note": scale_note, "current": 0, "rejected": [],
+    data = {"units": "mm", "source": "model_print.stl" + ("" if stl_units == "mm" else " x10 (legacy cm STL)"), "scale_note": scale_note, "current": 0, "rejected": [],
             "versions": [{"version": 0, "parent": None, "instruction": None, "stl": "edits/v0.stl", "created": time.strftime("%Y-%m-%dT%H:%M:%S")}]}
     vj.write_text(json.dumps(data, indent=1), encoding="utf-8")
     return data

@@ -83,6 +83,7 @@ class PrintPrepReport:
 
     def to_dict(self) -> dict:
         return {
+            "stl_units": STL_UNITS,
             "scale_factor": round(self.scale_factor, 5),
             "target_height_cm": round(self.target_height_cm, 3),
             "upright_height_cm": round(self.upright_height_cm, 3),
@@ -240,10 +241,21 @@ def check_min_wall_thickness(
     return warnings, n_samples
 
 
+STL_UNITS = "mm"
+MM_PER_CM = 10.0
+
+
 def export_stl(mesh: trimesh.Trimesh, path: Path) -> Path:
+    """Write ``mesh`` (in cm, as printprep works internally) as an STL in MILLIMETRES.
+
+    STL has no unit field and slicers read it as mm, so a cm-valued file prints 10x too small (this was a real bug: a 10 cm mug
+    came out as a 10 mm one). Every STL this project exports is mm; report.json records ``stl_units``.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    mesh.export(path, file_type="stl")
+    out = mesh.copy()
+    out.apply_scale(MM_PER_CM)
+    out.export(path, file_type="stl")
     return path
 
 

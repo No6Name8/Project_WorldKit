@@ -305,6 +305,36 @@ def run_sam3d_on_modal(rgba_png_bytes: bytes) -> bytes:
         ) from exc
 
 
+def measurement_summary(report: dict, prep_report, args) -> dict:
+    """What size the exported model has, how that size was obtained, and how uncertain it is (all in the report, never implied)."""
+    h_cm = round(float(prep_report.upright_height_cm), 3)
+    base = {"height_cm": h_cm, "height_mm": round(h_cm * 10, 1), "height_definition": "upright object height, before the flat print base is added",
+            "stl_units": "mm", "stl_bbox_mm": [round(float(v) * 10, 1) for v in prep_report.dimensions_cm]}
+    if prep_report.height_source == "user":
+        base.update({"method": "--height-cm (measured by the user)", "uncertainty_pct": None,
+                     "uncertainty_note": "the user's own measurement; its error is the user's instrument error"})
+        sc = report.get("scale_calibration") or {}
+        if sc.get("status") == "ok":
+            base["coin_cross_check"] = sc.get("cross_check_against_user_height")
+        return base
+    if prep_report.height_source == "reference_calibrated":
+        sc = report["scale_calibration"]
+        import math
+
+        px = [f["px_per_cm"] * sc["reference_diameter_cm"] for f in sc["per_frame"]]  # coin major axis in pixels per frame
+        quant = 1.0 / max(float(min(px)), 1.0)  # +-1 px on the smallest coin measurement
+        spread = float(sc["relative_spread_mad"])
+        systematic = 0.037  # mean error of this method on synthetic scenes with known sizes (docs/TECHNICAL_NOTES.md)
+        u = math.sqrt(spread**2 + quant**2 + systematic**2)
+        base.update({"method": f"coin ({sc['reference']}, {sc['reference_diameter_cm']} cm diameter, {sc['frames_used']} frames)",
+                     "uncertainty_pct": round(100 * u, 1),
+                     "uncertainty_components_pct": {"frame_to_frame_spread": round(100 * spread, 2), "coin_edge_1px": round(100 * quant, 2), "method_systematic_synthetic": round(100 * systematic, 1)},
+                     "uncertainty_note": "ESTIMATE: root-sum-square of the measured frame spread, a 1 px coin-edge error and the method's mean error on synthetic scenes; worst synthetic case was 11.5%. Real accuracy is only known where a measured height is also given."})
+        return base
+    base.update({"method": "placeholder (no coin and no --height-cm): the size is NOT a measurement", "uncertainty_pct": None})
+    return base
+
+
 def prepare_modal_input(rgba_png_bytes: bytes) -> bytes:
     """Crop SAM 3.1's full-frame RGBA to the object (same crop the hosted backends use) before SAM 3D Objects.
 
@@ -477,6 +507,7 @@ def run(args: argparse.Namespace) -> dict:
     )
     report["print_prep"] = prep_report.to_dict()
     report["print_ready"] = prep_report.print_ready
+    report["measurement"] = measurement_summary(report, prep_report, args)
 
     # --- 6. preview --------------------------------------------------------
     import trimesh

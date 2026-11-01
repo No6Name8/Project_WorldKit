@@ -315,7 +315,7 @@ def test_print_orientation_keeps_the_object_upright_on_its_base(tmp_path: Path):
     stl = trimesh.load(tmp_path / "out.stl", force="mesh")
     assert stl.bounds[0][2] == pytest.approx(0.0, abs=1e-6)  # resting on the bed plane
     base_cm = printprep.BASE_THICKNESS_MM / 10.0
-    assert stl.extents[2] == pytest.approx(10.0 + base_cm, rel=1e-3)  # still upright: height + base thickness
+    assert stl.extents[2] == pytest.approx((10.0 + base_cm) * 10, rel=1e-3)  # still upright: height + base thickness (STL is in mm)
     assert report.dimensions_cm[2] == pytest.approx(10.0 + base_cm, rel=1e-3)
     # the slab's large face is the lowest: the lowest 0.1 mm of vertices spread over the whole footprint
     low = stl.vertices[stl.vertices[:, 2] < 1e-3]
@@ -340,3 +340,26 @@ def test_user_height_still_beats_a_reference_estimate(tmp_path: Path):
         glb, tmp_path / "out.stl", height_cm=9.0, estimated_height_cm=8.6, estimated_height_source="reference_calibrated"
     )
     assert report.height_source == "user" and report.target_height_cm == pytest.approx(9.0)
+
+
+def assert_stl_in_mm(stl_path: Path, expected_extents_mm, tol_mm: float = 0.05) -> None:
+    """Shared check for every exported STL: load it and compare the bounding box, in millimetres."""
+    ext = trimesh.load(stl_path, force="mesh").extents
+    assert sorted(ext.round(3)) == pytest.approx(sorted(expected_extents_mm), abs=tol_mm), f"{stl_path.name}: {ext} mm"
+
+
+def test_export_stl_is_in_millimetres(box_mesh: trimesh.Trimesh, tmp_path: Path):
+    # box_mesh is 2 x 2 x 4 (cm): the file must say 20 x 20 x 40 (mm)
+    out = printprep.export_stl(box_mesh, tmp_path / "out.stl")
+    assert_stl_in_mm(out, [20, 20, 40])
+    assert box_mesh.extents.tolist() == [2.0, 2.0, 4.0]  # the in-memory mesh is untouched
+
+
+def test_prepared_stl_bbox_matches_the_reported_dimensions_in_mm(tmp_path: Path):
+    glb = _textured_box_with_uv_seams(tmp_path)
+    report = printprep.prepare_for_print(glb, tmp_path / "model_print.stl", height_cm=4.0)
+    d = report.to_dict()
+    assert d["stl_units"] == "mm"
+    assert_stl_in_mm(tmp_path / "model_print.stl", [v * 10 for v in report.dimensions_cm])
+    # a 4 cm tall object must be about 40 mm tall in the file (plus at most the flat-base slab), never 4
+    assert 40 <= trimesh.load(tmp_path / "model_print.stl", force="mesh").extents[2] < 46
