@@ -101,6 +101,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "off (default): unchanged behaviour."
         ),
     )
+    parser.add_argument("--no-aspect-fit", dest="no_aspect_fit", action="store_true", help="do not restretch the generated mesh height to the silhouettes (coin-grounded scale)")
     parser.add_argument("--coin", default=None, help="a known reference coin (scale_cal.COINS), e.g. saudi-25-halalas; sets --ref-diameter-cm")
     parser.add_argument("--ref-concept", default="coin", help="what SAM 3.1 should find as the circular reference (default: coin)")
     return parser.parse_args(argv)
@@ -227,6 +228,12 @@ def _scale_stage(mesh_path: Path, args: argparse.Namespace, report: dict, sharp_
         except segment.SegmentationError:
             ref_mask = None
         frames_in.append((inp.name, inp.mask, ref_mask))
+    grounded = None
+    if not getattr(args, "no_aspect_fit", False):
+        try:
+            grounded = scale_cal.calibrate_grounded(frames_in, verts, faces, args.ref_diameter_cm)
+        except scale_cal.ScaleCalibrationError as exc:
+            report["warnings"].append(f"Coin-grounded calibration unavailable, using the silhouette-pose calibration: {exc}")
     try:
         cal = scale_cal.calibrate(frames_in, verts, faces, args.ref_concept, args.ref_diameter_cm)
     except scale_cal.ScaleCalibrationError as exc:
@@ -235,6 +242,17 @@ def _scale_stage(mesh_path: Path, args: argparse.Namespace, report: dict, sharp_
         return None
     height_cm = cal.cm_per_unit * float(verts[:, 1].max() - verts[:, 1].min())
     info = cal.to_dict()
+    if grounded is not None:
+        info["silhouette_pose_only"] = {"cm_per_mesh_unit": cal.cm_per_unit, "height_cm": height_cm}
+        info["grounded"] = grounded.to_dict()
+        if grounded.applied:
+            _reshape_glb(mesh_path, grounded.aspect_k, grounded.taper_t)
+            info["mesh_reshaped"] = (f"generated mesh reshaped: height x{grounded.aspect_k:.3f}, taper {grounded.taper_t:+.2f} (fitted to the silhouettes at the "
+                                     f"coin-derived camera elevation; mean IoU {grounded.mean_iou_generated:.3f} -> {grounded.mean_iou_final:.3f}; lateral scale from the coin)")
+            report["warnings"].append(info["mesh_reshaped"])
+        height_cm = grounded.height_cm
+        info["cm_per_mesh_unit"] = grounded.cm_per_unit
+        info["height_range_cm"] = list(grounded.height_range_cm)
     info.update({"status": "ok", "estimated_upright_height_cm": height_cm, "frames_without_object_mask": skipped})
     if args.height_cm is not None:
         info["cross_check_against_user_height"] = {
@@ -246,6 +264,21 @@ def _scale_stage(mesh_path: Path, args: argparse.Namespace, report: dict, sharp_
         )
     report["scale_calibration"] = info
     return height_cm
+
+
+def _reshape_glb(path: Path, k: float, t: float) -> None:
+    """Apply the silhouette-fitted height stretch and taper to every geometry of a GLB (textures and UVs untouched)."""
+    import numpy as np
+    import trimesh
+
+    from . import scale_cal
+
+    sc = trimesh.load(path, process=False)
+    geoms = list(sc.geometry.values())
+    ref = scale_cal.shape_reference(np.vstack([np.asarray(g.vertices, float) for g in geoms]))
+    for g in geoms:
+        g.vertices = scale_cal.reshape_vertices(g.vertices, k, t, ref)
+    path.write_bytes(sc.export(file_type="glb"))
 
 
 def _fidelity_stage(glb: bytes, args: argparse.Namespace, report: dict, sharp_frames: list, object_name: str, out_dir: Path):

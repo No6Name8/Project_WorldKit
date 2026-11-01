@@ -177,3 +177,139 @@ def calibrate(
             continue
         per_frame.append(frame_scale(name, ref, diameter_cm, fit.pose, fit.iou))
     return combine(per_frame, reference, diameter_cm, rejected)
+
+
+# --- coin-grounded calibration: elevation from the coin, shape from the silhouettes ---------------------------------------------------
+# calibrate() above fits the camera elevation from the object's own silhouette, which is weakly determined (up to ~30 deg off) and leaks
+# into the scale. The coin lies on the same surface as the object, so ITS ellipse gives the camera elevation. With elevation fixed, the
+# silhouettes can also say how tall (aspect k) and how tapered (t) the generated mesh should be: generated proportions are not measured.
+# Both are chosen only by silhouette IoU against SAM masks; no external measurement is involved.
+
+ASPECT_GRID = (0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10)
+TAPER_GRID = (-0.20, -0.15, -0.10, -0.05, 0.0, 0.05, 0.10)  # radial scale 1 + t*(0.5 - y/h): t < 0 = wider at the top
+ASPECT_MIN_GAIN = 0.004  # mean IoU gain over the generated shape needed before the mesh is restretched
+TAPER_MIN_GAIN = 0.003
+ASPECT_FLAT_TOL = 0.003  # values within this IoU of the best are not distinguishable: their span is the reported uncertainty
+
+
+def shape_reference(vertices: np.ndarray, up_axis: int = 1) -> tuple:
+    h = [i for i in range(3) if i != up_axis]
+    lo, hi = vertices.min(0), vertices.max(0)
+    return float(lo[up_axis]), float(hi[up_axis]), float((lo[h[0]] + hi[h[0]]) / 2), float((lo[h[1]] + hi[h[1]]) / 2)
+
+
+def reshape_vertices(vertices: np.ndarray, k: float, t: float, ref: tuple, up_axis: int = 1) -> np.ndarray:
+    """Vertical stretch k about the lowest point and a linear taper t about the vertical axis; ``ref`` comes from the ORIGINAL mesh."""
+    y0, y1, c0, c1 = ref
+    h = [i for i in range(3) if i != up_axis]
+    v = np.asarray(vertices, float).copy()
+    yn = (v[:, up_axis] - y0) / max(y1 - y0, 1e-12)
+    f = 1.0 + t * (0.5 - yn)
+    v[:, h[0]] = c0 + (v[:, h[0]] - c0) * f
+    v[:, h[1]] = c1 + (v[:, h[1]] - c1) * f
+    v[:, up_axis] = y0 + (v[:, up_axis] - y0) * k
+    return v
+
+
+def fit_pose_fixed_elevation(vertices, faces, mask, elevation_deg: float, *, az_step: float = 10.0):
+    from . import texture_project as tp
+
+    size = (mask.shape[1], mask.shape[0])
+    best = None
+    for az in np.arange(0.0, 360.0, az_step):
+        p = tp._anchored_pose(vertices, float(az), float(elevation_deg), mask)
+        s = tp.iou(tp.silhouette(vertices, faces, p, size), mask)
+        if best is None or s > best[0]:
+            best = (s, p)
+    best_iou, bp = best
+    steps = np.array([4.0, 0.0, 0.03, 3.0, 3.0])  # az, el (fixed), rel-scale, tx, ty
+    for _ in range(3):
+        improved = True
+        while improved:
+            improved = False
+            for ax in (0, 2, 3, 4):
+                for sg in (-1.0, 1.0):
+                    v = [bp.az_deg, bp.el_deg, bp.scale, bp.tx, bp.ty]
+                    v[ax] += sg * steps[ax] * (bp.scale if ax == 2 else 1.0)
+                    c = tp.CameraPose(*v)
+                    s = tp.iou(tp.silhouette(vertices, faces, c, size), mask)
+                    if s > best_iou + 1e-4:
+                        best_iou, bp, improved = s, c, True
+        steps = steps / 2.0
+    return best_iou, bp
+
+
+@dataclass
+class GroundedScale:
+    aspect_k: float          # vertical stretch to apply to the generated mesh (1.0 = as generated)
+    taper_t: float           # linear taper to apply (0.0 = as generated)
+    cm_per_unit: float       # lateral scale (cm per mesh unit) of the reshaped mesh
+    height_cm: float
+    height_range_cm: tuple   # span of aspect values the silhouettes cannot tell apart (within ASPECT_FLAT_TOL of the best IoU)
+    mean_iou_by_k: dict
+    mean_iou_by_taper: dict
+    mean_iou_generated: float
+    mean_iou_final: float
+    applied: bool
+    frames: list
+    reference_diameter_cm: float
+    up_axis: int = 1
+
+    def to_dict(self) -> dict:
+        return {"method": "coin ellipse fixes the camera elevation; height aspect and taper fitted to the silhouettes at that elevation; lateral scale from the coin",
+                "aspect_k": self.aspect_k, "taper_t": self.taper_t, "applied": self.applied, "cm_per_mesh_unit": self.cm_per_unit, "height_cm": self.height_cm,
+                "height_range_cm": list(self.height_range_cm), "mean_iou_by_k": self.mean_iou_by_k, "mean_iou_by_taper": self.mean_iou_by_taper,
+                "mean_iou_generated": self.mean_iou_generated, "mean_iou_final": self.mean_iou_final, "frames": self.frames,
+                "reference_diameter_cm": self.reference_diameter_cm}
+
+
+def calibrate_grounded(frames, vertices, faces, diameter_cm: float, *, up_axis: int = 1) -> GroundedScale:
+    """``frames``: (name, object_mask, reference_mask or None). Needs >= MIN_FRAMES frames with a usable coin."""
+    ref_box = shape_reference(vertices, up_axis)
+    h0 = ref_box[1] - ref_box[0]
+    obs = []
+    for name, obj_mask, ref_mask in frames:
+        if ref_mask is None or not ref_mask.any():
+            continue
+        try:
+            ref = fit_disk(ref_mask)
+        except ScaleCalibrationError:
+            continue
+        obs.append((name, obj_mask, ref))
+    if len(obs) < MIN_FRAMES:
+        raise ScaleCalibrationError(f"only {len(obs)} frame(s) with a usable coin for the grounded calibration (need {MIN_FRAMES})")
+
+    def score(k: float, t: float):
+        vk = reshape_vertices(vertices, k, t, ref_box, up_axis)
+        res = [(fit_pose_fixed_elevation(vk, faces, m, r.elevation_deg), r.major_px / diameter_cm) for _, m, r in obs]
+        return float(np.mean([i for (i, _), _ppc in res])), float(np.mean([p.scale / ppc for (_, p), ppc in res]))
+
+    ks, ts = np.array(ASPECT_GRID), np.array(TAPER_GRID)
+    by_k = [score(k, 0.0) for k in ASPECT_GRID]
+    iou_k, cm_k = np.array([a for a, _ in by_k]), np.array([b for _, b in by_k])
+    j = int(iou_k.argmax())
+    k_best = float(ks[j])
+    if 0 < j < len(ks) - 1:  # parabolic refinement around the peak
+        a, b, c = iou_k[j - 1], iou_k[j], iou_k[j + 1]
+        den = a - 2 * b + c
+        if den < 0:
+            k_best = float(ks[j] + 0.5 * (a - c) / den * (ks[1] - ks[0]))
+    i_gen = float(iou_k[list(ks).index(1.0)])
+    k_ok = bool(iou_k.max() - i_gen >= ASPECT_MIN_GAIN and abs(k_best - 1.0) >= 0.02)
+    k_use = k_best if k_ok else 1.0
+    by_t = [score(k_use, t) for t in TAPER_GRID]
+    iou_t, cm_t = np.array([a for a, _ in by_t]), np.array([b for _, b in by_t])
+    i_t0 = float(iou_t[list(ts).index(0.0)])
+    jt = int(iou_t.argmax())
+    t_ok = bool(iou_t.max() - i_t0 >= TAPER_MIN_GAIN and ts[jt] != 0.0)
+    t_use = float(ts[jt]) if t_ok else 0.0
+    i_fin, cm_fin = score(k_use, t_use)
+    flat = ks[iou_k >= iou_k.max() - ASPECT_FLAT_TOL]
+    h = lambda k: float(np.interp(k, ks, cm_k) * h0 * k)
+    return GroundedScale(aspect_k=float(k_use), taper_t=t_use, cm_per_unit=cm_fin, height_cm=float(cm_fin * h0 * k_use),
+                         height_range_cm=(h(float(flat.min())), h(float(flat.max()))),
+                         mean_iou_by_k={f"{k:.2f}": round(float(v), 4) for k, v in zip(ks, iou_k)},
+                         mean_iou_by_taper={f"{t:+.2f}": round(float(v), 4) for t, v in zip(ts, iou_t)},
+                         mean_iou_generated=i_gen, mean_iou_final=i_fin, applied=bool(k_ok or t_ok),
+                         frames=[{"frame": n, "coin_elevation_deg": r.elevation_deg, "px_per_cm": r.major_px / diameter_cm} for n, _, r in obs],
+                         reference_diameter_cm=diameter_cm, up_axis=up_axis)

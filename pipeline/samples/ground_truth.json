@@ -1,0 +1,8 @@
+{
+  "_note": "Ruler measurements by the user. EVALUATION ONLY: never used to scale, tune or adjust any model output.",
+  "coin": {"name": "Saudi 25 halalas", "diameter_mm": null, "_todo": "measure with a ruler/caliper; preset in scale_cal.COINS is 21.5 mm (looked up)"},
+  "objects": {
+    "mug": {"height_mm": 70, "rim_diameter_mm": 85, "base_diameter_mm": 65, "shape": "tapered, widens toward the top"}
+  },
+  "_todo_desk_objects": "add each desk object as objects.<name>: {height_mm, width_mm|diameter_mm}"
+}
