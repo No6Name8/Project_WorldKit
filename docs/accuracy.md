@@ -10,4 +10,6 @@ Ground truth: `pipeline\samples\ground_truth.json` (ruler measurements; evaluati
 
 Mean absolute error 2.5% over 3 dimensions; worst 3.7%.
 
+**Model objects with no ground-truth entry (unscored):** black glasses case (29 mm tall), red candle holder (221 mm tall), silver incense burner (326 mm tall), small water bottle (122 mm tall), striped mug (70 mm tall, scale reference)
+
 Coin: no ruler measurement recorded in ground_truth.json; the preset diameter is a looked-up value.

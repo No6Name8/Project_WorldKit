@@ -105,7 +105,8 @@ def load_model_objects(runs: dict[str, Path], scenes: list[Path]) -> dict[str, d
                 continue
             rep = json.loads((sd / o["report"]).read_text(encoding="utf-8")) if o.get("report") and (sd / o["report"]).is_file() else {}
             h = (rep.get("measurement") or {}).get("height_mm") or (o.get("size_cm") or [0, 0, 0])[1] * 10 or None
-            found[norm(o["name"])] = {"name": o["name"], "source": str(sd), "dims": measure(sd / o["stl"], h), "method": "scene (coin)"}
+            found[norm(o["name"])] = {"name": o["name"], "source": str(sd), "dims": measure(sd / o["stl"], h), "is_ref": bool(o.get("is_scale_reference")),
+                                      "method": (man.get("scale_source") or {}).get("text", "scene").replace("scale source: ", "")}
     return found
 
 
@@ -120,14 +121,20 @@ def main(argv=None) -> int:
     truth = json.loads(a.truth.read_text(encoding="utf-8"))
     model = load_model_objects({k: v for k, v in runs.items() if (v / "model_print.stl").is_file()}, [Path(s) for s in a.scenes])
 
-    rows, unmatched_model, unmatched_truth = [], set(model), []
+    rows, unmatched_model, unmatched_truth, references, unscored = [], set(model), [], [], []
     for name, gt in truth["objects"].items():
-        mo = model.get(norm(name))
+        mo = model.get(norm(name)) or next((v for k, v in model.items() if set(norm(name).split()) <= set(k.split())), None)  # 'mug' matches 'striped mug'
         dims = {k: v for k, v in gt.items() if k.endswith("_mm") and v is not None}
         if not mo:
             unmatched_truth.append(name)
             continue
-        unmatched_model.discard(norm(name))
+        unmatched_model.discard(norm(mo['name']))
+        if mo.get("is_ref"):
+            references.append(name)  # the scale reference must never score itself
+            continue
+        if not dims:
+            unscored.append(name)
+            continue
         for k, real in dims.items():
             got = mo["dims"].get(k)
             rows.append((name, k, real, got, None if got is None else 100.0 * (got - real) / real, mo["method"]))
@@ -140,10 +147,14 @@ def main(argv=None) -> int:
     if rows:
         errs = [abs(r[4]) for r in rows if r[4] is not None]
         lines += ["", f"Mean absolute error {np.mean(errs):.1f}% over {len(errs)} dimensions; worst {max(errs):.1f}%."]
+    if references:
+        lines += ["", "**Scale references (not scored, they define the scale):** " + ", ".join(references)]
+    if unscored:
+        lines += ["", "**Unscored (ground truth is null, not measured yet):** " + ", ".join(unscored)]
     if unmatched_truth:
         lines += ["", "**Ground-truth objects with no model output (unmatched):** " + ", ".join(unmatched_truth)]
     if unmatched_model:
-        lines += ["", "**Model objects with no ground truth (unmatched):** " + ", ".join(model[k]["name"] for k in sorted(unmatched_model))]
+        lines += ["", "**Model objects with no ground-truth entry (unscored):** " + ", ".join(f"{model[k]['name']} ({model[k]['dims']['height_mm']:.0f} mm tall{', scale reference' if model[k].get('is_ref') else ''})" for k in sorted(unmatched_model))]
     if coin.get("diameter_mm") is None:
         lines += ["", "Coin: no ruler measurement recorded in ground_truth.json; the preset diameter is a looked-up value."]
     a.out.parent.mkdir(parents=True, exist_ok=True)

@@ -43,15 +43,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.mouse.move(5, 5);
     await sleep(100);
     const tp = await page.evaluate(() => window.__objectScreenPosition("round_side_table"));
-    await page.mouse.click(tp.x, tp.y + 40);
-    await sleep(300);
-    let ui = await page.evaluate(() => window.__mapUi());
+    let ui;
+    for (const [dx, dy] of [[0, 40], [90, 30], [-90, 30], [0, 80], [140, 0], [-140, 0], [60, 60]]) {  // the mug sits on the table: find a point on the table itself
+      await page.mouse.click(tp.x + dx, tp.y + dy);
+      await sleep(250);
+      ui = await page.evaluate(() => window.__mapUi());
+      if (ui.name === "round side table") break;
+    }
     check("clicking the table selects it: panel shows its name and is not printable", ui.name === "round side table" && ui.printObjDisabled && ui.objPanel === "block", JSON.stringify(ui));
     await page.mouse.click(mp.x, mp.y);
     await sleep(300);
     ui = await page.evaluate(() => window.__mapUi());
     check("clicking the mug selects it: name, real dimensions in cm, outline drawn", ui.name === "mug" && ui.dims.includes("cm") && (await page.evaluate(() => window.__outlineCount())) > 0, ui.dims);
     check("Print this is enabled for the mug", !ui.printObjDisabled);
+    check("the panel states the scale source", ui.scale.includes("scale source: striped mug, 70 mm height"), ui.scale);
     const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#btn-print-obj")]);
     const stl = await dl.path();
     const size = require("fs").statSync(stl).size;

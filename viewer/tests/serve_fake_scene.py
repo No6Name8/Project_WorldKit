@@ -33,6 +33,7 @@ if __name__ == "__main__":
     shutil.copy(d / "layout_check.png", d / "verify" / "view0_a.png")
     trimesh.creation.box(extents=[60, 60, 20]).export(d / "diorama.stl")
     m["diorama"] = {"stl": "diorama.stl", "scale_text": "1:4.0", "size_mm": [60, 60, 20], "warnings": ["scaled to 1:4.0"]}
+    m["scale_source"] = {"text": "scale source: striped mug, 70 mm height, reconstructed mesh height set to the supplied value", "kind": "object", "name": "striped mug", "size_mm": 70.0}
     m["verify"] = {"mean_iou_before": 0.61, "mean_iou_after": 0.7, "images": ["verify/view0_a.png"]}
     (d / "scene.json").write_text(json.dumps(m))
     uvicorn.run(serve.create_app(d, client=Wonder(), ask_spark=spark), host="127.0.0.1", port=int(sys.argv[1]), log_level="warning")
