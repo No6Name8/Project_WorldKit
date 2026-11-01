@@ -18,6 +18,7 @@ Layout method used: weak-perspective pose fits of one reference frame (no VGGT).
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import math
@@ -30,7 +31,7 @@ import numpy as np
 import trimesh
 from PIL import Image, ImageDraw
 
-from . import appearance, frames as frames_mod, printprep, reconstruct, scale_cal, segment
+from . import appearance, frames as frames_mod, printprep, reconstruct, refscale, scale_cal, segment
 from . import scene as sc
 from . import texture_project as tp
 from .meta_api import MetaAPIUnavailable, ask_muse_spark_with_usage
@@ -47,10 +48,12 @@ class MapError(RuntimeError):
 
 DISCOVER_PROMPT = """These {n} photos come from one phone video of objects resting on a desk or table.
 List every distinct PHYSICAL OBJECT sitting on the surface that someone might want to 3D-reconstruct or 3D-print.
-Do NOT list: coins (a coin is the scale reference), hands or people, walls, floor, background furniture, cables, shadows, or the surface itself.
+List each object ONCE, as a whole: a cap, lid or label belongs to its bottle or container, and a holder or stand belongs to the candle, lamp or ornament it holds (name the whole thing, e.g. "candle in red holder"); never list parts separately.
+Do NOT list: coins or cards used as scale references, hands or people, walls, floor, background furniture, cables, shadows, or the surface itself.
 Give each object a short noun phrase (1-3 words) that an image segmenter can find, and make the phrases distinct (add a colour if two objects are similar).
 Also name the surface the objects rest on.
-Reply with ONLY one JSON object: {{"objects": [{{"name": "white mug", "description": "short"}}], "surface": "desk"}}"""
+For each object also give "parts": segmenter phrases for pieces that belong to it and should be merged into it (e.g. the red holder of a candle), and "aliases": up to 2 alternative phrases for the same whole object (e.g. "incense burner" for "silver ornament").
+Reply with ONLY one JSON object: {{"objects": [{{"name": "white candle", "parts": ["red candle holder"], "aliases": ["candle"], "description": "short"}}], "surface": "desk"}}"""
 
 
 def discover_objects(image_paths: list[Path], ask=ask_muse_spark_with_usage) -> dict:
@@ -63,10 +66,13 @@ def discover_objects(image_paths: list[Path], ask=ask_muse_spark_with_usage) -> 
     for o in d.get("objects", []):
         n = str(o.get("name", "")).strip()
         low = n.lower()
-        if not n or low in seen or re.search(r"\b(coin|hand|wall|floor|background|person)\b", low):
+        if not n or low in seen or re.search(r"\b(coin|hand|wall|floor|background|person|sofa|couch|carpet|rug|cushion)\b", low):
             continue
         seen.add(low)
-        names.append({"name": n, "description": str(o.get("description", ""))})
+        names.append({"name": n, "description": str(o.get("description", "")), "parts": [str(x) for x in (o.get("parts") or []) if str(x).strip()][:3],
+                      "aliases": [str(x) for x in (o.get("aliases") or []) if str(x).strip()][:2]})
+    part_names = {x.lower() for o in names for x in o["parts"]}
+    names = [o for o in names if o["name"].lower() not in part_names]
     return {"objects": names, "surface": str(d.get("surface") or "desk"), "usage": usage}
 
 
@@ -78,19 +84,48 @@ class Track:
     masks: dict = field(default_factory=dict)  # frame stem -> full-frame bool mask
 
 
-def build_tracks(frame_list, names: list[str], segment_fn=segment.segment_concept) -> tuple[list[Track], dict]:
+def cached_mask(cache: Path | None, path, concept: str, segment_fn=segment.segment_concept, fresh: bool = False):
+    """Full-frame SAM mask of ``concept`` in ``path`` (None if not found), cached on disk by hash of the frame and the concept."""
+    f = None
+    if cache is not None:
+        cache.mkdir(parents=True, exist_ok=True)
+        f = cache / (hashlib.sha1(Path(path).read_bytes() + concept.encode()).hexdigest()[:20] + ".npz")
+        if f.is_file() and not fresh:
+            z = np.load(f)
+            return z["m"] if bool(z["ok"]) else None
+    m = None
+    try:
+        r = segment_fn(path, concept)
+        if not getattr(r, "used_fallback", False):
+            m = segment.full_frame_mask(path, r)
+    except segment.SegmentationError:
+        m = None
+    if f is not None:
+        np.savez_compressed(f, ok=m is not None, m=m if m is not None else np.zeros((1, 1), bool))
+    return m
+
+
+def build_tracks(frame_list, names: list, segment_fn=segment.segment_concept, cache: Path | None = None, fresh: bool = False, extra: dict | None = None) -> tuple[list[Track], dict]:
+    """``extra``: name -> {"parts": [...], "aliases": [...]}; the first concept (name, then aliases) with a mask is used, parts are merged into it."""
     tracks, errors = [], {}
     for name in names:
         t = Track(name)
+        ex = (extra or {}).get(name, {})
         for fr in frame_list:
-            try:
-                r = segment_fn(fr.path, name)
-                if getattr(r, "used_fallback", False):
-                    continue
-                m = segment.full_frame_mask(fr.path, r)
-            except segment.SegmentationError as exc:
-                errors.setdefault(name, []).append(f"{Path(fr.path).stem}: {str(exc)[:80]}")
+            m = None
+            words = name.split()
+            tails = [" ".join(words[-2:]), words[-1]] if len(words) > 1 else []  # "black glasses case" -> "glasses case" -> "case"
+            for concept in dict.fromkeys([name] + list(ex.get("aliases", [])) + tails):
+                m = cached_mask(cache, fr.path, concept, segment_fn, fresh)
+                if m is not None:
+                    break
+            if m is None:
+                errors.setdefault(name, []).append(f"{Path(fr.path).stem}: no mask")
                 continue
+            for part in ex.get("parts", []):
+                pm = cached_mask(cache, fr.path, part, segment_fn, fresh)
+                if pm is not None and pm.shape == m.shape:
+                    m = m | pm
             if m.sum() > 150:
                 t.masks[Path(fr.path).stem] = m
         tracks.append(t)
@@ -107,16 +142,24 @@ def dedup_tracks(tracks: list[Track], iou_thresh: float = 0.5, min_frames: int =
     keep.sort(key=lambda t: -sum(m.sum() for m in t.masks.values()))
     out = []
     for t in keep:
-        dup = None
+        dup, part_of = None, None
         for k in out:
             shared = set(t.masks) & set(k.masks)
-            if shared and np.mean([tp.iou(t.masks[s], k.masks[s]) for s in shared]) >= iou_thresh:
+            if not shared:
+                continue
+            if np.mean([tp.iou(t.masks[s], k.masks[s]) for s in shared]) >= iou_thresh:
                 dup = k
                 break
-        if dup is None:
+            inside = np.mean([(t.masks[s] & k.masks[s]).sum() / max(t.masks[s].sum(), 1) for s in shared])
+            if inside >= 0.7:
+                part_of = k
+                break
+        if dup is None and part_of is None:
             out.append(t)
-        else:
+        elif dup is not None:
             dropped.append({"name": t.name, "reason": f"same object as '{dup.name}' (mask IoU >= {iou_thresh} in shared frames)"})
+        else:
+            dropped.append({"name": t.name, "reason": f"part of '{part_of.name}' (>= 70% of its mask lies inside that object's mask)"})
     return out, dropped
 
 
@@ -261,6 +304,37 @@ def resolve_overlaps(items: list[Placed], gap_cm: float = 0.4, iters: int = 20) 
 
 
 # --- 5. verify --------------------------------------------------------------------------------------------------------------
+
+def fit_frame_camera(items: list, targets: dict, init: tp.CameraPose) -> tuple[tp.CameraPose, float] | None:
+    """Weak-perspective camera of one frame from the base-centre pixels of the placed objects (>= 3 needed): the frame's own viewpoint, which a
+    single reference-based camera cannot give once the phone moves close or around. Returns (camera, rms reprojection error in cm)."""
+    from scipy.optimize import least_squares
+
+    pts, px = [], []
+    for it in items:
+        if it.id in targets:
+            w = it.world()
+            pts.append([(w.min(0)[0] + w.max(0)[0]) / 2, w.min(0)[1], (w.min(0)[2] + w.max(0)[2]) / 2])
+            px.append(targets[it.id])
+    if len(pts) < 3:
+        return None
+    pts, px = np.asarray(pts), np.asarray(px)
+
+    def resid(v):
+        return (tp.CameraPose(v[0], v[1], v[2], v[3], v[4]).project(pts)[0] - px).ravel()
+
+    x0 = np.array([init.az_deg, init.el_deg, init.scale, init.tx, init.ty])
+    lo = np.array([-360.0, 10.0, init.scale * 0.4, -1e5, -1e5])
+    hi = np.array([360.0, 80.0, init.scale * 2.5, 1e5, 1e5])
+    best = None
+    for az0 in (x0[0], x0[0] + 90, x0[0] - 90, x0[0] + 180):  # azimuth is multi-modal
+        r = least_squares(resid, np.clip([az0, *x0[1:]], lo, hi), bounds=(lo, hi), loss="soft_l1", f_scale=8.0)
+        if best is None or r.cost < best.cost:
+            best = r
+    v = best.x
+    cam = tp.CameraPose(float(v[0]), float(v[1]), float(v[2]), float(v[3]), float(v[4]))
+    return cam, float(np.sqrt(np.mean(resid(v) ** 2)) / cam.scale)
+
 
 def object_ious(items: list[Placed], cams: dict, masks: dict, size_of: dict, overrides: dict | None = None) -> dict:
     """{object id: {frame: IoU}} between the rendered silhouette and the SAM mask, same canvas."""
@@ -426,7 +500,7 @@ def run(args) -> dict:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rep: dict = {"mode": "map", "warnings": [], "timings_sec": {}, "spark_calls": 0,
-                 "layout_method": "weak-perspective pose fits in one reference frame (the coin gives the desk plane's scale and elevation); VGGT not used"}
+                 "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used"}
     T = rep["timings_sec"]
 
     def timed(name, fn, *a, **k):
@@ -446,15 +520,30 @@ def run(args) -> dict:
     if args.objects:
         found = {"objects": [{"name": n, "description": "given on the command line"} for n in args.objects], "surface": "desk", "usage": None}
     else:
-        found = timed("discover", discover_objects, [f.path for f in picks])
-        rep["spark_calls"] += 1
+        dkey = hashlib.sha1(b"".join(Path(f.path).read_bytes() for f in picks) + DISCOVER_PROMPT.encode()).hexdigest()[:20]
+        dfile = out / "cache" / f"discover_{dkey}.json"
+        if dfile.is_file() and not getattr(args, "fresh", False):
+            found = json.loads(dfile.read_text(encoding="utf-8"))
+            rep["discover_from_cache"] = True
+        else:
+            found = timed("discover", discover_objects, [f.path for f in picks])
+            rep["spark_calls"] += 1
+            dfile.parent.mkdir(parents=True, exist_ok=True)
+            dfile.write_text(json.dumps(found, default=str))
     names = [o["name"] for o in found["objects"]]
+    specs = refscale.specs_from_args(getattr(args, "coin", None), getattr(args, "ref_diameter_cm", None), bool(getattr(args, "card", False)), getattr(args, "ref", None),
+                                     getattr(args, "ref_concept", "coin"))
+    fresh = bool(getattr(args, "fresh", False))
+    cache = out / "cache"
+    for sp in specs:
+        if sp.kind == "object" and not any(refscale.name_matches(n, sp.name) for n in names):
+            names.append(sp.name)  # the reference object must be found even if Spark phrased it differently
     rep["discovered"] = {"objects": names, "surface": found["surface"], "spark_tokens": found.get("usage")}
     if not names:
         raise MapError("Muse Spark found no objects on the surface")
 
     # 2. track
-    tracks, track_errors = timed("track", build_tracks, sharp, names)
+    tracks, track_errors = timed("track", build_tracks, sharp, names, cache=cache / "masks", fresh=fresh, extra={o["name"]: o for o in found["objects"]})
     tracks, dropped = dedup_tracks(tracks)
     rep["tracks"] = {t.name: len(t.masks) for t in tracks}
     rep["skipped"] = list(dropped)
@@ -480,13 +569,30 @@ def run(args) -> dict:
     rep["build"] = {"backend": args.mesh_backend, "parallel_containers_max": 3 if args.mesh_backend == "modal" else 1}
     metered0 = modal_metered() if args.mesh_backend == "modal" else None
     t0 = time.time()
+    mesh_cache = cache / "mesh"
+    mesh_cache.mkdir(parents=True, exist_ok=True)
+    keys = [hashlib.sha1(c).hexdigest()[:20] for c in inputs]
     if args.mesh_backend == "modal":
-        try:
-            from modal_app.sam3d import run_remote_many
+        results = [None] * len(inputs)
+        todo = []
+        for i, k in enumerate(keys):
+            f = mesh_cache / f"{k}.glb"
+            if f.is_file() and not fresh:
+                results[i] = f.read_bytes()
+            else:
+                todo.append(i)
+        rep["build"]["from_cache"] = len(inputs) - len(todo)
+        if todo:
+            try:
+                from modal_app.sam3d import run_remote_many
 
-            results = run_remote_many(inputs)
-        except Exception as exc:  # noqa: BLE001
-            raise MapError(f"SAM 3D on Modal failed for the whole batch: {type(exc).__name__}: {str(exc)[:200]}") from exc
+                got = run_remote_many([inputs[i] for i in todo])
+            except Exception as exc:  # noqa: BLE001
+                raise MapError(f"SAM 3D on Modal failed for the whole batch: {type(exc).__name__}: {str(exc)[:200]}") from exc
+            for i, g in zip(todo, got):
+                results[i] = g
+                if not isinstance(g, BaseException):
+                    (mesh_cache / f"{keys[i]}.glb").write_bytes(g)
     elif args.mesh_backend == "import":
         mf = dict(kv.split("=", 1) for kv in (args.mesh_file or []))
         results = [reconstruct.load_external_mesh(Path(mf[m["id"]])) if m["id"] in mf else RuntimeError(f"no --mesh-file {m['id']}=...") for m in meta]
@@ -520,30 +626,100 @@ def run(args) -> dict:
         items.append(Placed(m["id"], m["track"].name, glb, v, f, {"position": [0, 0, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}, m["stem"]))
     rep["built"] = [{"id": it.id, "name": it.name} for it in items]
     if not items:
+        (out / "partial_report.json").write_text(json.dumps({**rep, "error": "no object survived reconstruction and mesh QC"}, indent=1, default=float))
         raise MapError("no object survived reconstruction and mesh QC")
-    track_of = {ids[t.name]: t for t in tracks}
 
-    # 4. place
-    diam = args.ref_diameter_cm
-    coin_obs = {}
+    # 4. place: the most reliable reference visible (coin > card > user-given object) defines scale, camera elevation and the desk plane
     t0 = time.time()
-    if diam:
-        for s, f in sharp_by_stem.items():
-            d = coin_in_frame(Path(f.path), args.ref_concept)
-            if d is not None:
-                coin_obs[s] = d
-    rep["coin"] = {"diameter_cm": diam, "frames_with_coin": sorted(coin_obs)}
-    scale_known = bool(coin_obs)
+    track_of_early = {ids[t.name]: t for t in tracks}
+    ref_obs: dict = {}
+    marker_masks: dict = {}
+    scale_src, scale_note, fits_all = None, [], {}
+    for spec in specs:
+        if spec.kind in ("coin", "card"):
+            for st, f in sharp_by_stem.items():
+                m = cached_mask(cache / "masks", f.path, spec.name, fresh=fresh)
+                if m is None or m.sum() < 120:
+                    continue
+                try:
+                    if spec.kind == "coin":
+                        d = scale_cal.fit_disk(m)
+                        ppc, el = d.major_px / spec.size_cm, d.elevation_deg
+                    else:
+                        ppc, el = refscale.card_observation(m, spec.size_cm, spec.short_cm)
+                except (scale_cal.ScaleCalibrationError, refscale.RefError):
+                    continue
+                ys, xs = np.nonzero(m)
+                ref_obs[st] = refscale.FrameRef(float(ppc), float(np.clip(el, 12.0, 80.0)), (float(xs.mean()), float(ys.mean())))
+                marker_masks[st] = m
+            if ref_obs:
+                scale_src = spec
+                break
+            scale_note.append(f"{spec.name} reference not found in any frame")
+        else:
+            ritem = next((it for it in items if refscale.name_matches(it.name, spec.name)), None)
+            if ritem is None:
+                scale_note.append(f"reference object '{spec.name}' was not built (failed or skipped), cannot use it for scale")
+                continue
+            cpu = spec.size_cm / float(ritem.verts[:, 1].max() - ritem.verts[:, 1].min())  # cm per mesh unit, from the supplied height
+            for st, tk in track_of_early[ritem.id].masks.items():
+                try:
+                    fit = tp.fit_pose(ritem.verts, ritem.faces, tk)
+                except tp.TextureProjectionError:
+                    continue
+                fits_all[(ritem.id, st)] = fit
+                px = fit.pose.project(sc.base_center(ritem.verts)[None, :])[0][0]
+                ref_obs[st] = refscale.FrameRef(float(fit.pose.scale / cpu), float(np.clip(fit.pose.el_deg, 12.0, 80.0)), (float(px[0]), float(px[1])))
+            if ref_obs:
+                scale_src = spec
+                rep["reference_object_id"] = ritem.id
+                break
+            scale_note.append(f"reference object '{spec.name}' could not be pose-fitted in any frame")
+    scale_known = scale_src is not None
+    rep["scale_source"] = ({"text": scale_src.describe(), "kind": scale_src.kind, "name": scale_src.name, "size_mm": round(scale_src.size_cm * 10, 2), "frames_used": sorted(ref_obs),
+                            "object_id": rep.get("reference_object_id"), "considered": [sp.describe() for sp in specs], "notes": scale_note} if scale_known else
+                           {"text": "scale source: none (placeholder scale, NOT real size)", "considered": [sp.describe() for sp in specs], "notes": scale_note})
     if not scale_known:
-        rep["warnings"].append("no coin found (or no --coin/--ref-diameter-cm): the scene is NOT at real scale (placeholder 20 px/cm)")
-    vis_counts = {s: sum(1 for it in items if s in track_of[it.id].masks) for s in sharp_by_stem}
-    pool = list(coin_obs) if scale_known else list(sharp_by_stem)
-    ref = max(pool, key=lambda s: (vis_counts[s], coin_obs[s].major_px if scale_known else sharp_map[s]))
+        rep["warnings"].append("no scale reference found (or none given): the scene is NOT at real scale (placeholder 20 px/cm)")
+    rep["coin"] = {"frames_with_reference": sorted(ref_obs)}
+
+    # grounded reshape (coin-elevation-fixed silhouette fit of height aspect and taper) is only possible when a coin fixes the camera elevation
+    rep["grounded_reshape"] = {}
+    if scale_known and scale_src.kind == "coin":
+        from . import object as obj_cli_reshape
+
+        t1 = time.time()
+        for it in items:
+            tk = track_of_early[it.id].masks
+            cand = sorted((st for st in marker_masks if st in tk), key=lambda st: -int(tk[st].sum()))[:4]
+            if len(cand) < scale_cal.MIN_FRAMES:
+                rep["grounded_reshape"][it.id] = {"applied": False, "reason": f"only {len(cand)} frame(s) show both the object and the coin"}
+                continue
+            try:
+                g = scale_cal.calibrate_grounded([(st, tk[st], marker_masks[st]) for st in cand], it.verts, it.faces, scale_src.size_cm)
+            except scale_cal.ScaleCalibrationError as exc:
+                rep["grounded_reshape"][it.id] = {"applied": False, "reason": str(exc)}
+                continue
+            rep["grounded_reshape"][it.id] = g.to_dict()
+            if g.applied:
+                gp = next(m_["odir"] for m_ in meta if m_["id"] == it.id) / "model.glb"
+                obj_cli_reshape._reshape_glb(gp, g.aspect_k, g.taper_t)
+                it.verts, it.faces = sc._load_mesh(gp.read_bytes())
+                it.glb = gp.read_bytes()
+        T["reshape"] = round(time.time() - t1, 1)
+    vis_counts = {s_: sum(1 for it in items if s_ in track_of_early[it.id].masks) for s_ in sharp_by_stem}
+    pool = list(ref_obs) if scale_known else list(sharp_by_stem)
+    ref = max(pool, key=lambda s_: (vis_counts[s_], ref_obs[s_].px_per_cm if scale_known else sharp_map[s_]))
     rep["reference_frame"] = ref
+    if scale_src is not None and scale_src.kind == "object":
+        # the reference object's own mesh was reshaped by nothing: its height IS the supplied height by construction
+        rep["scale_source"]["note"] = "the reference object's reconstructed height is set to the supplied value, so it cannot be checked against itself"
+    track_of = track_of_early
 
     def camera_for(stem):
         if scale_known:
-            return desk_camera(coin_obs[stem], diam, coin_center(Path(sharp_by_stem[stem].path), args.ref_concept))
+            o = ref_obs[stem]
+            return tp.CameraPose(0.0, o.elevation_deg, o.px_per_cm, o.anchor_px[0], o.anchor_px[1])
         return tp.CameraPose(0.0, 40.0, 20.0, size_of[stem][0] / 2, size_of[stem][1] * 0.7)
 
     cam_ref = camera_for(ref)
@@ -554,7 +730,7 @@ def run(args) -> dict:
             rep["skipped"].append({"name": it.name, "reason": f"not visible in the reference frame {ref}"})
             continue
         try:
-            fits_ref[it.id] = tp.fit_pose(it.verts, it.faces, mask)
+            fits_ref[it.id] = fits_all.get((it.id, ref)) or tp.fit_pose(it.verts, it.faces, mask)
         except tp.TextureProjectionError as exc:
             rep["skipped"].append({"name": it.name, "reason": f"pose fit failed in the reference frame: {exc}"})
     items = [it for it in items if it.id in fits_ref]
@@ -578,18 +754,41 @@ def run(args) -> dict:
     others = sorted((x for x in pool if x != ref), key=lambda x: -(vis_counts[x] * 1000 + sharp_map[x]))
     verify_frames = [ref] + others[:2]
     cams = {ref: cam_ref}
+    cam_az_from, cam_fit = {}, {}
     for s in verify_frames[1:]:
         base_cam = camera_for(s)
-        diffs = []
+        # camera azimuth relative to the reference frame: from the object whose azimuth the silhouette pins down best in BOTH frames
+        # (a mug with a handle does; a bottle or candle is rotationally symmetric, its fitted azimuth is noise)
+        cand = []
         for it in items:
             m = track_of[it.id].masks.get(s)
-            if m is None:
+            if m is None or it.id not in fits_ref:
                 continue
             try:
-                diffs.append(yaw_deg_of(tp.fit_pose(it.verts, it.faces, m).pose.az_deg, it.fit_az[ref]))
+                f_s = fits_all.get((it.id, s)) or tp.fit_pose(it.verts, it.faces, m)
             except tp.TextureProjectionError:
                 continue
-        cams[s] = tp.CameraPose(circ_mean_deg(diffs) if diffs else 0.0, base_cam.el_deg, base_cam.scale, base_cam.tx, base_cam.ty)
+            cand.append((min(fits_ref[it.id].azimuth_sensitivity, f_s.azimuth_sensitivity) * min(fits_ref[it.id].iou, f_s.iou) ** 2, yaw_deg_of(f_s.pose.az_deg, it.fit_az[ref]), it.id))
+        cand.sort(reverse=True)
+        d_az = cand[0][1] if cand else 0.0
+        cams[s] = tp.CameraPose(d_az, base_cam.el_deg, base_cam.scale, base_cam.tx, base_cam.ty)
+        cam_az_from[s] = cand[0][2] if cand else None
+        targets = {}
+        for it in items:
+            m_ = track_of[it.id].masks.get(s)
+            if m_ is None:
+                continue
+            try:
+                f_ = fits_all.get((it.id, s)) or tp.fit_pose(it.verts, it.faces, m_)
+            except tp.TextureProjectionError:
+                continue
+            targets[it.id] = f_.pose.project(sc.base_center(it.verts)[None, :])[0][0]
+        ff = fit_frame_camera(items, targets, cams[s])
+        if ff is not None:
+            cams[s], err_cm = ff
+            cam_fit[s] = {"method": "weak-perspective camera fitted to the objects' base-centre pixels", "objects": sorted(targets), "rms_reprojection_cm": round(err_cm, 2)}
+        else:
+            cam_fit[s] = {"method": "azimuth from the best-pinned object (fewer than 3 objects visible)"}
     masks = {it.id: {s: track_of[it.id].masks[s] for s in verify_frames if s in track_of[it.id].masks} for it in items}
     ious0 = object_ious(items, cams, masks, size_of)
     before_t = {it.id: dict(it.transform) for it in items}
@@ -641,8 +840,8 @@ def run(args) -> dict:
         comp.save(vdir / f"view{i}_{s}.png")
     T["verify"] = round(time.time() - t0, 1)
     rep["verify"] = {"frames": verify_frames, "iou_before": ious0, "iou_after": ious1, "mean_iou_before": round(mean_iou(ious0), 3), "mean_iou_after": round(mean_iou(ious1), 3),
-                     "rounds": rounds, "images": sorted(p.relative_to(out).as_posix() for p in vdir.glob("view*.png")),
-                     "note": "IoU compares the rendered silhouette (weak-perspective camera from the coin) with the SAM 3.1 mask; the camera model is approximate"}
+                     "camera_azimuth_from_object": cam_az_from, "camera_fit": cam_fit, "rounds": rounds, "images": sorted(p.relative_to(out).as_posix() for p in vdir.glob("view*.png")),
+                     "note": "IoU compares the rendered silhouette with the SAM 3.1 mask. The reference frame uses the scale reference camera; other frames use a camera fitted to the objects' base-centre pixels, so there IoU tests size, shape and yaw but NOT position (see camera_fit residuals). Weak perspective is approximate."}
 
     # 6. export
     t0 = time.time()
@@ -667,18 +866,23 @@ def run(args) -> dict:
             rep["warnings"].append(f"print prep failed for {it.name}: {prep_err}")
         orep = {"object_name": it.name, "reconstruction_model": model_info, "best_view": meta_of[it.id]["view"], "best_frame": it.best_frame, "mesh_qc": meta_of[it.id].get("qc"),
                 "size_cm": it.size_cm, "print_ready": bool(prep.print_ready) if prep else False, "print_prep": prep.to_dict() if prep else None, "print_prep_error": prep_err,
-                "measurement": {"height_cm": it.size_cm[1], "method": "coin (scene reference frame)" if scale_known else "placeholder", "uncertainty_note": "scene-level estimate (coin edge, weak perspective); not a measurement of this object"}}
+                "measurement": {"height_cm": it.size_cm[1], "size_mm_whd": [round(it.size_cm[0] * 10, 1), round(it.size_cm[1] * 10, 1), round(it.size_cm[2] * 10, 1)],
+                        "method": rep["scale_source"]["text"], "scale_source": rep["scale_source"]["text"],
+                        "is_scale_reference": it.id == rep.get("reference_object_id"),
+                        "uncertainty_note": "scene-level estimate (reference edge/height, weak perspective, generated proportions); not a measurement of this object"}}
         (odir / "report.json").write_text(json.dumps(orep, indent=1, default=float))
         manifest_objects.append({"id": it.id, "name": it.name, "mesh": f"objects/{it.id}/model.glb", "report": f"objects/{it.id}/report.json", "role": "child", "reconstruction_model": model_info,
-                                 "transform": it.transform, "size_cm": it.size_cm, "stl": f"objects/{it.id}/model_print.stl" if prep else None, "printable": bool(prep)})
+                                 "transform": it.transform, "size_cm": it.size_cm, "size_mm": [round(x * 10, 1) for x in it.size_cm], "stl": f"objects/{it.id}/model_print.stl" if prep else None,
+                                 "printable": bool(prep), "is_scale_reference": it.id == rep.get("reference_object_id")})
     dio, dio_info = build_diorama(items)
     dio.export(out / "diorama.stl")
     (out / "diorama.json").write_text(json.dumps(dio_info, indent=1))
     T["export"] = round(time.time() - t0, 1)
     rep["diorama"] = dio_info
     manifest = {"worldkit_scene": sc.SCENE_VERSION, "mode": "map", "source_video": Path(args.video).name, "frame": ref,
-                "units": "centimetres on the desk plane (Y up, origin at the coin)" if scale_known else "arbitrary (no coin found)", "cm_per_scene_unit": 1.0 if scale_known else None,
-                "scale_calibration": {"reference": args.ref_concept, "reference_diameter_cm": diam, "relative_spread_mad": None, "frames_used": len(coin_obs)} if scale_known else None,
+                "units": "centimetres on the desk plane (Y up, origin at the scale reference)" if scale_known else "arbitrary (no scale reference found)", "cm_per_scene_unit": 1.0 if scale_known else None,
+                "scale_source": rep["scale_source"],
+                "scale_calibration": {"reference": rep["scale_source"].get("name"), "reference_size_mm": rep["scale_source"].get("size_mm"), "relative_spread_mad": None, "frames_used": len(ref_obs)} if scale_known else None,
                 "objects": manifest_objects, "layout_method": rep["layout_method"],
                 "verify": {"mean_iou_before": rep["verify"]["mean_iou_before"], "mean_iou_after": rep["verify"]["mean_iou_after"], "images": rep["verify"]["images"]},
                 "diorama": {"stl": "diorama.stl", **dio_info}, "skipped": rep["skipped"]}

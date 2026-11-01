@@ -340,6 +340,22 @@ def run_sam3d_on_modal(rgba_png_bytes: bytes) -> bytes:
 
 
 def measurement_summary(report: dict, prep_report, args) -> dict:
+    """``_measurement_summary`` plus the one-line "scale source" every output carries."""
+    base = _measurement_summary(report, prep_report, args)
+    if prep_report.height_source == "user":
+        src = f"scale source: user-supplied height, {base['height_mm']:g} mm, --height-cm"
+    elif prep_report.height_source == "reference_calibrated":
+        sc = report["scale_calibration"]
+        gr = sc.get("grounded") or {}
+        how = "disk ellipse major axis" + ("; camera elevation from the coin, height aspect and taper fitted to silhouettes" if gr.get("applied") else "")
+        src = f"scale source: {sc['reference']}, {sc['reference_diameter_cm'] * 10:g} mm diameter, {how}"
+    else:
+        src = "scale source: none (placeholder scale, NOT real size)"
+    base["scale_source"] = src
+    return base
+
+
+def _measurement_summary(report: dict, prep_report, args) -> dict:
     """What size the exported model has, how that size was obtained, and how uncertain it is (all in the report, never implied)."""
     h_cm = round(float(prep_report.upright_height_cm), 3)
     base = {"height_cm": h_cm, "height_mm": round(h_cm * 10, 1), "height_definition": "upright object height, before the flat print base is added",
