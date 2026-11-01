@@ -63,6 +63,11 @@ def create_app(viewer_dir: Path, open_dir: Path | None = None) -> Flask:
             return jsonify({"kind": "object", "glb": "/open/model.glb", "report": "/open/report.json" if report else None, "name": open_dir.name})
         return jsonify({"kind": None, "error": f"{open_dir} has neither scene.json nor model.glb"})
 
+    @app.get("/edit/state")
+    def edit_state():
+        """The AI Edit panel asks this; only `python -m worldkit.serve <model_dir>` enables it (answering 200 keeps the browser console clean)."""
+        return jsonify({"enabled": False})
+
     @app.get("/api/health")
     def health():
         return jsonify({"ok": True, "muse_spark_key_configured": has_api_key()})

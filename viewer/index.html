@@ -46,6 +46,12 @@
   #overlap-readout .warn { color: #ffcf7a; }
   .num { width: 56px; background: #1b1e25; border: 1px solid #3a3f4b; border-radius: 6px; color: #e6e8ee; padding: 4px; font-size: 12px; }
   #scale-banner.ok { background: #10301f; border-color: #1f7a45; color: #8ff0b5; }
+  #aiedit-panel { bottom: 14px; left: 450px; width: 440px; display: none; }
+  #ai-log { font-size: 12px; max-height: 150px; overflow-y: auto; margin: 8px 0; color: #c3c7d1; }
+  #ai-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
+  #ai-log .ok { color: #8ff0b5; } #ai-log .bad { color: #ff9a9a; } #ai-log .meta { color: #8b90a0; font-size: 11px; }
+  #ai-log img { width: 100%; border-radius: 4px; margin-top: 4px; }
+  #ai-status { font-size: 11.5px; color: #ffcf7a; min-height: 16px; }
   #bottom-left { bottom: 14px; left: 14px; width: 420px; }
   #edit-log { font-size: 12px; max-height: 110px; overflow-y: auto; margin-top: 8px; color: #c3c7d1; }
   #edit-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
@@ -130,6 +136,20 @@
   <input id="file-video" class="small" type="file" accept="video/*" />
   <video id="provenance-video" controls></video>
   <div id="provenance-readout">No report loaded. This panel shows report.json fields read-only -- it does not change the loaded mesh.</div>
+</div>
+
+<div id="aiedit-panel" class="panel">
+  <div class="ptitle">AI Edit <span style="font-weight:400;color:#8b90a0">- Muse Wonder edits, Muse Spark verifies</span> <span id="ai-version" style="float:right;color:#8b90a0"></span></div>
+  <div id="ai-log"></div>
+  <div id="ai-status"></div>
+  <div id="instruction-row">
+    <input id="ai-input" type="text" placeholder='e.g. "add the text WORLDKIT on the base"' />
+    <button id="ai-send">Edit</button>
+  </div>
+  <div class="row" style="margin:8px 0 0;">
+    <button id="ai-undo">Undo</button>
+    <button id="ai-download">Download STL</button>
+  </div>
 </div>
 
 <div id="bottom-left" class="panel">
@@ -1120,6 +1140,89 @@ async function startup() {
   loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
 }
 startup();
+
+// --- AI Edit panel (only when served by `python -m worldkit.serve <model_dir>`) ---------------------------------------------------
+const ai = { state: null, busy: false };
+function aiLog(html, cls) {
+  const d = document.createElement("div");
+  d.className = "entry " + (cls || "");
+  d.innerHTML = html;
+  const box = document.getElementById("ai-log");
+  box.prepend(d);
+  return d;
+}
+const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function aiRefreshLabel() {
+  const st = ai.state;
+  document.getElementById("ai-version").textContent = st ? `version v${st.current}${st.current === 0 ? " (original)" : ""}  |  ${st.units}` : "";
+  document.getElementById("ai-undo").disabled = !st || st.current === 0 || ai.busy;
+  document.getElementById("ai-send").disabled = ai.busy;
+}
+async function aiReloadModel() {
+  const r = await fetch("/edit/model.glb?t=" + Date.now());
+  if (!r.ok) throw new Error("could not load the edited model");
+  await loadGLBFromArrayBuffer(await r.arrayBuffer(), `edit v${ai.state.current}`);
+}
+async function aiSend() {
+  const input = document.getElementById("ai-input");
+  const text = input.value.trim();
+  if (!text || ai.busy) return;
+  ai.busy = true; aiRefreshLabel(); input.value = "";
+  const status = document.getElementById("ai-status");
+  status.textContent = "Muse Wonder is choosing tools, then Muse Spark verifies (about 15-60 s)...";
+  const entry = aiLog(`<b>You:</b> ${esc(text)}<div class="meta">working...</div>`);
+  try {
+    const resp = await fetch("/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instruction: text }) });
+    const r = await resp.json();
+    if (!resp.ok || r.ok === false) throw new Error(r.error || r.detail || `HTTP ${resp.status}`);
+    ai.state = r.state;
+    const tools = (r.tools || []).map((t) => `${t.name}(${JSON.stringify(t.arguments)})${t.error ? " ERROR: " + t.error : ""}`).join("; ");
+    const img = (r.renders && r.renders.length) ? `<a href="/edit/render/${r.renders[0]}" target="_blank"><img src="/edit/render/${r.renders[0]}"></a>` : "";
+    if (r.applied) {
+      entry.className = "entry ok";
+      entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✓ applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}: ${esc(tools)}<div class="meta">Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks only" : ""))} · ${r.seconds}s</div>${img}`;
+      await aiReloadModel();
+    } else {
+      entry.className = "entry bad";
+      entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✗ not applied, the model is unchanged: ${esc(r.reason)}<div class="meta">${esc(tools)} · ${r.seconds}s</div>${img}`;
+    }
+    status.textContent = "";
+  } catch (e) {
+    entry.className = "entry bad";
+    entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✗ ${esc(e.message || e)}`;
+    status.textContent = "";
+  } finally { ai.busy = false; aiRefreshLabel(); }
+}
+async function aiUndo() {
+  if (ai.busy) return;
+  try {
+    const r = await (await fetch("/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+    if (!r.ok) throw new Error(r.detail || "undo failed");
+    ai.state = r.state;
+    aiLog(`↶ undo: back to v${r.version}`);
+    await aiReloadModel();
+  } catch (e) { aiLog(`✗ ${esc(e.message || e)}`, "bad"); }
+  aiRefreshLabel();
+}
+document.getElementById("ai-send").onclick = aiSend;
+document.getElementById("ai-input").addEventListener("keydown", (e) => { if (e.key === "Enter") aiSend(); });
+document.getElementById("ai-undo").onclick = aiUndo;
+document.getElementById("ai-download").onclick = () => { window.location.href = "/edit/current.stl"; };
+window.__aiState = () => ai.state;
+window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return aiSend(); };
+(async () => {
+  try {
+    const r = await fetch("/edit/state");
+    if (!r.ok) return;
+    const st = await r.json();
+    if (!st.enabled) return;
+    ai.state = st;
+    document.getElementById("aiedit-panel").style.display = "block";
+    if (st.scale_note) aiLog(`<span class="meta">Scale: ${esc(st.scale_note)}. Sizes below are the model's own units (mm), not a measurement unless calibrated.</span>`);
+    aiRefreshLabel();
+    if (st.current > 0) { await new Promise((res) => setTimeout(res, 600)); await aiReloadModel(); aiLog(`Opened the current edited version v${st.current}`); }
+  } catch (e) { /* the plain viewer server has no /edit: the panel stays hidden */ }
+})();
 
 // --- Render loop -----------------------------------------------------------
 window.addEventListener("resize", () => {

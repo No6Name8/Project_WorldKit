@@ -144,3 +144,7 @@ def test_open_dir_autoload_vendor_and_traversal(viewer_dir: Path, tmp_path: Path
     empty = tmp_path / "empty"
     empty.mkdir()
     assert "neither" in webserver.create_app(viewer_dir, open_dir=empty).test_client().get("/api/autoload").get_json()["error"]
+
+
+def test_plain_viewer_server_reports_ai_edit_disabled(client):
+    assert client.get("/edit/state").get_json() == {"enabled": False}
