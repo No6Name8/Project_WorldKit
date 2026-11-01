@@ -28,13 +28,14 @@ Context: Meta Global AI Developer Hackathon 2026 (build Oct 27 – Nov 4; submis
 - `pipeline/worldkit/` Python pipeline: `object.py` (CLI), `scene.py` (multi-object), `detect`/`segment` (Muse Spark, SAM 3.1), `reconstruct.py` (hosted TRELLIS/Hunyuan), `modal_app/sam3d.py` (SAM 3D on Modal A100), `texture_project`, `cyl_texture`, `pattern_model`, `fidelity`, `understand`, `mesh_qc`, `qc` (reconstruction quality), `scale_cal`, `printprep`, `appearance`, `editcmd`, `webserver`.
 - `viewer/` three.js viewer (`index.html`, `physics.js` Rapier, `server.py`), `viewer/tests/*.js` Playwright tests. `viewer/assets/demo/` and `viewer/vendor/` are tracked on purpose (offline demo, no CDN). `docs/`: `TECHNICAL_NOTES.md` (measurements/diagnosis), `DEMO_RUNBOOK.md`, `SUBMISSION.md`, comparison images.
 - Python 3.10: `pipeline\.venv\Scripts\python.exe`. Tests: `python -m pytest pipeline/tests` (about 3.5 min). Browser tests: `cd viewer\tests; npm install; npm run test:all` with the viewer server running (`python viewer\server.py`); they use the bundled demo assets, so they run from a fresh clone. `python viewer\server.py --open RUN_DIR` loads a pipeline output.
+- AI Edit: `python -m worldkit.edit RUN_DIR "instruction"` / `--undo [N]` / `--list`; `python -m worldkit.serve RUN_DIR` (FastAPI viewer + `/edit`, `/undo`, `/edit/current.stl`). Edit units are mm (the pipeline STL is cm; v0 converts). Muse Wonder tool calling: Chat Completions `tools`, `tool_choice` only `auto`, echo the assistant `tool_calls` message and answer each with a `role=tool` message; it spends many reasoning tokens (use `max_tokens` ~16000).
 - CLI: `python -m worldkit.object VIDEO --out pipeline\runs\NAME --object mug [--mesh-backend modal|trellis|hosted|import] [--fidelity auto] [--ref-diameter-cm D | --height-cm H]`. Scene: `python -m worldkit.scene VIDEO --out DIR --objects mug "round side table"`.
 - Modal: workspace `no6name8`; SAM 3D needs `modal run "modal_app/sam3d.py::check_env"` (CPU preflight) to pass first; GPU is A100-40GB, `max_containers=1`, 30 min timeout, about $2.10/h, a full object run costs cents. Meta Model API is OpenAI-SDK compatible at `https://api.meta.ai/v1`.
 - Real test footage: `pipeline/samples/WhatsApp Video 2026-10-26 at 9.32.38 PM.mp4` (mug + coin on a round table, 480x856, 16 s).
 
-## State of the system (2026-10-28)
+## State of the system (2026-11-01)
 
-Working and verified on the mug video: video -> frames -> Muse Spark -> SAM 3.1 -> SAM 3D (default backend; TRELLIS is the no-GPU fallback) -> finalize/print prep -> viewer (orbit, gizmos, Muse Spark edits, collision probe, export) ; two-object scene (mug on table); Rapier rigid-body physics; coin-based scale estimate; opt-in `--fidelity auto` stripe-pattern model with a held-out check. 162 Python tests and 5 browser suites pass (129 browser checks).
+Working and verified on the mug video: video -> frames -> Muse Spark -> SAM 3.1 -> SAM 3D (default backend; TRELLIS is the no-GPU fallback) -> finalize/print prep -> viewer (orbit, gizmos, Muse Spark edits, collision probe, export) ; two-object scene (mug on table); Rapier rigid-body physics; coin-based scale estimate; opt-in `--fidelity auto` stripe-pattern model with a held-out check; **AI Edit** (`worldkit.edit` / `worldkit.serve`): Muse Wonder `muse-wonder-1.0` calls geometry tools (`edit_tools.py`: scale_to, emboss_text, drill_hole, flatten_base, split, thicken, mirror) on the print mesh, Muse Spark verifies before/after renders (plus deterministic checks), one retry, versions + undo in `edits/versions.json`, chat panel and Undo/Download STL in the viewer. Python tests and 6 browser suites pass (143 browser checks).
 
 Measured facts worth knowing (details in `docs/TECHNICAL_NOTES.md` and `pipeline/runs/fidelity_round1/`):
 - SAM 3D mug geometry is good (watertight, loop handle, level circular rim: planarity 0.9% of radius, 0.26 deg vs base); TRELLIS is lumpier with an uneven rim. All geometry is generated, not measured.
@@ -48,6 +49,10 @@ Pitfalls learned the hard way:
 - Correlating periodic patterns aliases onto the neighbouring stripe unless shifts are bounded; fit body radius from the outer wall only (inner wall biases it).
 - Verify visually: bugs found only by looking include invisible simulation clones, a tumbled mug that "penetrated" the ground, and rendered-from-below textures.
 - Modal image: needs `CONDA_PREFIX`, libGL, setuptools 80.9.0, nvdiffrast precompiled for sm_80, and the mip-splatting `diff_gaussian_rasterization`; the CPU `check_env` and A100 `gpu_smoke` entry points test these.
+
+- **AI Edit gotchas:** engraved text viewed straight on is invisible in a plainly shaded render (pocket floor and base face the same way): the verifier renderer uses relief shading and a straight-on view, and per-face mean depth fakes geometry on big skinny triangles under oblique views. `printprep` adds a flat plate wider than the object, so measure the body footprint above it (`edit_tools.body_footprint`), not at z=0. Merging vertices of an already-watertight manifold output pinches it non-manifold. trimesh voxelising is far too slow (188 s); use manifold3d Minkowski sums.
+- **Dev environment:** stale `viewer/server.py` processes keep serving old code on port 5050 (killing the netstat PID is not enough on Windows; kill by command line). Node's `fetch` refuses ports 5060/5061.
+- **Known upstream bug:** `model_print.stl` is written in cm but slicers read STL as mm; AI Edit versions are true mm, the pipeline STL is not.
 
 ## Where to push next (ideas, not orders)
 
