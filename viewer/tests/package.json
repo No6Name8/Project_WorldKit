@@ -10,7 +10,8 @@
     "test:demo": "node demo_readiness_test.js",
     "test:ai-edit": "node ai_edit_browser_test.js",
     "test:map": "node map_scene_browser_test.js",
-    "test:all": "npm run test:viewer && npm run test:integration && npm run test:sam3d && npm run test:scene-physics && npm run test:demo && npm run test:ai-edit && npm run test:map"
+    "test:parts": "node parts_browser_test.js",
+    "test:all": "npm run test:viewer && npm run test:integration && npm run test:sam3d && npm run test:scene-physics && npm run test:demo && npm run test:ai-edit && npm run test:map && npm run test:parts"
   },
   "dependencies": { "playwright": "1.64.1" }
 }

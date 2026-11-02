@@ -40,6 +40,21 @@ async function waitUp(port, url = "/api/health") { for (let i = 0; i < 80; i++) 
       await ready(); await sleep(900);
       await page.screenshot({ path: path.join(OUT, `1_object_${tag}.png`) });
 
+      // 1b. "show what SAM found" on the real mug (needs RUN_DIR/parts/parts.json from python -m worldkit.parts)
+      if (objRun && fs.existsSync(path.join(objRun, "parts", "parts.json"))) {
+        await page.waitForFunction(() => window.__partsUi && window.__partsUi().enabled, { timeout: 10000 });
+        await page.click("#btn-parts");
+        const box = await page.locator("canvas").boundingBox();  // orbit so the handle faces the camera
+        for (const dx of [250, 400]) {
+          await page.mouse.move(box.x + 36, box.y + 256); await page.mouse.down();
+          await page.mouse.move(box.x + 36 + dx * Math.min(1, box.width / 840), box.y + 256, { steps: 12 }); await page.mouse.up();
+        }
+        await sleep(500);
+        await page.screenshot({ path: path.join(OUT, `5_parts_overlay_${tag}.png`) });
+        await page.click("#btn-parts");
+        await page.click("#btn-reset");
+      }
+
       // 2. scene view (real desk scene through worldkit.serve when available, else the demo scene)
       if (sceneRun) await page.goto("http://127.0.0.1:5093/", { waitUntil: "domcontentloaded" }); else await page.click("#btn-demo-scene");
       await ready(); await sleep(1200);

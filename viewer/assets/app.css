@@ -192,3 +192,16 @@ td.e-na { color: var(--text-muted); }
   #vp-legend { bottom: var(--space-2); }
 }
 @media (max-width: 900px) { #viewport { position: absolute; inset: 0 0 46vh 0; } #dock.collapsed ~ #viewport { bottom: 36px; } }
+
+/* ---------- parts overlay ---------- */
+#btn-parts[aria-pressed="true"] { background: var(--bg-selected); border-color: var(--accent); }
+#part-list { margin-top: var(--space-2); }
+.part-row { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-3); align-items: center; padding: var(--space-2) 0; border-top: var(--border-w) solid var(--border-subtle); font-size: var(--fs-sm); }
+.part-row .pn { font-weight: var(--fw-medium); }
+.part-row .pc { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: var(--fs-xs); }
+.part-row .pbar { grid-column: 1 / -1; display: flex; gap: 2px; }
+.part-row .pbar i { flex: 1; height: 6px; border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-1); }
+.part-row .pbar i.on { background: var(--accent); border-color: var(--accent); }
+.part-row .pnote { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--text-muted); }
+#vp-part-legend { position: absolute; right: var(--space-2); bottom: var(--space-2); display: none; z-index: 5; max-width: 60%; font-size: var(--fs-xs); font-family: var(--font-mono); color: var(--text-secondary); background: var(--bg-surface); border: var(--border-w) solid var(--border-default); border-radius: var(--radius-2); padding: var(--space-1) var(--space-2); }
+#vp-part-legend i { display: inline-block; width: 10px; height: 10px; background: var(--accent); opacity: 0.6; border-radius: var(--radius-1); margin-right: var(--space-2); vertical-align: -1px; }

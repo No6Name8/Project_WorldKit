@@ -99,6 +99,15 @@
         </div>
       </details>
 
+      <details class="sec" open id="sec-parts">
+        <summary>Parts</summary>
+        <div class="sec-b">
+          <div class="row"><button id="btn-parts" type="button" aria-pressed="false" disabled>Show what SAM found</button></div>
+          <div id="part-list"></div>
+          <div id="parts-empty" class="hint">No part data for this model. Run python -m worldkit.parts RUN_DIR, then open the run again.</div>
+        </div>
+      </details>
+
       <details class="sec" open>
         <summary>AI Edit</summary>
         <div class="sec-b">
@@ -185,6 +194,7 @@
     <div id="wk-labels"></div>
     <div id="vp-tools"></div>
     <div id="vp-legend"><i></i><span id="vp-legend-text"></span></div>
+    <div id="vp-part-legend" role="status"><i></i><span id="vp-part-legend-text"></span></div>
     <div id="loading" role="status"><div class="bar"></div><span id="loading-text">Loading</span></div>
     <div id="verify-panel">
       <div class="head"><b>Verification against the real frames</b><span id="verify-sum"></span><button id="btn-verify-close">Close</button></div>
@@ -1210,7 +1220,7 @@ async function startup() {
   try {
     const cfg = await (await fetch("/api/autoload")).json();
     if (cfg.kind === "scene") { await loadSceneFromUrl(cfg.base); logEntry(`Opened run ${cfg.name}`); return; }
-    if (cfg.kind === "object") { window.__runStl = cfg.stl || null; await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); return; }
+    if (cfg.kind === "object") { window.__runStl = cfg.stl || null; await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); loadParts(); return; }
     if (cfg.error) logEntry(cfg.error, true);
   } catch (e) { logEntry(`Could not open the requested run: ${e}`, true); }
   loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
@@ -1255,6 +1265,8 @@ async function aiReloadModel() {
   const buf = await r.arrayBuffer();
   if (ai.obj) await replaceObjectGeometry(ai.obj, buf);
   else await loadGLBFromArrayBuffer(buf, `edit v${ai.state.current}`);
+  if (partsState.on) { partsState.on = false; document.getElementById("btn-parts").setAttribute("aria-pressed", "false"); }
+  clearPartOverlay(); // the overlay marks the ORIGINAL mesh
 }
 async function aiSend() {
   const input = document.getElementById("ai-input");
@@ -1272,15 +1284,18 @@ async function aiSend() {
     const tools = (r.tools || []).map((t) => `${t.name}(${JSON.stringify(t.arguments)})${t.error ? " ERROR: " + t.error : ""}`).join("; ");
     const imgUrl = (r.renders && r.renders.length) ? `/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}` : "";
     const img = imgUrl ? `<img class="thumb" src="${imgUrl}" alt="before and after render">` : "";
+    const sentences = (r.tools || []).map((t) => t.sentence).filter(Boolean);
     const toolNames = (r.tools || []).map((t) => `${esc(t.name)}${t.error ? " ERROR" : ""}`).join(", ") || "no tool";
-    const row = (vtag, verdict, meta) => `<div><span class="vtag">${vtag}</span>${esc(text)}</div><div class="mono">${toolNames}</div><div>${verdict}</div><div class="meta">${meta}</div>${img}`;
+    // a part edit reads as a sentence ("Thickened handle by 2 mm (SAM found 7 of 8 views)"), never as tool-call arguments
+    const what = sentences.length ? `<div>${sentences.map(esc).join(" ")}</div>` : `<div class="mono">${toolNames}</div>`;
+    const row = (vtag, verdict, meta) => `<div><span class="vtag">${vtag}</span>${esc(text)}</div>${what}<div>${verdict}</div><div class="meta">${meta}</div>${img}`;
     if (r.applied) {
       entry.className = "entry ok";
-      entry.innerHTML = row(`v${r.version}`, `applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}`, `Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks" : "verified"))} | ${esc(tools)} | ${r.seconds}s`);
+      entry.innerHTML = row(`v${r.version}`, `applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}`, [`Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks" : "verified"))}`, sentences.length ? "" : esc(tools), `${r.seconds}s`].filter(Boolean).join(" | "));
       await aiReloadModel();
     } else {
       entry.className = "entry bad";
-      entry.innerHTML = row(`no change`, `not applied, the model is unchanged: ${esc(r.reason)}`, `${esc(tools)} | ${r.seconds}s`);
+      entry.innerHTML = row(`no change`, `not applied, the model is unchanged: ${esc(r.reason)}`, [sentences.length ? "" : esc(tools), `${r.seconds}s`].filter(Boolean).join(" | "));
     }
     if (imgUrl) { entry.dataset.expandable = "1"; entry.tabIndex = 0; entry.title = "Click for the before/after render"; }
     status.textContent = "";
@@ -1402,7 +1417,7 @@ function setOutline(entry) {
   clearOutline();
   if (sceneObjects.length < 2) return;
   entry.group.traverse((m) => {
-    if (!m.isMesh || m.userData.__outline) return;
+    if (!m.isMesh || m.userData.__outline || m.userData.__partOverlay) return;
     const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), new THREE.LineBasicMaterial({ color: css("--vp-select"), depthTest: true, transparent: true, opacity: 0.95 }));
     lines.userData.__outline = true;
     lines.raycast = () => {};
@@ -1641,6 +1656,102 @@ window.__accuracyOpen = openAccuracy;
   const dock = document.getElementById("dock"), tg = document.getElementById("sheet-toggle");
   tg.onclick = () => { const c = dock.classList.toggle("collapsed"); tg.setAttribute("aria-expanded", String(!c)); tg.textContent = c ? "Panels (show)" : "Panels (hide)"; };
 }
+
+
+// --- Parts: "show what SAM found" overlay (accent-coloured faces of the selected part, drawn over the model) ---------------------------
+const partsState = { data: null, on: false, overlays: [] };
+function clearPartOverlay() {
+  for (const o of partsState.overlays) { o.parent && o.parent.remove(o); o.geometry.dispose(); o.material.dispose(); }
+  partsState.overlays = [];
+  document.getElementById("vp-part-legend").style.display = "none";
+}
+function partKeys(part) {
+  const bin = atob(part.glb_keys_b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  const a = new Int32Array(u8.buffer);
+  const keys = new Set();
+  for (let i = 0; i + 2 < a.length; i += 3) keys.add(a[i] + "," + a[i + 1] + "," + a[i + 2]);
+  return keys;
+}
+function buildPartOverlay() {
+  clearPartOverlay();
+  if (!partsState.on || !partsState.data) return 0;
+  let faces = 0;
+  for (const part of partsState.data.parts) {
+    const keys = partKeys(part);
+    modelGroup.traverse((m) => {
+      if (!m.isMesh || m.userData.__partOverlay || m.userData.__outline || !m.geometry.attributes.position) return;
+      const pos = m.geometry.attributes.position, idx = m.geometry.index;
+      const inSet = new Uint8Array(pos.count);
+      for (let i = 0; i < pos.count; i++) inSet[i] = keys.has(Math.round(pos.getX(i) * 1e4) + "," + Math.round(pos.getY(i) * 1e4) + "," + Math.round(pos.getZ(i) * 1e4)) ? 1 : 0;
+      const tri = idx ? idx.count / 3 : pos.count / 3;
+      const out = [];
+      for (let f = 0; f < tri; f++) {
+        const a = idx ? idx.getX(f * 3) : f * 3, b = idx ? idx.getX(f * 3 + 1) : f * 3 + 1, c = idx ? idx.getX(f * 3 + 2) : f * 3 + 2;
+        if (inSet[a] && inSet[b] && inSet[c]) out.push(pos.getX(a), pos.getY(a), pos.getZ(a), pos.getX(b), pos.getY(b), pos.getZ(b), pos.getX(c), pos.getY(c), pos.getZ(c));
+      }
+      if (!out.length) return;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+      const mat = new THREE.MeshBasicMaterial({ color: css("--accent"), transparent: true, opacity: 0.6, depthTest: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.FrontSide });
+      const ov = new THREE.Mesh(g, mat);
+      ov.userData.__partOverlay = true;
+      ov.raycast = () => {};
+      m.add(ov);
+      partsState.overlays.push(ov);
+      faces += out.length / 9;
+    });
+  }
+  const p0 = partsState.data.parts[0];
+  document.getElementById("vp-part-legend-text").textContent = `SAM part: ${p0.name}, found in ${p0.views_found} of ${p0.views_total} views. Edges are approximate.`;
+  document.getElementById("vp-part-legend").style.display = faces ? "block" : "none";
+  return faces;
+}
+function renderPartList() {
+  const box = document.getElementById("part-list");
+  box.textContent = "";
+  const parts = (partsState.data && partsState.data.parts) || [];
+  document.getElementById("parts-empty").style.display = parts.length ? "none" : "block";
+  document.getElementById("btn-parts").disabled = !parts.length;
+  for (const p of parts) {
+    const row = document.createElement("div");
+    row.className = "part-row";
+    const nm = document.createElement("span");
+    nm.className = "pn";
+    nm.textContent = p.name;
+    const ct = document.createElement("span");
+    ct.className = "pc";
+    ct.textContent = `${p.views_found} of ${p.views_total} views`;
+    const bar = document.createElement("span");
+    bar.className = "pbar";
+    bar.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < p.views_total; i++) { const b = document.createElement("i"); if (i < p.views_found) b.className = "on"; bar.appendChild(b); }
+    const note = document.createElement("span");
+    note.className = "pnote";
+    note.textContent = `${p.vertex_count} vertices${p.stl_points_b64 ? ", usable by AI Edit" : ", overlay only (no print-mesh selection)"}`;
+    row.append(nm, ct, bar, note);
+    box.appendChild(row);
+  }
+}
+async function loadParts() {
+  partsState.data = null; partsState.on = false;
+  clearPartOverlay();
+  document.getElementById("btn-parts").setAttribute("aria-pressed", "false");
+  try {
+    const r = await fetch("/open/parts/parts.json");
+    if (r.ok) partsState.data = await r.json();
+  } catch (e) { /* no parts file: the section shows its empty state */ }
+  renderPartList();
+}
+document.getElementById("btn-parts").onclick = () => {
+  partsState.on = !partsState.on;
+  document.getElementById("btn-parts").setAttribute("aria-pressed", String(partsState.on));
+  const n = buildPartOverlay();
+  if (partsState.on && !n) { partsState.on = false; document.getElementById("btn-parts").setAttribute("aria-pressed", "false"); document.getElementById("parts-empty").textContent = "The part could not be matched to the displayed mesh (it was edited or replaced)."; document.getElementById("parts-empty").style.display = "block"; }
+};
+window.__partsUi = () => ({ overlayFaces: partsState.overlays.reduce((n, o) => n + o.geometry.attributes.position.count / 3, 0), on: partsState.on, rows: document.querySelectorAll("#part-list .part-row").length,
+  legend: document.getElementById("vp-part-legend").style.display, legendText: document.getElementById("vp-part-legend-text").textContent, enabled: !document.getElementById("btn-parts").disabled });
 
 // --- Render loop -----------------------------------------------------------
 function onResize() {
