@@ -22,7 +22,7 @@ image = (
 
 
 @app.function(image=image, gpu="A100-40GB", timeout=1200)
-def run_vggt(frames: list[bytes]) -> dict:
+def run_vggt(frames: list[bytes], mode: str = "crop") -> dict:
     import os
     import tempfile
 
@@ -44,7 +44,7 @@ def run_vggt(frames: list[bytes]) -> dict:
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
     model = VGGT.from_pretrained("facebook/VGGT-1B").to(device)
     t_load = time.time() - t0
-    images = load_and_preprocess_images(paths).to(device)
+    images = load_and_preprocess_images(paths, mode=mode).to(device)
     with torch.no_grad(), torch.cuda.amp.autocast(dtype=dtype):
         agg, ps_idx = model.aggregator(images[None])
         pose_enc = model.camera_head(agg)[-1]
