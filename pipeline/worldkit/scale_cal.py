@@ -256,15 +256,25 @@ class GroundedScale:
     up_axis: int = 1
 
     def to_dict(self) -> dict:
-        return {"method": "coin ellipse fixes the camera elevation; height aspect and taper fitted to the silhouettes at that elevation; lateral scale from the coin",
+        return {"method": "the scale reference (coin ellipse or card corners) fixes the camera elevation; height aspect and taper fitted to the silhouettes at that elevation; lateral scale from the reference",
                 "aspect_k": self.aspect_k, "taper_t": self.taper_t, "applied": self.applied, "cm_per_mesh_unit": self.cm_per_unit, "height_cm": self.height_cm,
                 "height_range_cm": list(self.height_range_cm), "mean_iou_by_k": self.mean_iou_by_k, "mean_iou_by_taper": self.mean_iou_by_taper,
                 "mean_iou_generated": self.mean_iou_generated, "mean_iou_final": self.mean_iou_final, "frames": self.frames,
                 "reference_diameter_cm": self.reference_diameter_cm}
 
 
-def calibrate_grounded(frames, vertices, faces, diameter_cm: float, *, up_axis: int = 1) -> GroundedScale:
-    """``frames``: (name, object_mask, reference_mask or None). Needs >= MIN_FRAMES frames with a usable coin."""
+@dataclass
+class _RefObs:
+    elevation_deg: float
+    px_per_cm: float
+
+
+def calibrate_grounded(frames, vertices, faces, diameter_cm: float, *, up_axis: int = 1, observe=None, min_frames: int = MIN_FRAMES,
+                       reference_name: str = "coin") -> GroundedScale:
+    """``frames``: (name, object_mask, reference_mask or None). Needs >= ``min_frames`` frames with a usable reference.
+
+    ``observe(mask) -> (px_per_cm, elevation_deg)`` reads the reference; the default is a coin of diameter ``diameter_cm`` (ellipse fit).
+    A card passes ``refscale.card_observation`` here (``diameter_cm`` is then its long side, used only in the report)."""
     ref_box = shape_reference(vertices, up_axis)
     h0 = ref_box[1] - ref_box[0]
     obs = []
@@ -272,16 +282,21 @@ def calibrate_grounded(frames, vertices, faces, diameter_cm: float, *, up_axis: 
         if ref_mask is None or not ref_mask.any():
             continue
         try:
-            ref = fit_disk(ref_mask)
-        except ScaleCalibrationError:
+            if observe is None:
+                d = fit_disk(ref_mask)
+                ref = _RefObs(d.elevation_deg, d.major_px / diameter_cm)
+            else:
+                ppc, el = observe(ref_mask)
+                ref = _RefObs(float(el), float(ppc))
+        except (ScaleCalibrationError, ValueError):
             continue
         obs.append((name, obj_mask, ref))
-    if len(obs) < MIN_FRAMES:
-        raise ScaleCalibrationError(f"only {len(obs)} frame(s) with a usable coin for the grounded calibration (need {MIN_FRAMES})")
+    if len(obs) < min_frames:
+        raise ScaleCalibrationError(f"only {len(obs)} frame(s) with a usable {reference_name} for the grounded calibration (need {min_frames})")
 
     def score(k: float, t: float):
         vk = reshape_vertices(vertices, k, t, ref_box, up_axis)
-        res = [(fit_pose_fixed_elevation(vk, faces, m, r.elevation_deg), r.major_px / diameter_cm) for _, m, r in obs]
+        res = [(fit_pose_fixed_elevation(vk, faces, m, r.elevation_deg), r.px_per_cm) for _, m, r in obs]
         return float(np.mean([i for (i, _), _ppc in res])), float(np.mean([p.scale / ppc for (_, p), ppc in res]))
 
     ks, ts = np.array(ASPECT_GRID), np.array(TAPER_GRID)
@@ -311,5 +326,5 @@ def calibrate_grounded(frames, vertices, faces, diameter_cm: float, *, up_axis: 
                          mean_iou_by_k={f"{k:.2f}": round(float(v), 4) for k, v in zip(ks, iou_k)},
                          mean_iou_by_taper={f"{t:+.2f}": round(float(v), 4) for t, v in zip(ts, iou_t)},
                          mean_iou_generated=i_gen, mean_iou_final=i_fin, applied=bool(k_ok or t_ok),
-                         frames=[{"frame": n, "coin_elevation_deg": r.elevation_deg, "px_per_cm": r.major_px / diameter_cm} for n, _, r in obs],
+                         frames=[{"frame": n, f"{reference_name}_elevation_deg": r.elevation_deg, "px_per_cm": r.px_per_cm} for n, _, r in obs],
                          reference_diameter_cm=diameter_cm, up_axis=up_axis)

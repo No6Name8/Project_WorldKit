@@ -27,11 +27,12 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import cv2
 import numpy as np
 import trimesh
 from PIL import Image, ImageDraw
 
-from . import appearance, coindetect, frames as frames_mod, printprep, reconstruct, refscale, scale_cal, segment
+from . import appearance, carddetect, coindetect, frames as frames_mod, printprep, reconstruct, refscale, scale_cal, segment
 from . import scene as sc
 from . import texture_project as tp
 from .meta_api import MetaAPIUnavailable, ask_muse_spark_with_usage
@@ -99,6 +100,8 @@ def cached_mask(cache: Path | None, path, concept: str, segment_fn=segment.segme
         r = segment_fn(path, concept)
         if not getattr(r, "used_fallback", False):
             m = segment.full_frame_mask(path, r)
+    except segment.SegmentationBudgetError:
+        return None  # the call cap, not the image: do not cache a "not found"
     except segment.SegmentationError:
         m = None
     if f is not None:
@@ -115,7 +118,7 @@ def build_tracks(frame_list, names: list, segment_fn=segment.segment_concept, ca
         for fr in frame_list:
             m = None
             words = name.split()
-            tails = [" ".join(words[-2:]), words[-1]] if len(words) > 1 else []  # "black glasses case" -> "glasses case" -> "case"
+            tails = [" ".join(words[-2:]), words[-1]] if len(words) > 1 and not ex.get("no_tails") else []  # "black glasses case" -> "glasses case" -> "case"
             for concept in dict.fromkeys([name] + list(ex.get("aliases", [])) + tails):
                 m = cached_mask(cache, fr.path, concept, segment_fn, fresh)
                 if m is not None:
@@ -552,13 +555,22 @@ def verify_loop(items, cams, masks, size_of, rgbs, frames, vdir: Path, tag: str,
 
 
 def run(args) -> dict:
+    rep: dict = {"mode": "map", "warnings": [], "timings_sec": {}, "spark_calls": 0,
+                 "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used"}
+    try:
+        return _run(args, rep)
+    except MapError as exc:  # keep what the run learned (tracks, builds, skips) next to the error
+        Path(args.out).mkdir(parents=True, exist_ok=True)
+        (Path(args.out) / "partial_report.json").write_text(json.dumps({**rep, "error": str(exc)}, indent=1, default=str), encoding="utf-8")
+        raise
+
+
+def _run(args, rep: dict) -> dict:
     from . import object as obj_cli
 
     t_all = time.time()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    rep: dict = {"mode": "map", "warnings": [], "timings_sec": {}, "spark_calls": 0,
-                 "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used"}
     T = rep["timings_sec"]
 
     def timed(name, fn, *a, **k):
@@ -582,13 +594,49 @@ def run(args) -> dict:
         rest = [f for f in sharp if f not in with_coin][: max(args.keep_frames - len(with_coin), 0)]
         sharp = with_coin + rest
         rep["frame_selection"] = {"frames_scanned_for_coin": "all", "frames_with_coin_detected_by_colour": len(coin_color), "kept_with_coin": len(with_coin), "kept_sharpest": len(rest)}
+    for name in getattr(args, "add_frame", None) or []:
+        # a frame the sharpness filter did not keep (e.g. a close view showing object and reference together), from out/_all_frames
+        src = out / "_all_frames" / (name if name.endswith(".png") else name + ".png")
+        if not src.is_file():
+            rep["warnings"].append(f"--add-frame {name}: not found in {out / '_all_frames'}")
+            continue
+        dst = out / "frames" / f"added_{src.stem}.png"
+        dst.write_bytes(src.read_bytes())
+        g = cv2.cvtColor(np.array(Image.open(dst).convert("RGB")), cv2.COLOR_RGB2GRAY)
+        sharp.insert(0, frames_mod.Frame(dst, -1, -1.0, float(cv2.Laplacian(g, cv2.CV_64F).var())))
+        rep.setdefault("frame_selection", {}).setdefault("added_frames", []).append(dst.stem)
+    all_sharp = list(sharp)
+    card_spec = next((sp for sp in early_specs if sp.kind == "card"), None)
+    card_found: dict = {}
+    rejected_ref = set(getattr(args, "reject_ref", None) or [])
+    if card_spec is not None:
+        # a card lying flat: SAM 3.1 first; where it finds nothing, the rectangle detector (carddetect), which can also accept other
+        # rectangles, so frames whose detection was judged wrong on the preflight contact sheet are dropped with --reject-ref
+        for f in sharp:
+            st = Path(f.path).stem
+            if st in rejected_ref:
+                continue
+            m = cached_mask(out / "cache" / "masks", f.path, card_spec.name, fresh=False)
+            how = "sam"
+            if m is None or m.sum() < 120:
+                m, how = carddetect.find_card(np.array(Image.open(f.path).convert("RGB"))), "rectangle"
+            if m is not None:
+                card_found[st] = (m, how)
+        rep["card_detection"] = {"frames": {st: how for st, (_, how) in card_found.items()}, "rejected_by_eye": sorted(rejected_ref)}
+    n_track = getattr(args, "track_frames", None)
+    if n_track:
+        # SAM call budget: track objects only in n frames, the frames showing the scale reference first
+        has_ref = [f for f in sharp if Path(f.path).stem in card_found or Path(f.path).stem in coin_color]
+        sharp = (has_ref + [f for f in sharp if f not in has_ref])[:n_track]
+        rep.setdefault("frame_selection", {})["tracked_frames"] = [Path(f.path).stem for f in sharp]
     sharp_by_stem = {Path(f.path).stem: f for f in sharp}
     sharp_map = {s: f.sharpness for s, f in sharp_by_stem.items()}
     rgb = {s: np.array(Image.open(f.path).convert("RGB")) for s, f in sharp_by_stem.items()}
     size_of = {s: (a.shape[1], a.shape[0]) for s, a in rgb.items()}
 
     # 1. discover
-    picks = [sharp[i] for i in np.linspace(0, len(sharp) - 1, min(6, len(sharp))).round().astype(int)]
+    disc = all_sharp
+    picks = [disc[i] for i in np.linspace(0, len(disc) - 1, min(6, len(disc))).round().astype(int)]
     if args.objects:
         found = {"objects": [{"name": n, "description": "given on the command line"} for n in args.objects], "surface": "desk", "usage": None}
     else:
@@ -604,6 +652,11 @@ def run(args) -> dict:
             dfile.write_text(json.dumps(found, default=str))
     excluded = []
     extra_ex = [x.lower() for x in (getattr(args, "exclude", None) or [])]
+    keep_shiny = [x.lower() for x in (getattr(args, "keep_shiny", None) or [])]
+    for o in found["objects"]:
+        if o.get("shiny") and any(refscale.name_matches(o["name"], x) for x in keep_shiny):
+            o["shiny"] = False
+            rep.setdefault("overrides", []).append(f"{o['name']}: Muse Spark flagged it shiny/transparent; built anyway (--keep-shiny)")
     keep_objs = []
     for o in found["objects"]:
         why = "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)" if o.get("shiny") else (
@@ -628,7 +681,10 @@ def run(args) -> dict:
         raise MapError("Muse Spark found no objects on the surface")
 
     # 2. track
-    tracks, track_errors = timed("track", build_tracks, sharp, names, cache=cache / "masks", fresh=fresh, extra={o["name"]: o for o in found["objects"]})
+    extra = {o["name"]: o for o in found["objects"]}
+    if getattr(args, "sam_lean", False):  # one SAM call per object per frame: no part masks, no shorter-name retries
+        extra = {n: {**o, "parts": [], "aliases": [], "no_tails": True} for n, o in extra.items()}
+    tracks, track_errors = timed("track", build_tracks, sharp, names, cache=cache / "masks", fresh=fresh, extra=extra)
     tracks, dropped = dedup_tracks(tracks)
     rep["tracks"] = {t.name: len(t.masks) for t in tracks}
     rep["skipped"] = list(dropped) + excluded
@@ -641,6 +697,10 @@ def run(args) -> dict:
     for t in tracks:
         others = [o for o in tracks if o is not t]
         stem, info = best_view(t, others, sharp_map)
+        forced = next((v.split("=", 1)[1] for v in (getattr(args, "build_view", None) or []) if refscale.name_matches(v.split("=", 1)[0], t.name)), None)
+        if forced and forced in t.masks:
+            info = {**info, "forced_by": "--build-view", "automatic_choice": stem}
+            stem = forced
         vis = t.masks[stem].copy()
         for o in others:
             if stem in o.masks:
@@ -720,10 +780,19 @@ def run(args) -> dict:
     ref_obs: dict = {}
     marker_masks: dict = {}
     scale_src, scale_note, fits_all = None, [], {}
+    card_el = None
+    if card_spec is not None and card_found:
+        card_el = refscale.card_reference_elevation([m for m, _ in card_found.values()], card_spec.size_cm, card_spec.short_cm)
+        rep["card_detection"]["reference_elevation_deg"] = card_el
     for spec in specs:
         if spec.kind in ("coin", "card"):
             for st, f in sharp_by_stem.items():
-                m = cached_mask(cache / "masks", f.path, spec.name, fresh=fresh)
+                if st in rejected_ref:
+                    continue
+                if spec.kind == "card":
+                    m = card_found.get(st, (None, None))[0]
+                else:
+                    m = cached_mask(cache / "masks", f.path, spec.name, fresh=fresh)
                 if (m is None or m.sum() < 120) and spec.kind == "coin":
                     m = coin_color.get(st)  # colour detector fallback (tiny coin)
                 if m is None or m.sum() < (30 if spec.kind == "coin" else 120):
@@ -733,7 +802,8 @@ def run(args) -> dict:
                         d = scale_cal.fit_disk(m, min_area_px=30)
                         ppc, el = d.major_px / spec.size_cm, d.elevation_deg
                     else:
-                        ppc, el = refscale.card_observation(m, spec.size_cm, spec.short_cm)
+                        ppc, el = refscale.card_observation(m, spec.size_cm, spec.short_cm, card_el)
+                        rep["card_detection"].setdefault("per_frame", {})[st] = {"px_per_cm": round(ppc, 3), "elevation_deg": round(el, 2)}
                 except (scale_cal.ScaleCalibrationError, refscale.RefError):
                     continue
                 ys, xs = np.nonzero(m)
@@ -772,22 +842,53 @@ def run(args) -> dict:
 
     # grounded reshape (coin-elevation-fixed silhouette fit of height aspect and taper) is only possible when a coin fixes the camera elevation
     rep["grounded_reshape"] = {}
-    if scale_known and scale_src.kind == "coin":
+    # perspective: a coin/card scale holds at the marker's depth only. With VGGT, each object's px/cm is corrected by z_marker / z_object
+    depth_r: dict = {}
+    if getattr(args, "vggt", False) and scale_known and scale_src.kind in ("coin", "card"):
+        try:
+            from . import vggt_cams
+
+            depth_r = vggt_cams.perspective_corrections(sharp_by_stem=sharp_by_stem, marker_masks=marker_masks, cache=cache, fresh=fresh,
+                                                        obj_masks={it.id: track_of_early[it.id].masks for it in items})
+            rep["depth_correction"] = {"method": "px/cm at the object = px/cm at the scale reference x z_reference / z_object; elevation at the object = elevation "
+                                                 "read off the reference + (VGGT elevation of the object - VGGT elevation of the reference); VGGT medians over the masks",
+                                       "per_object": {k: {st: {"depth_ratio": round(v[0], 4), "elevation_delta_deg": round(v[1], 2)} for st, v in d.items()} for k, d in depth_r.items()}}
+            if depth_r:
+                rep["scale_source"]["text"] += ", perspective-corrected per object with VGGT depth"
+        except Exception as exc:  # noqa: BLE001
+            rep["warnings"].append(f"VGGT depth correction unavailable, weak-perspective scale used as is: {type(exc).__name__}: {str(exc)[:160]}")
+    if scale_known and scale_src.kind in ("coin", "card"):
         from . import object as obj_cli_reshape
+
+        gmin = int(getattr(args, "grounded_min_frames", None) or scale_cal.MIN_FRAMES)
+
+        def observe_for(oid):
+            by_mask = {id(marker_masks[st]): depth_r.get(oid, {}).get(st, (1.0, 0.0)) for st in marker_masks}
+
+            def observe(m_):
+                if scale_src.kind == "card":
+                    ppc, el = refscale.card_observation(m_, scale_src.size_cm, scale_src.short_cm, card_el)
+                else:
+                    d = scale_cal.fit_disk(m_)
+                    ppc, el = d.major_px / scale_src.size_cm, d.elevation_deg
+                r, de = by_mask.get(id(m_), (1.0, 0.0))
+                return ppc * r, el + de
+            return observe
 
         t1 = time.time()
         for it in items:
             tk = track_of_early[it.id].masks
             cand = sorted((st for st in marker_masks if st in tk), key=lambda st: -int(tk[st].sum()))[:4]
-            if len(cand) < scale_cal.MIN_FRAMES:
-                rep["grounded_reshape"][it.id] = {"applied": False, "reason": f"only {len(cand)} frame(s) show both the object and the coin"}
+            if len(cand) < gmin:
+                rep["grounded_reshape"][it.id] = {"applied": False, "reason": f"only {len(cand)} frame(s) show both the object and the {scale_src.kind} (need {gmin})"}
                 continue
             try:
-                g = scale_cal.calibrate_grounded([(st, tk[st], marker_masks[st]) for st in cand], it.verts, it.faces, scale_src.size_cm)
+                g = scale_cal.calibrate_grounded([(st, tk[st], marker_masks[st]) for st in cand], it.verts, it.faces, scale_src.size_cm, observe=observe_for(it.id),
+                                                 min_frames=gmin, reference_name=scale_src.kind)
             except scale_cal.ScaleCalibrationError as exc:
                 rep["grounded_reshape"][it.id] = {"applied": False, "reason": str(exc)}
                 continue
-            rep["grounded_reshape"][it.id] = g.to_dict()
+            rep["grounded_reshape"][it.id] = {**g.to_dict(), "reference": scale_src.kind, "min_frames": gmin, "frames_used": len(cand)}
             if g.applied:
                 gp = next(m_["odir"] for m_ in meta if m_["id"] == it.id) / "model.glb"
                 obj_cli_reshape._reshape_glb(gp, g.aspect_k, g.taper_t)
@@ -825,7 +926,7 @@ def run(args) -> dict:
         raise MapError("no object could be placed in the reference frame")
     for it in items:
         fit = fits_ref[it.id]
-        s = float(fit.pose.scale / cam_ref.scale)  # cm per mesh unit
+        s = float(fit.pose.scale / (cam_ref.scale * depth_r.get(it.id, {}).get(ref, (1.0, 0.0))[0]))  # cm per mesh unit (depth-corrected with VGGT)
         yaw = float(fit.pose.az_deg)  # the reference camera has azimuth 0
         bc = sc.base_center(it.verts)
         px = fit.pose.project(bc[None, :])[0][0]
@@ -879,25 +980,27 @@ def run(args) -> dict:
     vdir = out / "verify"
     masks = {it.id: {s: track_of[it.id].masks[s] for s in verify_frames if s in track_of[it.id].masks} for it in items}
     init_t = {it.id: dict(it.transform) for it in items}
-    weak = verify_loop(items, cams, masks, size_of, rgb, verify_frames, vdir, "weak", rep, getattr(args, "no_spark_verify", False))
+    prefer_vggt = bool(getattr(args, "prefer_vggt", False) and getattr(args, "vggt", False))
+    weak = verify_loop(items, cams, masks, size_of, rgb, verify_frames, vdir, "weak", rep, getattr(args, "no_spark_verify", False) or prefer_vggt)
     rep["spark_calls"] += weak["spark_calls"]
     weak_final_t = {it.id: dict(it.transform) for it in items}
     for it in items:
         it.transform = dict(init_t[it.id])
     vggt_res = None
-    if getattr(args, "vggt", False) and scale_known and scale_src.kind == "coin":
+    if getattr(args, "vggt", False) and scale_known and scale_src.kind in ("coin", "card"):
         try:
             from . import vggt_cams
 
             vggt_res = vggt_cams.verify_with_vggt(items=items, sharp_by_stem=sharp_by_stem, track_of=track_of, ref=ref, verify_frames=verify_frames, marker_masks=marker_masks,
-                                                  coin_cm=scale_src.size_cm, cache=cache, fresh=fresh, out=out, verify_fn=verify_loop, rep=rep, no_spark=getattr(args, "no_spark_verify", False))
+                                                  coin_cm=scale_src.size_cm, cache=cache, fresh=fresh, out=out, verify_fn=verify_loop, rep=rep, no_spark=getattr(args, "no_spark_verify", False),
+                                                  card_cm=(scale_src.size_cm, scale_src.short_cm) if scale_src.kind == "card" else None)
             rep["spark_calls"] += vggt_res.get("spark_calls", 0)
         except Exception as exc:  # noqa: BLE001
             rep["warnings"].append(f"VGGT verification failed: {type(exc).__name__}: {str(exc)[:200]}")
             vggt_res = {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
     # the scene keeps the corrections of the camera method with the higher mean IoU afterwards (each method starts from the same placement)
     use = "weak"
-    if vggt_res and "mean_iou_after" in vggt_res and vggt_res["mean_iou_after"] > weak["mean_iou_after"]:
+    if vggt_res and "mean_iou_after" in vggt_res and (prefer_vggt or vggt_res["mean_iou_after"] > weak["mean_iou_after"]):
         use = "vggt"
         for it in items:
             it.transform = dict(vggt_res["after_transforms"][it.id])

@@ -42,8 +42,10 @@ class RefSpec:
         return RELIABILITY[self.kind]
 
     def describe(self, method: str | None = None) -> str:
+        if self.kind == "card":
+            return f"scale source: card ({self.size_cm * 10:g} x {self.short_cm * 10:g} mm), {method or 'corner fit, weak perspective'}"
         what = {"coin": "diameter", "card": "long side", "object": "height"}[self.kind]
-        m = method or {"coin": "disk ellipse major axis (weak perspective)", "card": "rectangle long side (approximate)",
+        m = method or {"coin": "disk ellipse major axis (weak perspective)", "card": "corner fit, weak perspective",
                        "object": "reconstructed mesh height set to the supplied value"}[self.kind]
         return f"scale source: {self.name}, {self.size_cm * 10:g} mm {what}, {m}"
 
@@ -66,7 +68,7 @@ def parse_ref(text: str) -> RefSpec:
         if key in COINS:
             return RefSpec("coin", "coin", COINS[key], preset=key)
         if key in CARDS:
-            return RefSpec("card", "credit card", CARDS[key][0], CARDS[key][1], preset=key)
+            return RefSpec("card", "bank card", CARDS[key][0], CARDS[key][1], preset=key)
         raise RefError(f"--ref needs name=size (e.g. \"striped mug=70mm\") or a preset ({sorted(COINS)}, {sorted(CARDS)}), got {text!r}")
     name, size = text.rsplit("=", 1)
     name = name.strip()
@@ -105,10 +107,95 @@ class FrameRef:
     anchor_px: tuple
 
 
-def card_observation(mask: np.ndarray, long_cm: float, short_cm: float) -> tuple[float, float]:
-    """(px_per_cm, elevation_deg) from a card mask: long side = ``long_cm``; short/long image ratio gives sin(elevation) (see module note)."""
+def card_reference_elevation(masks, long_cm: float, short_cm: float) -> float | None:
+    """Median elevation of the card frames whose outline is NOT ambiguous (same video, same hand height): used to resolve the others."""
+    els = []
+    for m in masks:
+        q = card_quad(m)
+        if q is None:
+            continue
+        try:
+            _, el, amb = card_from_quad(q, long_cm, short_cm)
+        except RefError:
+            continue
+        if not amb:
+            els.append(el)
+    return float(np.median(els)) if els else None
+
+
+def card_quad(mask: np.ndarray) -> np.ndarray | None:
+    """The card mask's four corners (4x2, image px) or None when the outline is not a clean quadrilateral."""
     import cv2
 
+    cnts, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not cnts:
+        return None
+    c = cv2.convexHull(max(cnts, key=cv2.contourArea))
+    peri = cv2.arcLength(c, True)
+    for eps in (0.02, 0.03, 0.04, 0.06):
+        q = cv2.approxPolyDP(c, eps * peri, True)
+        if len(q) == 4:
+            return q.reshape(4, 2).astype(float)
+    return None
+
+
+CARD_AMBIGUOUS_RATIO = 3.0  # the second branch fits within this factor of the best: the outline alone cannot tell which side is long
+CARD_AXIS_TERM = 0.28
+
+
+def card_branches(quad: np.ndarray, long_cm: float, short_cm: float) -> list[tuple[float, float, float]]:
+    """The physically possible readings (px_per_cm, elevation_deg, residual, |sin a cos a|) of a flat card under weak perspective with no camera roll, best first.
+
+    A card edge of length L at azimuth a projects to (k L cos a, k L sin a sin el); the perpendicular edge of length S to
+    (-k S sin a, k S cos a sin el). The horizontal parts are not foreshortened, so k = hypot(ux/L, vx/S) and k sin el = hypot(uy/L, vy/S)
+    whatever the card's rotation. Which image edge pair is the long side is tested with uy*vy = -ux*vx*sin^2(el) (sign-safe). When the
+    card's edges are close to the image axes both assignments satisfy it: a wide card seen from above looks like a card pointing away seen
+    from low down. ``card_observation`` resolves that with the elevation of the other card frames."""
+    q = np.asarray(quad, float)
+    e0 = ((q[1] - q[0]) + (q[2] - q[3])) / 2.0  # one pair of opposite edges, averaged
+    e1 = ((q[3] - q[0]) + (q[2] - q[1])) / 2.0  # the other pair
+    out = []
+    for u, v in ((e0, e1), (e1, e0)):
+        ux, uy, vx, vy = u[0] / long_cm, u[1] / long_cm, v[0] / short_cm, v[1] / short_cm
+        k = float(np.hypot(ux, vx))
+        if k <= 0:
+            continue
+        raw = float(np.hypot(uy, vy)) / k
+        if raw > 1.05:  # would need the card to be seen from beyond straight above: impossible
+            continue
+        sin_el = min(raw, 1.0)
+        res = abs(uy * vy + ux * vx * sin_el ** 2) / k ** 2
+        out.append((k, float(np.degrees(np.arcsin(sin_el))), float(res), abs(ux * vx) / k ** 2))
+    if not out:
+        raise RefError("degenerate card outline")
+    return sorted(out, key=lambda b: b[2])
+
+
+def card_from_quad(quad: np.ndarray, long_cm: float, short_cm: float, prefer_el: float | None = None) -> tuple[float, float, bool]:
+    """(px_per_cm, elevation_deg, ambiguous). Ambiguous outlines take the branch nearest ``prefer_el`` (else the higher elevation)."""
+    br = card_branches(quad, long_cm, short_cm)
+    # |sin a cos a| below CARD_AXIS_TERM = edges within ~17 deg of the image axes, where perspective noise decides the residual test
+    amb = len(br) == 2 and (br[1][2] < CARD_AMBIGUOUS_RATIO * max(br[0][2], 1e-3) or br[0][3] < CARD_AXIS_TERM)
+    pick = br[0]
+    if amb:
+        # nearest to the other card frames' elevation; with none, the higher one (a phone over a desk looks down; it is also the old
+        # "long image side = long card side" reading)
+        pick = min(br, key=lambda b: abs(b[1] - prefer_el)) if prefer_el is not None else max(br, key=lambda b: b[1])
+    return pick[0], pick[1], bool(amb)
+
+
+def card_observation(mask: np.ndarray, long_cm: float, short_cm: float, prefer_el: float | None = None) -> tuple[float, float]:
+    """(px_per_cm, elevation_deg) from a card mask: corner fit (``card_from_quad``; ``prefer_el`` resolves an ambiguous outline) when the
+    outline is a clean quadrilateral, otherwise the
+    older approximation (long image side = ``long_cm``, short/long ratio = sin(elevation)), which is wrong when the card's long side points
+    away from the camera."""
+    import cv2
+
+    q = card_quad(mask)
+    if q is not None:
+        ppc, el, _ = card_from_quad(q, long_cm, short_cm, prefer_el)
+        if ppc * long_cm >= 12:
+            return ppc, el
     cnts, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not cnts:
         raise RefError("empty card mask")

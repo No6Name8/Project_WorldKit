@@ -100,7 +100,80 @@ def ransac_plane(X: np.ndarray, tol: float, iters: int = 800, seed: int = 0):
     return n2, cen, float(inl.mean())
 
 
-def verify_with_vggt(*, items, sharp_by_stem, track_of, ref, verify_frames, marker_masks, coin_cm, cache, fresh, out, verify_fn, rep, no_spark=False) -> dict:
+def perspective_corrections(*, sharp_by_stem, marker_masks, obj_masks, cache, fresh) -> dict:
+    """{object id: {frame: (z_marker / z_object, elevation_object - elevation_marker in degrees)}} from VGGT (medians over each mask).
+
+    A weak-perspective reading of a coin or card holds at the marker only. An object farther from the camera looks smaller by the depth
+    ratio (px/cm at the object = px/cm at the marker x ratio) and is seen at a shallower angle to the table: the elevation difference is
+    measured between the camera rays to the two masks' 3D points and the table plane fitted around the marker. Same VGGT run (and cache)
+    as ``verify_with_vggt``."""
+    stems = sorted(sharp_by_stem)
+    g = run_vggt([sharp_by_stem[s].path for s in stems], cache / "vggt" / "vggt", fresh)
+    D = g["depth"].astype(np.float32)
+    if D.ndim == 4:
+        D = D[..., 0]
+    P = g["world_points"].astype(np.float32)
+    Rm, tv = g["extrinsic"][:, :, :3], g["extrinsic"][:, :, 3]
+    centers = -np.einsum("nji,nj->ni", Rm, tv)
+    idx = {s: i for i, s in enumerate(stems)}
+    planes = {}
+
+    def elev(i, m, st):
+        mv = mask_to_vggt(m)
+        if st not in planes:
+            ys, xs = np.nonzero(mask_to_vggt(marker_masks[st]))
+            v, u = int(ys.mean()), int(xs.mean())
+            win = P[i][max(v - 60, 0):v + 60, max(u - 60, 0):u + 60].reshape(-1, 3)
+            planes[st] = ransac_plane(win[np.isfinite(win).all(1)], tol=0.005)[0]
+        p = np.median(P[i][mv], axis=0)
+        d = p - centers[i]
+        return float(np.degrees(np.arcsin(abs(d @ planes[st]) / np.linalg.norm(d))))
+
+    def zmed(i, m):
+        mv = mask_to_vggt(m)
+        v = D[i][mv]
+        return float(np.median(v)) if v.size else None
+
+    out = {}
+    for oid, ms in obj_masks.items():
+        for st, m in ms.items():
+            if st not in marker_masks or st not in idx:
+                continue
+            i = idx[st]
+            zm, zo = zmed(i, marker_masks[st]), zmed(i, m)
+            if zm and zo and zm > 0 and zo > 0:
+                out.setdefault(oid, {})[st] = (zm / zo, elev(i, m, st) - elev(i, marker_masks[st], st))
+    return out
+
+
+def card_scale_3d(P_i: np.ndarray, mask: np.ndarray, size_wh, card_cm) -> tuple[float, float] | None:
+    """(cm per VGGT unit, 3D long/short ratio) from the card's four corners looked up in VGGT's world-point map (no weak perspective).
+    The ratio should be close to 85.6/54 = 1.585 if the mask really is the card."""
+    from . import refscale
+
+    q = refscale.card_quad(mask)
+    if q is None:
+        return None
+    qv, _ = to_vggt_px(q, size_wh)
+    X = []
+    for u, v in qv:
+        u, v = int(round(u)), int(round(v))
+        if not (2 <= u < VGGT_SIZE - 2 and 2 <= v < VGGT_SIZE - 2):
+            return None
+        X.append(np.median(P_i[v - 1:v + 2, u - 1:u + 2].reshape(-1, 3), axis=0))
+    X = np.array(X)
+    e = [np.linalg.norm(X[(i + 1) % 4] - X[i]) for i in range(4)]
+    p0, p1 = (e[0] + e[2]) / 2, (e[1] + e[3]) / 2
+    lo, sh = max(p0, p1), min(p0, p1)
+    if sh <= 0:
+        return None
+    L, S = card_cm
+    return float((L / lo + S / sh) / 2), float(lo / sh)
+
+
+def verify_with_vggt(*, items, sharp_by_stem, track_of, ref, verify_frames, marker_masks, coin_cm, cache, fresh, out, verify_fn, rep, no_spark=False,
+                     card_cm=None) -> dict:
+    """``card_cm=(long, short)``: the marker is a card, scaled from its corners' 3D points; otherwise a coin of diameter ``coin_cm``."""
     stems = sorted(sharp_by_stem)
     paths = [sharp_by_stem[s].path for s in stems]
     g = run_vggt(paths, cache / "vggt" / "vggt", fresh)
@@ -111,7 +184,7 @@ def verify_with_vggt(*, items, sharp_by_stem, track_of, ref, verify_frames, mark
     sizes = {s: Image.open(sharp_by_stem[s].path).size for s in stems}  # (w, h)
 
     # scale, origin and plane from the coin frames
-    cm_per_unit, origins, plane_pts = [], [], []
+    cm_per_unit, origins, plane_pts, card_ratios = [], [], [], []
     for s, m in marker_masks.items():
         if s not in idx:
             continue
@@ -125,21 +198,28 @@ def verify_with_vggt(*, items, sharp_by_stem, track_of, ref, verify_frames, mark
             continue
         d = float(np.median(depth[i][v - 1:v + 2, u - 1:u + 2]))
         pt = np.median(P[i][v - 1:v + 2, u - 1:u + 2].reshape(-1, 3), axis=0)
-        # coin ellipse major axis in VGGT pixels (area-equivalent, as scale_cal.fit_disk)
-        from . import scale_cal
+        if card_cm is not None:
+            cs = card_scale_3d(P[i], m, sizes[s], card_cm)
+            if cs is None:
+                continue
+            cm_per_unit.append(cs[0])
+            card_ratios.append(cs[1])
+        else:
+            # coin ellipse major axis in VGGT pixels (area-equivalent, as scale_cal.fit_disk)
+            from . import scale_cal
 
-        try:
-            major = scale_cal.fit_disk(m, min_area_px=30).major_px * sc
-        except scale_cal.ScaleCalibrationError:
-            continue
-        # the camera-space depth of the coin = depth map value (VGGT depth is z along the optical axis)
-        d_units = major * d / float(K[i][0, 0])
-        cm_per_unit.append(coin_cm / d_units)
+            try:
+                major = scale_cal.fit_disk(m, min_area_px=30).major_px * sc
+            except scale_cal.ScaleCalibrationError:
+                continue
+            # the camera-space depth of the coin = depth map value (VGGT depth is z along the optical axis)
+            d_units = major * d / float(K[i][0, 0])
+            cm_per_unit.append(coin_cm / d_units)
         origins.append(pt)
         win = P[i][max(v - 70, 0):v + 70, max(u - 70, 0):u + 70].reshape(-1, 3)
         plane_pts.append(win[np.isfinite(win).all(1)])
     if len(cm_per_unit) < 2:
-        raise RuntimeError(f"only {len(cm_per_unit)} coin frame(s) usable for the VGGT scale")
+        raise RuntimeError(f"only {len(cm_per_unit)} {'card' if card_cm else 'coin'} frame(s) usable for the VGGT scale")
     c = float(np.median(cm_per_unit))
     o = np.median(np.array(origins), axis=0)
     cloud = np.vstack(plane_pts)
@@ -174,5 +254,7 @@ def verify_with_vggt(*, items, sharp_by_stem, track_of, ref, verify_frames, mark
     res["alignment"] = {"cm_per_vggt_unit": c, "scale_spread_rel": float(np.std(cm_per_unit) / c), "coin_frames_used": len(cm_per_unit),
                         "coin_centre_spread_cm": float(np.linalg.norm((np.array(origins) - o) * c, axis=1).max()), "table_plane_inlier_fraction": inl,
                         "table_plane_points": int(len(cloud)), "camera_height_above_table_cm_ref_frame": float((centers[ri] - o) @ Yax * c),
-                        "vggt_run": g["_meta"], "scale_source": f"coin {coin_cm * 10:g} mm diameter (ellipse major axis, VGGT depth and focal length)"}
+                        "vggt_run": g["_meta"], "scale_source": (f"card {card_cm[0] * 10:g} x {card_cm[1] * 10:g} mm (corner 3D points from VGGT)" if card_cm else
+                                                                 f"coin {coin_cm * 10:g} mm diameter (ellipse major axis, VGGT depth and focal length)"),
+                        "per_frame_cm_per_unit": [round(x, 5) for x in cm_per_unit], "card_3d_long_short_ratio": [round(x, 3) for x in card_ratios] or None}
     return res

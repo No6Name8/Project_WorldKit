@@ -307,6 +307,10 @@ def _fallback_mask(image_path: Path) -> SegmentationMaskResult:
     )
 
 
+class SegmentationBudgetError(SegmentationError):
+    """The run's SAM 3.1 call cap is reached (worldkit.budget); not a finding about the image, so never cache it as 'not found'."""
+
+
 def segment_concept(
     image_path: Path, concept: str, client: AsyncOpenAI | None = None, use_cache: bool = True
 ) -> SegmentationMaskResult:
@@ -328,6 +332,12 @@ def segment_concept(
     if not has_api_key():
         return _fallback_mask(image_path)
 
+    from . import budget
+
+    try:
+        budget.take("sam", f"{concept} @ {Path(image_path).name}")
+    except budget.BudgetExceeded as exc:
+        raise SegmentationBudgetError(str(exc)) from exc
     own_client = client is None
     client = client or _get_async_client()
     try:

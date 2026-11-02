@@ -116,11 +116,17 @@ def main(argv=None) -> int:
     ap.add_argument("--scenes", nargs="*", default=[], help="scene folders (scene.json from worldkit.scene)")
     ap.add_argument("--truth", type=Path, default=GT_PATH)
     ap.add_argument("--out", type=Path, default=OUT_MD)
+    ap.add_argument("--alias", action="append", default=[], help='model name = ground-truth name, e.g. "striped cup=mug" (the discovery step names objects freely)')
     a = ap.parse_args(argv)
     runs = DEFAULT_RUNS if a.runs is None else {kv.split("=", 1)[0]: Path(kv.split("=", 1)[1]) for kv in a.runs}
     truth = json.loads(a.truth.read_text(encoding="utf-8"))
     model = load_model_objects({k: v for k, v in runs.items() if (v / "model_print.stl").is_file()}, [Path(s) for s in a.scenes])
 
+    for al in a.alias:
+        src, dst = (norm(x) for x in al.split("=", 1))
+        if src in model and dst not in model:
+            model[dst] = {**model[src], "alias_of": model[src]["name"]}
+            del model[src]
     rows, unmatched_model, unmatched_truth, references, unscored = [], set(model), [], [], []
     for name, gt in truth["objects"].items():
         mo = model.get(norm(name)) or next((v for k, v in model.items() if set(norm(name).split()) <= set(k.split())), None)  # 'mug' matches 'striped mug'
@@ -137,7 +143,7 @@ def main(argv=None) -> int:
             continue
         for k, real in dims.items():
             got = mo["dims"].get(k)
-            rows.append((name, k, real, got, None if got is None else 100.0 * (got - real) / real, mo["method"]))
+            rows.append((name + (f" (named '{mo['alias_of']}' by discovery)" if mo.get("alias_of") else ""), k, real, got, None if got is None else 100.0 * (got - real) / real, mo["method"]))
     coin = truth.get("coin", {})
     lines = ["# Real vs model accuracy", "",
              f"Ground truth: `{a.truth.relative_to(ROOT)}` (ruler measurements; evaluation only, never used to scale or tune). Model sizes: print STLs in mm, base plate excluded.", "",

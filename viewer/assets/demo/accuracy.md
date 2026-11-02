@@ -14,6 +14,37 @@ Mean absolute error 2.5% over 3 dimensions; worst 3.7%.
 
 Coin: no ruler measurement recorded in ground_truth.json; the preset diameter is a looked-up value.
 
+## Desk video, card scale, scene mode (`runs/desk_card`, 2026-11-02)
+
+Video `pipeline/samples/desk_scene_card.mp4`; scale source: card (85.6 x 54 mm), corner fit in 3 frames, perspective-corrected per object with VGGT
+(depth ratio and viewing elevation); mug built from one SAM 3D view (frame sharp_09). Ground truth: `pipeline\samples\ground_truth.json`
+(ruler; evaluation only). Model sizes: print STLs in mm, base plate excluded. Discovery named the mug "striped cup" (matched with `--alias "striped cup=mug"`).
+
+| object | dimension | real mm | model mm | error % | model scale from |
+|---|---|---:|---:|---:|---|
+| mug (named 'striped cup' by discovery) | height | 70 | 81.8 | +16.9 | card (85.6 x 54 mm), corner fit, weak perspective, perspective-corrected per object with VGGT depth |
+| mug (named 'striped cup' by discovery) | rim_diameter | 85 | 77.5 | -8.8 | card (85.6 x 54 mm), corner fit, weak perspective, perspective-corrected per object with VGGT depth |
+| mug (named 'striped cup' by discovery) | base_diameter | 65 | 57.0 | -12.3 | card (85.6 x 54 mm), corner fit, weak perspective, perspective-corrected per object with VGGT depth |
+
+Mean absolute error 12.7% over 3 dimensions; worst 16.9% (height). Height and base diameter are more than 10% off.
+
+Same run before the corrections (for the record, not chosen by ground truth): card scale as read at the card, no perspective correction:
+height -10.4%, rim -25.2%, base -28.1% (mean 21.2%); with the VGGT depth ratio only: +10.9 / -7.4 / -10.9% (mean 9.7%); with depth ratio and
+elevation (kept, the physically complete correction): +16.9 / -8.8 / -12.3% (mean 12.7%).
+
+Most likely cause of the remaining error: the mug is about 65 px wide in the only frames that also show the card (it sits ~20% farther from the
+camera than the card), so its silhouettes barely constrain its proportions (mean IoU over the height-aspect grid 0.878-0.895, nearly flat) and
+the generated shape decides the height-to-width ratio (the model is about as tall as it is wide; the real mug is 70 tall, 85 wide). The only
+frames with a large mug and the card together (frames 43-47 of the 2 fps extraction) were not among the 12 kept, and the SAM call cap was spent.
+
+**Card scene vs coin-only Object mode (mug):**
+
+| dimension | real mm | coin, Object mode (`mug_grounded`) | card, scene mode (`desk_card`) |
+|---|---:|---:|---:|
+| height | 70 | 71.3 (+1.9%) | 81.8 (+16.9%) |
+| rim_diameter | 85 | 88.1 (+3.7%) | 77.5 (-8.8%) |
+| base_diameter | 65 | 63.8 (-1.9%) | 57.0 (-12.3%) |
+
 ## Desk video, coin scale (Map mode, `runs/desk_coin`)
 
 Ground truth: `pipeline\samples\ground_truth.json` (ruler measurements; evaluation only, never used to scale or tune). Model sizes: print STLs in mm, base plate excluded.

@@ -116,6 +116,12 @@ def ask_muse_spark_with_usage(
     callers may fall back to a local heuristic in that case. Any other
     failure raises plain MetaAPIError and should stop the run.
     """
+    from . import budget
+
+    try:
+        budget.take("spark", prompt)
+    except budget.BudgetExceeded as exc:
+        raise MetaAPIUnavailable(str(exc)) from exc
     client = client or get_client()
     content: list[dict] = [{"type": "text", "text": prompt}]
     for img in images:

@@ -78,3 +78,29 @@ def test_mask_cache_reuses_the_result_and_fresh_recomputes(tmp_path):
         assert calls == ["mug", "mug"]
     finally:
         seg.full_frame_mask = old
+
+
+def _card_quad(az_deg, el_deg, k=10.0, L=8.56, S=5.4):
+    a, e = np.radians(az_deg), np.radians(el_deg)
+    P = lambda x, z: np.array([k * (x * np.cos(a) - z * np.sin(a)), k * np.sin(e) * (x * np.sin(a) + z * np.cos(a))]) + 200  # noqa: E731
+    return np.array([P(-L / 2, -S / 2), P(L / 2, -S / 2), P(L / 2, S / 2), P(-L / 2, S / 2)])
+
+
+@pytest.mark.parametrize("az", [0, 20, 60, 90, 130, 170])
+def test_card_corner_fit_any_rotation(az):
+    ppc, el, _ = rs.card_from_quad(_card_quad(az, 35.0), 8.56, 5.4, prefer_el=33.0)
+    assert ppc == pytest.approx(10.0, rel=1e-6) and el == pytest.approx(35.0, abs=1e-4)
+
+
+def test_card_axis_aligned_is_ambiguous_and_resolved_by_other_frames():
+    # a wide card seen from 35 deg has a second reading (long side pointing away, seen from low down): the other frames' elevation decides
+    q = _card_quad(0.0, 35.0)
+    ppc, el, amb = rs.card_from_quad(q, 8.56, 5.4, prefer_el=33.0)
+    assert amb and el == pytest.approx(35.0, abs=1e-4) and ppc == pytest.approx(10.0, rel=1e-6)
+    assert rs.card_from_quad(q, 8.56, 5.4, prefer_el=12.0)[1] < 20.0
+
+
+def test_card_pointing_away_has_one_physical_reading():
+    # the other reading of a card pointing straight away would need the camera beyond vertical, so it is rejected
+    ppc, el, amb = rs.card_from_quad(_card_quad(90.0, 28.0), 8.56, 5.4)
+    assert not amb and el == pytest.approx(28.0, abs=1e-4) and ppc == pytest.approx(10.0, rel=1e-6)
