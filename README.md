@@ -18,6 +18,49 @@ pipeline\.venv\Scripts\python.exe viewer\server.py
 
 Open <http://127.0.0.1:5050/> and click **Demo: mug + table** (or **Demo: mug**). The bundled demo assets are real pipeline output; three.js and the physics engine are vendored, so this works offline. Select the mug or the table (click or list), move/rotate/scale each with the gizmo, **Check overlaps**, type the mug's real height in **Set real height** to calibrate, press **Simulate** to drop the mug on the table (Rapier physics), **Reset sim**, then **Export scene**. Natural-language editing ("move it 10 cm to the left") needs a Meta API key in `pipeline/.env`; everything else does not.
 
+## Web app (phone upload) and laptop worker
+
+**The web app never runs the pipeline.** It signs you in, uploads a phone video, shows each project's status live and opens finished results in the viewer. All the heavy work (SAM 3D on Modal, Meta API calls) runs on **your laptop**, in a worker you start yourself. Nothing is processed in the cloud.
+
+What runs today:
+
+- **Web app** (`web/`, Vite, no framework): home, sign in / sign up, new project (Object or Map, record or pick a video, upload with a progress bar), projects list with live status (Supabase Realtime, 8 s polling as fallback), delete, and the viewer for finished projects (private files opened through signed URLs). It is an installable PWA (app shell cached only; never videos). Works at 390 px and 1440 px.
+- **Supabase** (`supabase/migrations/`): a `projects` table with Row Level Security (you only ever see your own rows), private `videos` and `results` buckets whose first folder must be your user id, Realtime on `projects`.
+- **Laptop worker** (`python -m worldkit.worker`): signs in as you (publishable key, Row Level Security applies, no service key), takes the oldest `uploaded` project, downloads the video, runs `worldkit.object` or `worldkit.scene` with the coin `saudi-25-halalas`, uploads the STL, GLB and report, and sets `done` or `failed` with a plain sentence. `--dry-run` publishes a bundled run instead of running the pipeline, for testing without GPU or API cost.
+- **Demo viewer** without an account: `/viewer/index.html?demo=1` (hosted) or the viewer server below.
+
+```mermaid
+flowchart LR
+  Phone["Phone (PWA)"] -- "upload video, read status" --> SB["Supabase: Auth, projects, Storage"]
+  SB -- "Realtime status" --> Phone
+  Worker["Laptop worker<br/>python -m worldkit.worker"] -- "poll, download video, upload STL/GLB/report" --> SB
+  Worker --> Pipeline["worldkit.object / worldkit.scene"]
+  Pipeline --> Modal["Modal GPU: SAM 3D"]
+  Pipeline --> Meta["Meta APIs: Muse Spark, SAM 3.1"]
+  Phone -- "open result (signed URLs)" --> Viewer["three.js viewer"]
+  SB -- "result files" --> Viewer
+```
+
+Run it:
+
+```powershell
+# 1. database: push the repo (supabase/migrations) or paste supabase\RUN_THIS_IN_SQL_EDITOR.sql into the Supabase SQL editor
+# 2. web app
+cd web
+copy .env.example .env.local        # fill VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (the publishable key, never the secret key)
+npm install
+npm run dev                         # http://localhost:5173
+# 3. worker (a second terminal): the account you sign in with on the phone
+#    put WORKER_EMAIL and WORKER_PASSWORD in pipeline\.env (gitignored), then:
+cd ..\pipeline
+.venv\Scripts\python.exe -m worldkit.worker --dry-run     # test chain, no GPU, no API
+.venv\Scripts\python.exe -m worldkit.worker               # real runs (needs Modal and the Meta key, as above)
+```
+
+Deployment steps are in `docs/DEPLOY.md`. Limits: the free Supabase plan refuses single files over 50 MB (the app says so before uploading; film about 20 seconds); the hosted viewer has no edit server, so AI Edit needs `python -m worldkit.serve` on the laptop.
+
+Planned (not built): uploads over 50 MB (resumable), processing without a laptop, push notification when a project finishes, AI Edit from the hosted viewer, sharing a project with another account, a worker that subscribes instead of polling.
+
 ## Run it on your own video
 
 ```powershell
@@ -37,9 +80,12 @@ pipeline\.venv\Scripts\python.exe viewer\server.py --open pipeline\runs\my_mug
 ## AI Edit: type an instruction, the model changes (verified, undoable)
 
 ```powershell
-pipeline\.venv\Scripts\python.exe -m worldkit.edit pipelineuns\my_mug "make it exactly 12 cm tall"
-pipeline\.venv\Scripts\python.exe -m worldkit.edit pipelineuns\my_mug --undo          # or --undo N, or --list
-pipeline\.venv\Scripts\python.exe -m worldkit.serve pipelineuns\my_mug               # viewer with the AI Edit chat panel, Undo and Download STL
+pipeline\.venv\Scripts\python.exe -m worldkit.edit pipeline
+uns\my_mug "make it exactly 12 cm tall"
+pipeline\.venv\Scripts\python.exe -m worldkit.edit pipeline
+uns\my_mug --undo          # or --undo N, or --list
+pipeline\.venv\Scripts\python.exe -m worldkit.serve pipeline
+uns\my_mug               # viewer with the AI Edit chat panel, Undo and Download STL
 ```
 
 Muse Wonder (`muse-wonder-1.0`, Meta Model API function calling) is shown the instruction and the model's measured facts and calls precise geometry tools on the print mesh (`worldkit/edit_tools.py`, trimesh + manifold3d): scale, emboss/engrave text, drill holes, flatten the base, split, thicken walls, mirror. Every result must pass deterministic checks (watertight, requested height, volume moved the right way) **and** Muse Spark judging before/after renders; a failure is fed back to Wonder for one retry, then the edit is rejected and the model is left untouched. Each applied edit is a version (`edits/v1.stl`, ...) with instruction, tool calls, verdict, token usage and timing in `edits/versions.json`; undo can go to any version and deletes nothing. STL versions are in millimetres, and the sizes are the model's own units: unless you supplied a measured height they are as uncalibrated as the rest of the scene.

@@ -1,0 +1,20 @@
+{
+  "name": "worldkit-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "WorldKit web app shell: sign in, upload a phone video, see saved projects, open results in the viewer. The pipeline itself runs on the laptop worker, never here.",
+  "scripts": {
+    "prepare-viewer": "node scripts/copy-viewer.mjs",
+    "dev": "npm run prepare-viewer && vite",
+    "build": "npm run prepare-viewer && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "node --test tests/lib.test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

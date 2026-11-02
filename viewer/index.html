@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#0f1215" />
 <title>WorldKit</title>
-<link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
-<link rel="stylesheet" href="/assets/tokens.css" />
-<link rel="stylesheet" href="/assets/app.css" />
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="assets/tokens.css" />
+<link rel="stylesheet" href="assets/app.css" />
 </head>
 <body>
 <header id="topbar">
@@ -21,6 +21,7 @@
   </div>
   <div class="spacer"></div>
   <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
+  <button id="btn-back" type="button" style="display:none">Projects</button>
   <button id="btn-accuracy" type="button">Accuracy</button>
 </header>
 
@@ -203,8 +204,8 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "/vendor/three/build/three.module.js",
-    "three/addons/": "/vendor/three/examples/jsm/"
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
   }
 }
 </script>
@@ -304,6 +305,28 @@ function applyGizmoVisibility() {
 const _attach = gizmo.attach.bind(gizmo);
 gizmo.attach = (o) => { const r = _attach(o); applyGizmoVisibility(); return r; };
 gizmo.attach(modelGroup);
+
+// --- Hosted project files: the web app passes signed URLs for a project's private files (postMessage); fetches and downloads are resolved here ---
+const PROJECT_BASE = "wk-project://files/";
+let projectFiles = null;
+const relOf = (u) => String(u).slice(PROJECT_BASE.length).split("?")[0];
+function resUrl(u) { return projectFiles && String(u).startsWith(PROJECT_BASE) ? ((projectFiles.files[relOf(u)]) || "") : u; }
+function go(u) {
+  const s = String(u);
+  if (projectFiles && s.startsWith(PROJECT_BASE)) { const r = relOf(s); window.location.href = projectFiles.downloads[r] || projectFiles.files[r] || ""; }
+  else window.location.href = s;
+}
+{
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const u = typeof input === "string" ? input : (input && input.url) || "";
+    if (u.startsWith(PROJECT_BASE)) {
+      const target = projectFiles && projectFiles.files[relOf(u)];
+      return target ? realFetch(target) : Promise.resolve(new Response("not found", { status: 404 }));
+    }
+    return realFetch(input, init);
+  };
+}
 
 // --- Loading ---------------------------------------------------------------
 const loader = new GLTFLoader();
@@ -575,7 +598,7 @@ fetch("/api/health")
   })
   .catch(() => {
     statusDot.className = "bad";
-    statusText.textContent = "Backend unreachable. The gizmo still works, AI edits do not.";
+    statusText.textContent = location.protocol === "file:" || !/^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? "Static viewer: no edit server" : "Backend unreachable. The gizmo still works, AI edits do not.";
   });
 
 function sendInstruction() {
@@ -1224,11 +1247,11 @@ async function loadSceneFromUrlInner(baseUrl) {
   return loadSceneFromFiles(files);
 }
 async function loadDemoMug() {
-  window.__runStl = "/assets/demo/run_mug/model_print.stl";
-  await loadObjectFromUrls("/assets/demo/run_mug/model.glb", "/assets/demo/run_mug/report.json", "model.glb");
-  await loadParts("/assets/demo/run_mug/parts/parts.json");
+  window.__runStl = "assets/demo/run_mug/model_print.stl";
+  await loadObjectFromUrls("assets/demo/run_mug/model.glb", "assets/demo/run_mug/report.json", "model.glb");
+  await loadParts("assets/demo/run_mug/parts/parts.json");
 }
-async function loadDemoDesk() { await loadSceneFromUrl("/assets/demo/run_desk/"); }
+async function loadDemoDesk() { await loadSceneFromUrl("assets/demo/run_desk/"); }
 document.getElementById("btn-demo-run").onclick = async () => {
   try {
     if (document.getElementById("mode-map").getAttribute("aria-pressed") === "true" || sceneObjects.length > 1) await loadDemoDesk();
@@ -1236,18 +1259,44 @@ document.getElementById("btn-demo-run").onclick = async () => {
   } catch (e) { logEntry(`FAILED: demo run: ${e}`, true); }
 };
 window.__loadDemoRun = (kind) => (kind === "map" ? loadDemoDesk() : loadDemoMug());
-document.getElementById("btn-demo-mug").onclick = () => loadObjectFromUrls("/assets/demo/mug/model.glb", "/assets/demo/mug/report.json", "model.glb").catch((e) => logEntry(`Demo failed: ${e}`, true));
-document.getElementById("btn-demo-scene").onclick = () => loadSceneFromUrl("/assets/demo/scene/").catch((e) => logEntry(`Demo failed: ${e}`, true));
+document.getElementById("btn-demo-mug").onclick = () => loadObjectFromUrls("assets/demo/mug/model.glb", "assets/demo/mug/report.json", "model.glb").catch((e) => logEntry(`Demo failed: ${e}`, true));
+document.getElementById("btn-demo-scene").onclick = () => loadSceneFromUrl("assets/demo/scene/").catch((e) => logEntry(`Demo failed: ${e}`, true));
 window.__loadObjectFromUrls = loadObjectFromUrls;
 window.__loadSceneFromUrl = loadSceneFromUrl;
 
+const urlParams = new URLSearchParams(location.search);
+const IS_EMBED = urlParams.has("embed");
+async function openProject(msg) {
+  projectFiles = { files: msg.files || {}, downloads: msg.downloads || {} };
+  const has = (r) => !!projectFiles.files[r];
+  try {
+    if (msg.project.mode === "map") {
+      window.__sceneBase = null;
+      await loadSceneFromUrl(PROJECT_BASE);
+    } else {
+      window.__runStl = has("model_print.stl") ? PROJECT_BASE + "model_print.stl" : null;
+      await loadObjectFromUrls(PROJECT_BASE + "model.glb", has("report.json") ? PROJECT_BASE + "report.json" : null, "model.glb");
+      if (has("parts/parts.json")) await loadParts(PROJECT_BASE + "parts/parts.json");
+    }
+    if (sceneObjects.length === 1 && msg.project.name) { sceneObjects[0].name = msg.project.name; refreshObjectList(); refreshSelection(); }
+    logEntry(`Opened project ${msg.project.name}`);
+  } catch (e) { logEntry(`FAILED: could not open the project: ${e}`, true); }
+}
 async function startup() {
+  if (IS_EMBED) {  // inside the web app: wait for the project's signed file URLs
+    document.body.classList.add("embed");
+    statusText.textContent = "Saved project";
+    window.addEventListener("message", (e) => { if (e.origin === location.origin && e.data && e.data.type === "wk-project") openProject(e.data); });
+    (window.parent !== window ? window.parent : window).postMessage({ type: "wk-ready" }, location.origin);
+    return;
+  }
+  if (urlParams.has("demo")) { await loadDemoMug(); return; }
   try {
     const cfg = await (await fetch("/api/autoload")).json();
     if (cfg.kind === "scene") { await loadSceneFromUrl(cfg.base); logEntry(`Opened run ${cfg.name}`); return; }
     if (cfg.kind === "object") { window.__runStl = cfg.stl || null; await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); loadParts(); return; }
     if (cfg.error) logEntry(cfg.error, true);
-  } catch (e) { logEntry(`Could not open the requested run: ${e}`, true); }
+  } catch (e) { /* no local server (static hosting): fall through to the bundled sample */ }
   loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
 }
 startup();
@@ -1353,7 +1402,7 @@ async function aiUndo(to) {
 document.getElementById("ai-send").onclick = aiSend;
 document.getElementById("ai-input").addEventListener("keydown", (e) => { if (e.key === "Enter") aiSend(); });
 document.getElementById("ai-undo").onclick = () => aiUndo();
-document.getElementById("ai-download").onclick = () => { window.location.href = "/edit/current.stl?x=1" + aiQ(); };
+document.getElementById("ai-download").onclick = () => go("/edit/current.stl?x=1" + aiQ());
 window.__aiState = () => ai.state;
 window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return aiSend(); };
 (async () => {
@@ -1497,7 +1546,7 @@ function afterSelect(o) {
     const pbs = document.getElementById("btn-print-obj");
     const url = () => window.__runStl || (ai.state ? "/edit/current.stl?x=1" : null);
     pbs.disabled = !url();
-    pbs.onclick = () => { const u = url(); if (u) window.location.href = u; };
+    pbs.onclick = () => { const u = url(); if (u) go(u); };
     document.getElementById("obj-note").textContent = url() ? "STL is in millimetres. Geometry is generated, not measured." : "No STL for this model. Open a run folder with python viewer/server.py --open RUN_DIR.";
     return;
   }
@@ -1506,7 +1555,7 @@ function afterSelect(o) {
   const stl = spec.stl && base ? base + spec.stl : null;
   const pb = document.getElementById("btn-print-obj");
   pb.disabled = !stl;
-  pb.onclick = () => { if (stl) window.location.href = stl; };
+  pb.onclick = () => { if (stl) go(stl); };
   const eb = document.getElementById("btn-edit-obj");
   const canEdit = !!(ai.sceneMode && stl && (ai.objects || []).includes(o.id));
   eb.disabled = !canEdit;
@@ -1562,7 +1611,7 @@ function updateMapBar() {
   const base = window.__sceneBase;
   const pb = document.getElementById("btn-print-scene");
   pb.disabled = !(d && d.stl && base);
-  pb.onclick = () => { if (d && d.stl && base) window.location.href = base + d.stl; };
+  pb.onclick = () => { if (d && d.stl && base) go(base + d.stl); };
   const ssb = m && m.scale_source;
   document.getElementById("map-title").title = ssb ? ssb.text : "";
   document.getElementById("print-scene-info").textContent = d ? `diorama ${d.scale_text}, ${(d.size_mm || []).join(" × ")} mm${(d.warnings || []).length ? ", " + d.warnings.length + " warning" + (d.warnings.length > 1 ? "s" : "") : ""}` : "";
@@ -1577,7 +1626,7 @@ document.getElementById("btn-verify").onclick = () => {
   if (panel.style.display === "block") { panel.style.display = "none"; return; }
   const m = window.__sceneManifest, base = window.__sceneBase;
   document.getElementById("verify-sum").innerHTML = m.verify ? `mean IoU <span class="chip">${m.verify.mean_iou_before}</span> to <span class="chip">${m.verify.mean_iou_after}</span>` : "";
-  document.getElementById("verify-imgs").innerHTML = (m.verify.images || []).map((p) => `<img src="${base}${p}" alt="${p}">`).join("");
+  document.getElementById("verify-imgs").innerHTML = (m.verify.images || []).map((p) => `<img src="${resUrl(base + p)}" alt="${p}">`).join("");
   panel.style.display = "block";
 };
 document.getElementById("btn-verify-close").onclick = () => { document.getElementById("verify-panel").style.display = "none"; };
@@ -1680,13 +1729,18 @@ async function openAccuracy() {
   accEl.style.display = "block";
   if (accLoaded) return;
   try {
-    const r = await fetch("/assets/demo/accuracy.md");
+    const r = await fetch("assets/demo/accuracy.md");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     renderAccuracy(await r.text());
     accLoaded = true;
   } catch (e) {
     document.getElementById("accuracy-body").innerHTML = `<div class="entry bad">Could not load the accuracy table: ${esc(e.message || e)}</div>`;
   }
+}
+if (IS_EMBED) {
+  const back = document.getElementById("btn-back");
+  back.style.display = "";
+  back.onclick = () => window.parent.postMessage({ type: "wk-back" }, location.origin);
 }
 document.getElementById("btn-accuracy").onclick = () => (accEl.style.display === "block" ? (accEl.style.display = "none") : openAccuracy());
 document.getElementById("btn-accuracy-close").onclick = () => { accEl.style.display = "none"; };
