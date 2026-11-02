@@ -26,8 +26,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => window.__sceneReady === true, { timeout: 30000 });
     await page.waitForFunction(() => window.__aiState && window.__aiState(), { timeout: 10000 });
+    await page.click("#tab-ai");
     check("the AI Edit panel is shown by the edit server", await page.locator("#aiedit-panel").isVisible());
-    check("it shows the version and the units, and the scale caveat is stated", (await page.locator("#ai-version").innerText()).includes("v0") && (await page.locator("#ai-log").innerText()).includes("PLACEHOLDER"));
+    check("it shows the version and the units, and the scale caveat is stated", (await page.locator("#ai-version").innerText()).includes("v0") && (await page.locator("#sec-ai").innerText()).includes("PLACEHOLDER"));
     check("Undo is disabled at the original model", await page.locator("#ai-undo").isDisabled());
 
     const sizeBefore = await page.evaluate(() => window.__getMeshWorldVertices().length);

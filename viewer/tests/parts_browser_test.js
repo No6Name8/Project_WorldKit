@@ -29,6 +29,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     let ui = await page.evaluate(() => window.__partsUi());
     check("the Parts section lists the part with its view count", ui.rows === 1 && (await page.locator("#part-list").innerText()).includes("7 of 8 views"));
     check("the overlay is off until asked", !ui.on && ui.overlayFaces === 0 && ui.legend === "none");
+    await page.click("#tab-ai");
     await page.click("#btn-parts");
     await sleep(300);
     ui = await page.evaluate(() => window.__partsUi());

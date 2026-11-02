@@ -2,33 +2,46 @@ import { supabase } from "../supabase.js";
 import { esc, statusInfo, formatDate, applyChange, resultPaths } from "../lib.js";
 
 export async function renderProjects(root, ctx) {
-  let list = null, error = "", live = false, timer = null, channel = null;
-  root.innerHTML = `<div class="page-h"><h1>Projects</h1><span class="live" id="live"><i></i><span>connecting</span></span></div><div id="list"></div>`;
+  let list = null, error = "", live = false, timer = null, channel = null, filter = "all";
+  root.innerHTML = `<div class="page-h"><div><h1>Projects</h1><p class="sub">Personal workspace</p></div><a class="btn primary big" href="#/new">New project</a></div>
+    <div class="ptabs"><div class="tabs" role="tablist" aria-label="Filter projects">
+      <button type="button" role="tab" data-f="all" aria-selected="true">All projects</button><button type="button" role="tab" data-f="object" aria-selected="false">Object</button><button type="button" role="tab" data-f="map" aria-selected="false">Map</button>
+    </div><span class="live" id="live"><i></i><span>connecting</span></span></div>
+    <div id="list"></div>`;
   const listEl = root.querySelector("#list");
+  root.querySelectorAll("[data-f]").forEach((b) => { b.onclick = () => { filter = b.dataset.f; root.querySelectorAll("[data-f]").forEach((x) => x.setAttribute("aria-selected", String(x === b))); draw(); }; });
 
+  const ICON = {
+    done: '<path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/>',
+    processing: '<path d="M12 3a9 9 0 1 0 9 9"/>',
+    uploaded: '<rect x="3" y="6.5" width="13" height="11" rx="1"/><path d="m16 10.5 5-3v9l-5-3"/>',
+    failed: '<path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17v.5"/>',
+  };
+  const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>';
   const card = (p) => {
     const s = statusInfo(p.status);
     const note = p.status === "failed" ? `<div class="note err">${esc(p.error || "The worker could not finish this project.")}</div>`
       : p.status === "done" ? "" : `<div class="note">${esc(s.hint)}</div>`;
     return `<article class="card" data-id="${esc(p.id)}">
-      <div><div class="name">${esc(p.name)}</div>
-        <div class="meta"><span class="chip ${esc(p.status)}">${esc(s.label)}</span><span class="chip">${esc(p.mode)}</span><span class="mono">${esc(formatDate(p.created_at))}</span></div></div>
-      <div class="actions">
-        ${p.status === "done" ? `<a class="btn accent-outline" href="#/project/${esc(p.id)}">Open</a>` : `<button type="button" class="btn" disabled title="Available when the project is done">Open</button>`}
-        <button type="button" class="danger" data-del="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">Delete</button>
-      </div>${note}</article>`;
+      <div class="thumb s-${esc(p.status)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">${ICON[p.status] || ICON.uploaded}</svg></div>
+      <div class="pc-row"><span class="name">${esc(p.name)}</span><button type="button" class="icon-btn" data-del="${esc(p.id)}" aria-label="Delete ${esc(p.name)}" title="Delete">${TRASH}</button></div>
+      <div class="pc-row"><span class="kind">${p.mode === "map" ? "Map" : "Object"}</span><span class="chip ${esc(p.status)}">${esc(s.label)}</span></div>
+      <div class="pc-row"><span class="mono date">${esc(formatDate(p.created_at))}</span>
+        ${p.status === "done" ? `<a class="btn link" href="#/project/${esc(p.id)}">Open model</a>` : `<span class="hint">${p.status === "failed" ? "Not built" : "Not ready"}</span>`}</div>
+      ${note}</article>`;
   };
 
   const draw = () => {
     root.querySelector("#live").className = `live ${live ? "on" : ""}`;
     root.querySelector("#live span").textContent = live ? "live" : "checking every 8 s";
     if (error) { listEl.innerHTML = `<div class="msg err" role="alert">${esc(error)} <button type="button" id="retry">Try again</button></div>`; listEl.querySelector("#retry").onclick = load; return; }
-    if (list === null) { listEl.innerHTML = '<div class="cards" aria-busy="true"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'; return; }
+    if (list === null) { listEl.innerHTML = '<div class="grid" aria-busy="true"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'; return; }
     if (!list.length) {
       listEl.innerHTML = `<div class="empty"><p><b>No projects yet.</b></p><p>Film an object, upload it, and it shows up here.</p><p><a class="btn primary" href="#/new">New project</a></p></div>`;
       return;
     }
-    listEl.innerHTML = `<div class="cards">${list.map(card).join("")}</div>`;
+    const shown = list.filter((p) => filter === "all" || p.mode === filter);
+    listEl.innerHTML = shown.length ? `<div class="grid">${shown.map(card).join("")}</div>` : `<div class="empty"><p>No ${filter === "map" ? "Map" : "Object"} projects.</p></div>`;
     listEl.querySelectorAll("[data-del]").forEach((b) => { b.onclick = () => del(b.dataset.del); });
   };
 

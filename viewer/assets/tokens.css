@@ -1,47 +1,52 @@
 /* WorldKit design tokens. Three layers: primitive (raw values) -> semantic (meaning) -> component (parts).
+   Values come from the Figma file SOea5KbOenp8kUMI7nEdtO (local variables color/*, spacing/*, radius/*, border/*).
    Dark is the default. Components in index.html use semantic/component tokens only, never raw values. */
 
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/inter-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/inter-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); }
+
 :root {
-  /* ---- primitive: neutral ramp (cool grey) ---- */
-  --gray-1000: #0b0e12;
-  --gray-950: #0f1115;
-  --gray-900: #161a21;
-  --gray-850: #1c212a;
-  --gray-800: #232933;
-  --gray-700: #242a33;
-  --gray-600: #343c48;
-  --gray-500: #566170;
-  --gray-400: #7a8694;
-  --gray-300: #9aa6b2;
-  --gray-200: #c3cbd5;
-  --gray-100: #e6eaf0;
+  /* ---- primitive: Figma color/* ---- */
+  --fg-bg: #111214;             /* color/bg */
+  --fg-panel: #191b1f;          /* color/panel */
+  --fg-panel-raised: #202329;   /* color/panel/raised */
+  --fg-panel-disabled: #25282d; /* color/panel/disabled */
+  --fg-panel-skeleton: #292d34; /* color/panel/skeleton */
+  --fg-border: #343840;         /* color/border */
+  --fg-border-strong: #515a67;  /* color/border/strong */
+  --fg-text: #f0f1f3;           /* color/text */
+  --fg-muted: #a6adb8;          /* color/muted */
+  --fg-muted-disabled: #838d9b; /* color/muted/disabled */
+  --fg-accent: #2f6ed2;         /* color/accent */
+  --fg-accent-text: #83b2ff;    /* color/accent/text */
+  --fg-accent-surface: #203754; /* color/accent/surface */
+  --fg-success: #8bc7a4;        /* color/success */
+  --fg-warning: #e2be78;        /* color/warning */
+  --fg-error: #f19a98;          /* color/error */
+  --fg-error-surface: #302022;  /* color/error/surface */
+  --fg-vp-black: #000000;       /* color/viewport/black */
+  --fg-vp-model: #b9c1cc;       /* color/viewport/model */
   --white: #ffffff;
-  /* ---- primitive: the one accent (blue) and the status hues ---- */
-  --blue-700: #1f4fa8;
-  --blue-600: #3b82f6;
-  --blue-500: #3b82f6;
-  --blue-400: #5b9bff;
-  --green-500: #34d399;
-  --amber-500: #f5b544;
-  --red-500: #f87171;
-  --teal-400: #2dd4bf;
-  --blue-bg: rgba(59, 130, 246, 0.12);
-  --grey-bg: rgba(154, 166, 178, 0.12);
-  --green-bg: rgba(52, 211, 153, 0.12);
-  --amber-bg: rgba(245, 181, 68, 0.12);
-  --red-bg: rgba(248, 113, 113, 0.12);
+  --blue-hover: #3b7be0;        /* accent, one step lighter, for hover only */
+  --success-bg: rgba(139, 199, 164, 0.12);
+  --warning-bg: rgba(226, 190, 120, 0.12);
+  --idle-bg: rgba(166, 173, 184, 0.10);
 
   /* ---- primitive: type, space, radius, motion ---- */
-  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Cascadia Mono", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
-  --fs-xs: 12px;   /* labels, units, captions */
-  --fs-sm: 13px;   /* dense body, tables */
-  --fs-md: 14px;   /* controls, default body */
-  --fs-lg: 16px;   /* panel/object titles */
+  --font-ui: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
+  --fs-xs: 12px;   /* labels, captions, body in panels (Figma Regular 12/16) */
+  --fs-sm: 12px;   /* dense body, tables */
+  --fs-md: 14px;   /* controls, card titles (Figma 14/20) */
+  --fs-lg: 14px;   /* object titles in cards */
+  --fs-xl: 20px;   /* project title (Figma Semi Bold 20/28) */
+  --fs-2xl: 24px;  /* home headline (Figma Semi Bold 24/32) */
   --lh-tight: 1.25;
-  --lh-body: 1.45;
+  --lh-body: 1.4;
   --fw-regular: 400;
-  --fw-medium: 500;
+  --fw-medium: 600;
   --fw-semibold: 600;
 
   --space-1: 4px;
@@ -50,9 +55,11 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 96px;
 
-  --radius-1: 2px;
-  --radius-2: 4px;
+  --radius-1: 4px;
+  --radius-2: 4px;   /* radius/default: the only radius in the design */
   --border-w: 1px;
 
   --dur-fast: 120ms;  /* hover, press */
@@ -60,73 +67,83 @@
   --dur-slow: 180ms;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
-  --topbar-h: 44px;
-  --statusbar-h: 28px;
-  --sidebar-w: 280px;
-  --inspector-w: 360px;
+  --topbar-h: 56px;
+  --statusbar-h: 32px;
+  --sidebar-w: 208px;
+  --inspector-w: 296px;
+  --ai-panel-w: 400px;
+  --gutter: 24px;     /* page gutter */
+  --gap: 16px;        /* between cards */
 
   /* ---- semantic: surfaces, text, borders ---- */
-  --bg-app: var(--gray-950);
-  --bg-viewport: #12151b;
-  --bg-surface: var(--gray-900);
-  --bg-raised: var(--gray-850);
-  --bg-field: var(--gray-1000);
-  --bg-hover: var(--gray-800);
-  --bg-selected: #17233a;
-  --text-primary: var(--gray-100);
-  --text-secondary: var(--gray-200);
-  --text-muted: var(--gray-300);
-  --text-on-accent: #0a0f1a;  /* dark text: white on #3b82f6 is only 3.7:1, this is 5.1:1 */
-  --border-subtle: #1d222b;
-  --border-default: var(--gray-700);
-  --border-strong: var(--gray-600);
-  --accent: var(--blue-500);
-  --accent-solid: var(--blue-600);
-  --accent-solid-hover: var(--blue-400);
-  --accent-hover: var(--blue-400);
-  --accent-bg: var(--blue-bg);
-  --sam: var(--teal-400);      /* SAM part overlay, drawn at 55%. Never the accent colour. */
-  --sam-alpha: 0.55;
-  --focus-ring: var(--blue-400);
-  --status-ok: var(--green-500);
-  --status-warn: var(--amber-500);
-  --status-err: var(--red-500);
-  --status-idle: var(--gray-300);
-  --status-idle-bg: var(--grey-bg);
-  --status-proc: var(--accent);
-  --status-proc-bg: var(--blue-bg);
-  --status-ok-bg: var(--green-bg);
-  --status-warn-bg: var(--amber-bg);
-  --status-err-bg: var(--red-bg);
+  --bg-app: var(--fg-bg);
+  --bg-viewport: var(--fg-bg);
+  --bg-surface: var(--fg-panel);
+  --bg-raised: var(--fg-panel-raised);
+  --bg-field: var(--fg-bg);
+  --bg-hover: var(--fg-panel-raised);
+  --bg-selected: var(--fg-accent-surface);
+  --bg-disabled: var(--fg-panel-disabled);
+  --bg-skeleton: var(--fg-panel-skeleton);
+  --text-primary: var(--fg-text);
+  --text-secondary: var(--fg-muted);
+  --text-muted: var(--fg-muted);
+  --text-disabled: var(--fg-muted-disabled);
+  --text-on-accent: var(--white);   /* white on #2f6ed2 is 4.9:1 */
+  --text-link: var(--fg-accent-text);
+  --border-subtle: var(--fg-border);
+  --border-default: var(--fg-border);
+  --border-strong: var(--fg-border-strong);
+  --accent: var(--fg-accent);
+  --accent-text: var(--fg-accent-text);
+  --accent-solid: var(--fg-accent);
+  --accent-solid-hover: var(--blue-hover);
+  --accent-hover: var(--fg-accent-text);
+  --accent-bg: var(--fg-accent-surface);
+  --sam: var(--fg-accent);          /* the design draws the SAM part in the accent blue */
+  --sam-alpha: 0.85;
+  --focus-ring: var(--fg-accent-text);
+  --status-ok: var(--fg-success);
+  --status-warn: var(--fg-warning);
+  --status-err: var(--fg-error);
+  --status-idle: var(--fg-muted);
+  --status-idle-bg: var(--idle-bg);
+  --status-proc: var(--fg-warning);
+  --status-proc-bg: var(--warning-bg);
+  --status-ok-bg: var(--success-bg);
+  --status-warn-bg: var(--warning-bg);
+  --status-err-bg: var(--fg-error-surface);
   --elev-1: 0 1px 0 rgba(0, 0, 0, 0.4);
   --elev-2: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --scrim: rgba(11, 13, 16, 0.72);
+  --scrim: rgba(17, 18, 20, 0.72);
 
   /* ---- semantic: 3D viewport ---- */
-  --vp-background: #12151b;
-  --vp-grid-major: var(--gray-600);
-  --vp-grid-minor: var(--gray-800);
-  --vp-select: var(--blue-500);
-  --vp-sam: var(--teal-400);
-  --vp-bed: var(--white);
+  --vp-background: #15171a;
+  --vp-grid-major: var(--fg-border-strong);
+  --vp-grid-minor: var(--fg-border);
+  --vp-select: var(--fg-accent-text);
+  --vp-sam: var(--fg-accent);
+  --vp-bed: var(--fg-text);
+  --vp-edges: var(--fg-vp-black);
 
   /* ---- component ---- */
   --btn-bg: var(--bg-raised);
-  --btn-bg-hover: var(--bg-hover);
+  --btn-bg-hover: var(--fg-panel-disabled);
   --btn-border: var(--border-default);
   --btn-primary-bg: var(--accent-solid);
   --btn-primary-bg-hover: var(--accent-solid-hover);
-  --btn-height: 28px;
-  --field-height: 28px;
-  --row-height: 28px;
+  --btn-height: 32px;
+  --btn-height-lg: 40px;
+  --field-height: 32px;
+  --row-height: 32px;
 }
 
-/* Light theme (opt-in with <html data-theme="light">): semantic layer only. */
+/* Light theme (opt-in with <html data-theme="light">): semantic layer only. Not in the Figma file; untested. */
 :root[data-theme="light"] {
   --bg-app: #f3f5f7; --bg-viewport: #e6eaee; --bg-surface: #ffffff; --bg-raised: #f6f8fa; --bg-field: #ffffff;
   --bg-hover: #e9edf1; --bg-selected: #e3edfd; --text-primary: #14171b; --text-secondary: #3b444d; --text-muted: #5b6671;
   --border-subtle: #e1e5e9; --border-default: #cbd2d9; --border-strong: #aab3bc;
-  --text-on-accent: #ffffff; --accent: #2f6bd0; --accent-solid: #2f6bd0; --accent-solid-hover: #234f9f; --focus-ring: #2f6bd0;
+  --text-on-accent: #ffffff; --accent: #2f6ed2; --accent-solid: #2f6ed2; --accent-solid-hover: #234f9f; --focus-ring: #2f6ed2;
   --status-ok-bg: #e4f4ec; --status-warn-bg: #fbf1dd; --status-err-bg: #fbe6e4;
   --vp-background: #e6eaee; --vp-grid-major: #aab3bc; --vp-grid-minor: #d3d9df; --vp-bed: #3b444d;
   color-scheme: light;

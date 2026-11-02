@@ -87,6 +87,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check("the other object is untouched", tableBefore === tableAfter);
     const dims = await page.evaluate(() => window.__mapUi().dims);
     check("the panel notes the edit", dims.includes("edited"), dims);
+    await page.click("#tab-viewer");
     await page.click("#btn-reset-cam");
     check("Reset camera does not break the scene", await page.evaluate(() => window.__sceneReady === true));
     await page.screenshot({ path: path.join(ROOT, "docs", "map_viewer_ui.png") });

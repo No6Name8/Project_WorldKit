@@ -3,201 +3,146 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#0f1215" />
+<meta name="theme-color" content="#111214" />
 <title>WorldKit</title>
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="assets/tokens.css" />
 <link rel="stylesheet" href="assets/app.css" />
 </head>
-<body>
+<body data-tab="viewer">
 <header id="topbar">
   <div id="brand">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="square" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>
-    <b>WorldKit</b><span>Film it. Print it.</span>
+    <b>WorldKit</b>
   </div>
   <nav id="crumb" aria-label="Breadcrumb">
     <button id="btn-back" type="button" class="crumb-link">Projects</button><span class="crumb-root">Projects</span>
     <span class="sep" aria-hidden="true">/</span><b id="crumb-name">No project</b>
   </nav>
+  <div id="top-right">
+    <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
+  </div>
+</header>
+
+<section id="proj-head">
+  <div class="ph-row">
+    <div class="ph-text">
+      <h1 id="proj-title">No project</h1>
+      <p id="proj-sub">Open a run or a demo</p>
+    </div>
+    <div class="seg" role="group" aria-label="Mode">
+      <button id="mode-object" type="button" aria-pressed="true">Object</button>
+      <button id="mode-map" type="button" aria-pressed="false">Map</button>
+    </div>
+  </div>
   <div class="tabs" role="tablist" aria-label="Project sections">
     <button id="tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
     <button id="tab-ai" type="button" role="tab" aria-selected="false">AI Edit</button>
     <button id="btn-accuracy" type="button" role="tab" aria-selected="false">Accuracy</button>
   </div>
-  <div class="spacer"></div>
-  <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
-  <div class="seg" role="group" aria-label="Mode">
-    <button id="mode-object" type="button" aria-pressed="true">Object</button>
-    <button id="mode-map" type="button" aria-pressed="false">Map</button>
-  </div>
-</header>
-
-<footer id="statusbar" role="contentinfo"><span id="sb-left">No project</span><span id="sb-right">Units: mm <i aria-hidden="true">·</i> <span id="sb-saved">Not saved</span></span></footer>
+</section>
 
 <div id="app">
-  <div id="dock">
-    <button id="sheet-toggle" type="button" aria-expanded="true">Panels</button>
+  <aside id="side-left" class="side card" aria-label="Objects">
+    <div class="card-h"><span>Objects</span><span id="obj-count" class="mono"></span></div>
+    <div id="map-bar">
+      <span id="map-title"></span>
+      <button id="btn-print-scene" class="primary block" disabled>Print whole scene (diorama)</button>
+      <span id="print-scene-info"></span>
+      <div class="row">
+        <button id="btn-reset-cam">Reset camera</button>
+        <button id="btn-verify">Verify images</button>
+        <label class="inline"><input type="checkbox" id="chk-labels" checked /> Labels</label>
+      </div>
+    </div>
+    <div id="object-list"></div>
+    <div class="divider"></div>
+    <div class="card-h sm"><span>Source video</span></div>
+    <div id="src-video" class="hint">Not recorded in this run.</div>
 
-    <aside id="side-left" class="side" aria-label="Objects">
-      <section class="sec" open>
-        <div class="sec-h"><span>Objects</span></div>
-        <div id="map-bar">
-          <span id="map-title"></span>
-          <div class="row">
-            <button id="btn-print-scene" class="primary grow" disabled>Print whole scene (diorama)</button>
-          </div>
-          <span id="print-scene-info"></span>
-          <div class="row">
-            <button id="btn-reset-cam">Reset camera</button>
-            <button id="btn-verify">Verify images</button>
-            <label class="inline"><input type="checkbox" id="chk-labels" checked /> Labels</label>
-          </div>
+    <details class="devtools" id="sec-advanced">
+      <summary>Developer tools</summary>
+      <div class="dev-b">
+        <h3 class="subh">Load</h3>
+        <div class="row">
+          <button id="btn-demo-run" class="grow" title="One coin-scaled run: the mug for Object, the desk scene for Map">Demo run</button>
         </div>
-        <div class="sec-b">
-          <div id="object-list"></div>
+        <div class="row">
+          <label class="file-btn"><button id="btn-load-scene" type="button">Scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
+          <label class="file-btn"><button id="btn-load-label" type="button">GLB file</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
         </div>
-      </section>
-      <details class="sec" open>
-        <summary>Load</summary>
-        <div class="sec-b">
-          <div class="row">
-            <button id="btn-demo-run" class="grow" title="One coin-scaled run: the mug for Object, the desk scene for Map">Demo run</button>
-          </div>
-          <div class="row">
-            <label class="file-btn"><button id="btn-load-scene" type="button">Scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
-            <label class="file-btn"><button id="btn-load-label" type="button">GLB file</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
-          </div>
-          <div class="row" title="Older bundled reconstructions (not coin-scaled)">
-            <button id="btn-demo-mug">Demo: mug</button>
-            <button id="btn-demo-scene">Demo: mug + table</button>
-          </div>
+        <div class="row" title="Older bundled reconstructions (not coin-scaled)">
+          <button id="btn-demo-mug">Demo: mug</button>
+          <button id="btn-demo-scene">Demo: mug + table</button>
         </div>
-      </details>
-    </aside>
 
-    <aside id="side-right" class="side" aria-label="Inspector">
-      <section class="sec" open>
-        <div class="sec-h"><span>Selection</span></div>
-        <div class="sec-b">
-          <div id="obj-panel">
-            <h2 id="obj-name">Selected object</h2>
-            <div id="dim-cards" class="dims3" hidden></div>
-            <div id="obj-dims"></div>
-            <div class="note" id="obj-base">Dimensions exclude the print base plate.</div>
-            <div class="scale-line"><span id="obj-scale"></span><span id="obj-scale-flag" class="chip warn" hidden>estimate</span></div>
-            <div id="obj-mesh" class="mesh-line" hidden></div>
-            <div class="row">
-              <button id="btn-print-obj" class="primary grow">Download STL (mm)</button>
-              <button id="btn-edit-obj">Edit</button>
-            </div>
-            <div class="note" id="obj-note"></div>
-          </div>
-          <div id="obj-empty">Nothing selected. Click an object in the list or in the viewport.</div>
+        <h3 class="subh">Scale</h3>
+        <div id="scale-banner"></div>
+        <div class="row" title="Manual calibration: type the REAL height of the selected object, measured by you">
+          <input id="calib-height" class="num" type="number" min="0.1" step="0.1" placeholder="cm" aria-label="Real height in cm" />
+          <button id="btn-calibrate">Set real height</button>
         </div>
-      </section>
 
-      <details class="sec" open>
-        <summary>Scale</summary>
-        <div class="sec-b">
-          <div id="scale-banner"></div>
-          <div class="row" title="Manual calibration: type the REAL height of the selected object, measured by you">
-            <input id="calib-height" class="num" type="number" min="0.1" step="0.1" placeholder="cm" aria-label="Real height in cm" />
-            <button id="btn-calibrate">Set real height</button>
-          </div>
+        <h3 class="subh">Transform</h3>
+        <div class="row">
+          <button id="mode-translate">Move (W)</button>
+          <button id="mode-rotate">Rotate (E)</button>
+          <button id="mode-scale">Scale (R)</button>
+          <button id="btn-gizmo-off" title="Hide the gizmo (Esc)">Hide gizmo</button>
         </div>
-      </details>
-
-      <details class="sec grow-sec" open id="sec-ai">
-        <summary>AI Edit</summary>
-        <div class="sec-b">
-          <div class="row">
-            <button id="btn-parts" type="button" aria-pressed="false" disabled>Show what SAM found</button>
-          </div>
-          <div id="part-list"></div>
-          <div id="parts-empty" class="hint">No part data for this model. Run python -m worldkit.parts RUN_DIR, then open the run again.</div>
-          <div id="aiedit-panel">
-            <div class="ai-head"><span class="t">Wonder edits, Spark verifies</span><span id="ai-version"></span></div>
-            <div id="ai-versions" aria-label="Versions"></div>
-            <div id="ai-log"></div>
-            <div id="ai-status"></div>
-            <div id="instruction-row">
-              <input id="ai-input" type="text" placeholder='e.g. make the handle 2 mm thicker' aria-label="Edit instruction" />
-              <button id="ai-send">Send</button>
-            </div>
-            <div class="hint" id="ai-helper">One change at a time. Wonder edits the print mesh, Spark checks the before and after renders, and every edit can be undone.</div>
-            <div class="row" style="margin-top: var(--space-2);">
-              <button id="ai-undo">Undo</button>
-              <button id="ai-download">Current version STL (mm)</button>
-            </div>
-          </div>
-          <div id="ai-skel" aria-hidden="true"><div class="skel"></div><div class="skel"></div><div class="skel" style="width:70%"></div></div>
-          <div id="ai-empty">AI Edit is not connected. Start the edit server with python -m worldkit.serve RUN_DIR and reload this page.</div>
-          <div id="ai-disabled" aria-hidden="true">
-            <div class="instruction-row"><input type="text" disabled placeholder="Edit server not connected" tabindex="-1" /><button disabled tabindex="-1">Send</button></div>
-          </div>
+        <div class="row">
+          <button id="btn-reset">Reset view</button>
+          <button id="btn-reset-transform">Reset transform</button>
+          <button id="btn-export">Export GLB</button>
         </div>
-      </details>
+        <div id="transform-readout">loading</div>
 
-      <details class="sec" id="sec-advanced">
-        <summary>Advanced</summary>
-        <div class="sec-b">
-          <h3 class="subh">Transform</h3>
-          <div class="row">
-            <button id="mode-translate">Move (W)</button>
-            <button id="mode-rotate">Rotate (E)</button>
-            <button id="mode-scale">Scale (R)</button>
-            <button id="btn-gizmo-off" title="Hide the gizmo (Esc)">Hide gizmo</button>
-          </div>
-          <div class="row">
-            <button id="btn-reset">Reset view</button>
-            <button id="btn-reset-transform">Reset transform</button>
-            <button id="btn-export">Export GLB</button>
-          </div>
-          <div id="transform-readout">loading</div>
-
-          <h3 class="subh">Move by text</h3>
-          <div id="instruction-row">
-            <input id="instruction-input" type="text" placeholder='e.g. move it 10 cm to the left' aria-label="Move instruction" />
-            <button id="btn-send">Apply</button>
-          </div>
-          <div id="edit-log"></div>
-
-          <h3 class="subh">Physics</h3>
-          <div class="row">
-            <label class="inline">drop cm <input id="phys-drop" class="num" type="number" value="15" min="0" step="1" /></label>
-            <label class="inline">mass kg <input id="phys-mass" class="num" type="number" value="0.3" min="0.01" step="0.05" /></label>
-          </div>
-          <div class="row">
-            <button id="btn-phys-start">Simulate</button>
-            <button id="btn-phys-reset">Reset sim</button>
-            <button id="btn-sim-toggle">Collision probe</button>
-          </div>
-          <div id="sim-readout" style="display:none;">off</div>
-          <div id="sim-hint" class="hint" style="display:none;">WASD move, Q/E down/up</div>
-          <div id="phys-readout">Off. Simulates gravity on a cloned copy; edited objects are untouched. Collider: convex hull (approximation).</div>
-
-          <h3 class="subh">Overlap check</h3>
-          <div class="row"><button id="btn-check-overlap">Check overlaps</button><button id="btn-export-scene">Export scene</button></div>
-          <div id="overlap-readout">single object loaded</div>
-
-          <h3 class="subh">Provenance</h3>
-          <label class="hint" for="file-report">pipeline report.json</label>
-          <input id="file-report" class="small" type="file" accept=".json,application/json" />
-          <label class="hint" for="file-video" style="display:block;margin-top: var(--space-2);">source video</label>
-          <input id="file-video" class="small" type="file" accept="video/*" />
-          <video id="provenance-video" controls></video>
-          <div id="provenance-readout">No report loaded. Shows report.json fields read-only; it does not change the loaded mesh.</div>
+        <h3 class="subh">Move by text</h3>
+        <div class="instruction-row">
+          <input id="instruction-input" type="text" placeholder='e.g. move it 10 cm to the left' aria-label="Move instruction" />
+          <button id="btn-send">Apply</button>
         </div>
-      </details>
-    </aside>
-  </div>
+        <div id="edit-log"></div>
 
-  <main id="viewport">
+        <h3 class="subh">Physics</h3>
+        <div class="row">
+          <label class="inline">drop cm <input id="phys-drop" class="num" type="number" value="15" min="0" step="1" /></label>
+          <label class="inline">mass kg <input id="phys-mass" class="num" type="number" value="0.3" min="0.01" step="0.05" /></label>
+        </div>
+        <div class="row">
+          <button id="btn-phys-start">Simulate</button>
+          <button id="btn-phys-reset">Reset sim</button>
+          <button id="btn-sim-toggle">Collision probe</button>
+        </div>
+        <div id="sim-readout" style="display:none;">off</div>
+        <div id="sim-hint" class="hint" style="display:none;">WASD move, Q/E down/up</div>
+        <div id="phys-readout">Off. Simulates gravity on a cloned copy; edited objects are untouched. Collider: convex hull (approximation).</div>
+
+        <h3 class="subh">Overlap check</h3>
+        <div class="row"><button id="btn-check-overlap">Check overlaps</button><button id="btn-export-scene">Export scene</button></div>
+        <div id="overlap-readout">single object loaded</div>
+
+        <h3 class="subh">Provenance</h3>
+        <label class="hint" for="file-report">pipeline report.json</label>
+        <input id="file-report" class="small" type="file" accept=".json,application/json" />
+        <label class="hint" for="file-video" style="display:block;margin-top: var(--space-2);">source video</label>
+        <input id="file-video" class="small" type="file" accept="video/*" />
+        <video id="provenance-video" controls></video>
+        <div id="provenance-readout">No report loaded. Shows report.json fields read-only; it does not change the loaded mesh.</div>
+      </div>
+    </details>
+  </aside>
+
+  <main id="viewport" class="card">
     <div id="canvas-wrap"></div>
     <div id="wk-labels"></div>
-    <div id="vp-tools"><button id="btn-vp-reset" type="button" title="Frame the objects">Reset view</button></div>
+    <div id="vp-tools">
+      <button id="btn-edges" type="button" class="vp-btn" aria-pressed="false" title="Draw the mesh's sharp edges over the shaded model">Solid</button>
+      <button id="btn-vp-reset" type="button" class="vp-btn" title="Frame the objects">Reset view</button>
+    </div>
     <div id="vp-legend"><i></i><span id="vp-legend-text"></span></div>
     <div id="vp-part-legend" role="status"><i></i><span id="vp-part-legend-text"></span></div>
+    <div id="vp-foot"><span id="vp-mesh"></span><span id="vp-grid" class="mono"></span></div>
     <div id="loading" role="status"><div class="bar"></div><span id="loading-text">Loading</span></div>
     <div id="verify-panel">
       <div class="head"><b>Verification against the real frames</b><span id="verify-sum"></span><button id="btn-verify-close">Close</button></div>
@@ -205,17 +150,73 @@
       <div id="verify-imgs"></div>
     </div>
   </main>
+
+  <aside id="side-right" class="side card" aria-label="Inspector">
+    <section id="panel-sel" aria-label="Selection">
+      <div id="obj-panel">
+        <div class="card-h big"><h2 id="obj-name">Selected object</h2><span id="obj-ver" class="chip" hidden></span></div>
+        <div class="lbl">Size <span aria-hidden="true">·</span> W × H × D</div>
+        <div id="dim-cards" class="dims3" hidden></div>
+        <div id="obj-dims"></div>
+        <div class="kvrow"><span class="lbl">Scale source</span><span class="scale-line"><span id="obj-scale" class="mono"></span><span id="obj-scale-flag" class="chip warn" hidden>estimate</span></span></div>
+        <div class="note" id="obj-base">Dimensions exclude the print base plate.</div>
+        <div class="divider"></div>
+        <div id="obj-mesh" class="mesh-block" hidden></div>
+        <div class="row">
+          <button id="btn-print-obj" class="primary grow big">Download STL (mm)</button>
+          <button id="btn-edit-obj" class="big">Edit</button>
+        </div>
+        <div class="note" id="obj-note"></div>
+      </div>
+      <div id="obj-empty">Nothing selected. Click an object in the list or in the viewport.</div>
+    </section>
+
+    <section id="sec-ai" aria-label="AI Edit">
+      <div class="card-h big"><h2>AI Edit</h2><span id="ai-version" class="mono"></span></div>
+      <div id="aiedit-panel">
+        <div class="ver-row"><span class="lbl">Version</span><div id="ai-versions" aria-label="Versions"></div><button id="ai-undo" class="link-btn">Undo</button></div>
+      </div>
+      <div class="divider"></div>
+      <div class="switch-row">
+        <span>Show what SAM found</span>
+        <button id="btn-parts" type="button" class="switch" role="switch" aria-pressed="false" aria-checked="false" aria-label="Show what SAM found" disabled><i></i></button>
+      </div>
+      <div id="part-list"></div>
+      <div id="parts-empty" class="hint">No part data for this model. Run python -m worldkit.parts RUN_DIR, then open the run again.</div>
+      <div class="divider"></div>
+      <div id="aiedit-log-wrap">
+        <div id="ai-log"></div>
+        <div id="ai-status"></div>
+        <div class="instruction-row" id="instruction-row">
+          <textarea id="ai-input" rows="2" placeholder="Describe a change..." aria-label="Edit instruction"></textarea>
+          <button id="ai-send">Send</button>
+        </div>
+        <div class="hint" id="ai-helper">Review changes before printing. Undo returns to the previous version.</div>
+        <div class="hint" id="ai-scale"></div>
+        <div class="row" style="margin-top: var(--space-2);">
+          <button id="ai-download">Current version STL (mm)</button>
+        </div>
+      </div>
+      <div id="ai-skel" aria-hidden="true"><div class="skel"></div><div class="skel"></div><div class="skel" style="width:70%"></div></div>
+      <div id="ai-empty">AI Edit is not connected. Start the edit server with python -m worldkit.serve RUN_DIR and reload this page.</div>
+      <div id="ai-disabled" aria-hidden="true">
+        <div class="instruction-row"><textarea rows="2" disabled placeholder="Edit server not connected" tabindex="-1"></textarea><button disabled tabindex="-1">Send</button></div>
+      </div>
+    </section>
+  </aside>
+
+  <section id="accuracy-view" aria-label="Accuracy">
+    <div class="card acc-card">
+      <div class="card-h big"><h2>Measurements: real vs model</h2><button id="btn-accuracy-close">Back to viewer</button></div>
+      <div class="hint">Model sizes are measured on the exported print STL (mm), base plate excluded. Error is (model - real) / real.</div>
+      <div class="acc-legend"><span><i class="a"></i>within 3%</span><span><i class="b"></i>3 to 8%</span><span><i class="c"></i>over 8%</span></div>
+      <div id="accuracy-body"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:75%"></div></div>
+    </div>
+    <div class="card acc-note-card"><div class="acc-note" id="accuracy-note"></div></div>
+  </section>
 </div>
 
-<div id="accuracy-view" role="dialog" aria-label="Accuracy">
-  <div class="wrap">
-    <div class="row" style="justify-content: space-between;"><h2>Accuracy: real vs model</h2><button id="btn-accuracy-close">Close</button></div>
-    <div class="hint">Model sizes are measured on the exported print STL (mm), base plate excluded. Error is (model - real) / real.</div>
-    <div class="acc-legend"><span><i class="a"></i>within 3%</span><span><i class="b"></i>3 to 8%</span><span><i class="c"></i>over 8%</span></div>
-    <div id="accuracy-body"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:75%"></div></div>
-    <div class="acc-note" id="accuracy-note"></div>
-  </div>
-</div>
+<footer id="statusbar" role="contentinfo"><span id="sb-left">No project</span><span id="sb-right">Units: mm <i aria-hidden="true">·</i> <span id="sb-saved">Not saved</span></span></footer>
 
 <script type="importmap">
 {
@@ -286,8 +287,22 @@ dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 20;
 dirLight.shadow.bias = -0.0004; dirLight.shadow.normalBias = 0.02;
 scene.add(dirLight);
 
-const grid = new THREE.GridHelper(10, 20, css("--vp-grid-major"), css("--vp-grid-minor"));
+let grid = new THREE.GridHelper(10, 20, css("--vp-grid-major"), css("--vp-grid-minor"));
+let gridCellMm = null;  // real size of one grid cell, set once the scale is known
 scene.add(grid);
+// once the scale is known the floor grid is rebuilt with real cells: 10 mm, or 50/100 mm when 10 mm would be too dense
+function updateGrid() {
+  const cellCm = !calibrated ? null : [1, 5, 10, 50].find((c) => 10 / (c / cmPerSceneUnit) <= 120) || 50;
+  if ((cellCm ? cellCm * 10 : null) === gridCellMm) return;
+  const y = grid.position.y;
+  scene.remove(grid); grid.geometry.dispose(); grid.material.dispose();
+  gridCellMm = cellCm ? cellCm * 10 : null;
+  const cell = cellCm ? cellCm / cmPerSceneUnit : 0.5;
+  const n = Math.round(10 / cell);
+  grid = new THREE.GridHelper(n * cell, n, css("--vp-grid-major"), css("--vp-grid-minor"));
+  grid.position.y = y;
+  scene.add(grid);
+}
 const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.4 }));
 shadowFloor.rotation.x = -Math.PI / 2;
 shadowFloor.receiveShadow = true;
@@ -1324,7 +1339,15 @@ async function startup() {
     (window.parent !== window ? window.parent : window).postMessage({ type: "wk-ready" }, location.origin);
     return;
   }
-  if (urlParams.has("demo")) { await loadDemoMug(); return; }
+  if (urlParams.has("preview")) document.body.classList.add("preview");
+  if (urlParams.has("demo")) {
+    await loadDemoMug();
+    if (window.parent !== window) {
+      const o = sceneObjects[0], dm = o && objectDims(o);
+      window.parent.postMessage({ type: "wk-preview", name: o && o.name, mm: dm && dm.mm, scale: o ? scaleSourceText(o) : "" }, location.origin);
+    }
+    return;
+  }
   try {
     const cfg = await (await fetch("/api/autoload")).json();
     if (cfg.kind === "scene") { await loadSceneFromUrl(cfg.base); logEntry(`Opened run ${cfg.name}`); return; }
@@ -1352,7 +1375,9 @@ const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<"
 function aiRefreshLabel() {
   const st = ai.state;
   updateStatusBar();
-  document.getElementById("ai-version").textContent = st ? `v${st.current}${st.current === 0 ? " original" : ""} | ${st.units}` : "";
+  document.getElementById("ai-version").textContent = st ? `v${st.current}${st.current === 0 ? " original" : ""} · ${st.units}` : "";
+  updateHeader();
+  document.getElementById("ai-scale").textContent = ai.scaleNote || "";
   document.getElementById("ai-undo").disabled = !st || st.current === 0 || ai.busy;
   const chips = document.getElementById("ai-versions");
   chips.textContent = "";
@@ -1383,7 +1408,7 @@ async function aiReloadModel() {
       updateBanner(); updateReadout();
     }
   }
-  if (partsState.on) { partsState.on = false; document.getElementById("btn-parts").setAttribute("aria-pressed", "false"); }
+  if (partsState.on) { partsState.on = false; setPartsSwitch(false); }
   clearPartOverlay(); // the overlay marks the ORIGINAL mesh
 }
 async function aiSend() {
@@ -1393,7 +1418,7 @@ async function aiSend() {
   ai.busy = true; aiRefreshLabel(); input.value = "";
   const status = document.getElementById("ai-status");
   status.textContent = "Muse Wonder is choosing tools, then Muse Spark verifies (about 15-60 s)...";
-  const entry = aiLog(`<div>${esc(text)}</div><div class="meta">working</div>`);
+  const entry = aiLog(`<div class="e-h"><span class="e-k">Working</span></div><div class="res">${esc(text)}</div><div class="meta">Wonder is editing, Spark verifies</div>`);
   try {
     const resp = await fetch("/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instruction: text, obj: ai.obj }) });
     const r = await resp.json();
@@ -1405,8 +1430,8 @@ async function aiSend() {
     const sentences = (r.tools || []).map((t) => t.sentence).filter(Boolean);
     const toolErrors = (r.tools || []).map((t) => t.error).filter(Boolean);
     const spark = r.spark || (r.spark_verified === false ? "unavailable, accepted on geometry checks" : "verified");
-    const detail = `${(r.tools || []).map((t) => `${t.name} ${JSON.stringify(t.arguments)}${t.error ? " ERROR: " + t.error : ""}`).join("\n") || "no tool called"}\n${r.seconds}s, retries ${r.retries ?? 0}`;
-    const row = (vtag, line) => `<div><span class="vtag">${vtag}</span>${esc(text)}</div><div class="res">${line}</div><details class="dt"><summary>details</summary><pre class="mono">${esc(detail)}</pre></details>${img}`;
+    const detail = [`Request: ${text}`, ...((r.tools || []).map((t) => `${t.name} ${JSON.stringify(t.arguments)}${t.error ? " ERROR: " + t.error : ""}`)), ...((r.tools || []).length ? [] : ["no tool called"]), ai.scaleNote, `${r.seconds} s, ${r.retries ?? 0} retries`].filter(Boolean).join("\n");
+    const row = (vtag, line) => `<div class="e-h"><span class="e-k">${r.applied ? "Applied edit" : "Not applied"}</span><span class="vtag">${vtag}</span></div><div class="res">${line}</div><details class="dt"><summary>Details</summary><pre class="mono">${esc(detail)}</pre></details>${img}`;
     if (r.applied) {
       entry.className = "entry ok";
       entry.innerHTML = row(`v${r.version}`, `${esc(sentences.join(". ") || "Applied")}. Spark: ${esc(spark)}.`);
@@ -1419,7 +1444,7 @@ async function aiSend() {
     status.textContent = "";
   } catch (e) {
     entry.className = "entry bad";
-    entry.innerHTML = `<div>${esc(text)}</div><div class="res">FAILED: ${esc(e.message || e)}</div>`;
+    entry.innerHTML = `<div class="e-h"><span class="e-k">Failed</span><span class="vtag">no change</span></div><div class="res">FAILED: ${esc(e.message || e)}</div><details class="dt"><summary>Details</summary><pre class="mono">${esc(`Request: ${text}`)}</pre></details>`;
     status.textContent = "";
   } finally { ai.busy = false; aiRefreshLabel(); }
 }
@@ -1435,7 +1460,7 @@ async function aiUndo(to) {
   aiRefreshLabel();
 }
 document.getElementById("ai-send").onclick = aiSend;
-document.getElementById("ai-input").addEventListener("keydown", (e) => { if (e.key === "Enter") aiSend(); });
+document.getElementById("ai-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); aiSend(); } });
 document.getElementById("ai-undo").onclick = () => aiUndo();
 document.getElementById("ai-download").onclick = () => go("/edit/current.stl?x=1" + aiQ());
 window.__aiState = () => ai.state;
@@ -1450,7 +1475,7 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
     if (st.scene_mode) { ai.sceneMode = true; ai.objects = st.objects || []; document.getElementById("ai-empty").textContent = "Select an object, then press Edit in the Selection panel to describe a change to its print mesh."; return; } // in a scene the panel opens per object ("Edit with AI")
     ai.state = st;
     document.getElementById("aiedit-panel").style.display = "block";
-    if (st.scale_note) aiLog(`<span class="meta">Scale: ${esc(st.scale_note)}. Sizes below are the model's own units (mm), not a measurement unless calibrated.</span>`);
+    ai.scaleNote = st.scale_note ? `Scale: ${st.scale_note}. Sizes are the model's own units (mm), not a measurement unless calibrated.` : "";
     aiRefreshLabel();
     { const cur = sceneObjects.find((x) => x.group === modelGroup); if (cur) afterSelect(cur); }
     if (st.current > 0) { await new Promise((res) => setTimeout(res, 600)); await aiReloadModel(); aiLog(`Opened the current edited version v${st.current}`); }
@@ -1546,6 +1571,21 @@ function setOutline(entry) {
   });
 }
 window.__outlineCount = () => outlineLines.length;
+let edgeLines = [];
+function setEdges(on) {
+  for (const l of edgeLines) { l.parent && l.parent.remove(l); l.geometry.dispose(); l.material.dispose(); }
+  edgeLines = [];
+  const b = document.getElementById("btn-edges");
+  b.setAttribute("aria-pressed", String(on)); b.textContent = on ? "Solid + edges" : "Solid";
+  if (!on) return;
+  objectsRoot.traverse((m) => {
+    if (!m.isMesh || m.userData.__outline || m.userData.__partOverlay || m.userData.__edges) return;
+    const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 30), new THREE.LineBasicMaterial({ color: css("--vp-edges"), transparent: true, opacity: 0.55 }));
+    l.userData.__edges = true; l.raycast = () => {};
+    m.add(l); edgeLines.push(l);
+  });
+}
+document.getElementById("btn-edges").onclick = () => setEdges(!edgeLines.length);
 
 // object panel
 function objectDims(o) {
@@ -1570,16 +1610,54 @@ function setMeshLine() {
   const thin = pp.thin_wall_warning_count || 0;
   const good = pp.watertight && pp.geometry_checks_passed !== false && thin === 0;
   el.hidden = false;
-  el.innerHTML = `<span>Mesh check</span><span class="chip ${good ? "ok" : "warn"}">${pp.watertight ? "watertight" : "not watertight"}</span>` + (thin ? `<span class="chip warn">${thin} thin-wall warnings</span>` : "");
+  let tris = 0;
+  if (modelGroup) modelGroup.traverse((m) => { if (m.isMesh && !m.userData.__partOverlay && m.geometry.attributes.position) tris += m.geometry.index ? m.geometry.index.count / 3 : m.geometry.attributes.position.count / 3; });
+  el.innerHTML = `<span class="lbl">Mesh check</span><span class="${good ? "ok-t" : "warn-t"}">${pp.watertight ? "Watertight" : "Not watertight"}${pp.geometry_checks_passed === false ? " · geometry checks failed" : ""}</span>` +
+    (thin ? `<span class="warn-t">${thin} thin-wall warnings</span>` : "") + (tris ? `<span class="mono">${Math.round(tris).toLocaleString("en-US")} triangles</span>` : "");
+  updateVpFoot();
 }
 function updateStatusBar(projectName) {
   const nm = projectName || (document.getElementById("crumb-name").dataset.set === "1" ? document.getElementById("crumb-name").textContent : "No project");
   const ver = ai.state ? `v${ai.state.current}${ai.state.current === 0 ? " original" : ""}` : "original";
-  document.getElementById("sb-left").textContent = nm === "No project" ? nm : `${nm} / ${ver}`;
+  const tab = { ai: "AI Edit", accuracy: "Accuracy" }[document.body.dataset.tab];
+  document.getElementById("sb-left").textContent = nm === "No project" ? nm : [nm, tab, ver].filter(Boolean).join(" / ");
+  updateHeader(nm);
   const saved = !!ai.state || IS_EMBED;
   const el = document.getElementById("sb-saved");
   el.textContent = saved ? "Saved" : "Local session";
   el.className = saved ? "ok" : "";
+}
+// the header block under the top bar: project title and one status line ("Object · ready to print", "Object · v2", "Map · 4 objects")
+function updateHeader(name) {
+  const c = document.getElementById("crumb-name");
+  const nm = name || (c.dataset.set === "1" ? c.textContent : "No project");
+  document.getElementById("proj-title").textContent = nm;
+  const multi = sceneObjects.length > 1;
+  const kind = multi ? (window.__sceneManifest && window.__sceneManifest.mode === "map" ? "Map" : "Scene") : "Object";
+  const pp = window.__lastReport && window.__lastReport.print_prep;
+  let state;
+  if (!sceneObjects.length) state = "Open a run or a demo";
+  else if (multi) state = `${sceneObjects.filter((o) => !o.missing).length} objects`;
+  else if (ai.state && ai.state.current > 0) state = `v${ai.state.current}`;
+  else if (pp && pp.watertight && pp.geometry_checks_passed !== false) state = "ready to print";
+  else if (pp) state = "mesh needs checks";
+  else state = "no print check yet";
+  document.getElementById("proj-sub").textContent = sceneObjects.length ? `${kind} · ${state}` : state;
+  const chip = document.getElementById("obj-ver");
+  chip.hidden = !ai.state; chip.textContent = ai.state ? `v${ai.state.current}` : "";
+  const cnt = document.getElementById("obj-count");
+  cnt.textContent = multi ? `${sceneObjects.filter((o) => !o.missing).length}` : "";
+  updateVpFoot();
+}
+function updateVpFoot() {
+  const pp = window.__lastReport && window.__lastReport.print_prep;
+  document.getElementById("vp-mesh").textContent = sceneObjects.length > 1 ? `${sceneObjects.filter((o) => !o.missing).length} objects` : pp ? (pp.watertight ? "Watertight mesh" : "Mesh is not watertight") : "";
+  // GridHelper(10, 20): one cell is 0.5 scene units; only shown in mm when the scale is known
+  updateGrid();
+  document.getElementById("vp-grid").textContent = gridCellMm ? `Grid: ${gridCellMm} mm` : "Grid: not to scale";
+  const rep = window.__lastReport, sv = document.getElementById("src-video");
+  const vid = rep && (rep.source_video || rep.video || (rep.input && rep.input.video));
+  sv.textContent = vid ? String(vid).split(/[\\/]/).pop() + (rep.video_seconds ? ` · ${rep.video_seconds} s` : "") : (rep && rep.frames_extracted ? `${rep.frames_extracted} frames used; file name not recorded in this run.` : "Not recorded in this run.");
 }
 function setCrumb(name) {
   const c = document.getElementById("crumb-name");
@@ -1610,7 +1688,8 @@ function afterSelect(o) {
   document.getElementById("obj-dims").textContent = dm.text;
   setDimCards(dm.mm);
   const scaleTxt = scaleSourceText(o) + (multi && spec0IsRef(o) ? " (this object is the reference)" : "");
-  document.getElementById("obj-scale").textContent = scaleTxt;
+  document.getElementById("obj-scale").textContent = scaleTxt.replace(/^scale source:\s*/i, "").replace(/ diameter$/, "");
+  document.getElementById("obj-scale").title = scaleTxt;
   document.getElementById("obj-scale-flag").hidden = !(dm.real && !/measured by you|user/i.test(scaleTxt));
   setMeshLine();
   setCrumb(multi ? ((window.__sceneManifest && window.__sceneManifest.name) || "Scene") : o.name);
@@ -1639,14 +1718,14 @@ function afterSelect(o) {
 }
 async function openAiForObject(o) {
   ai.obj = o.id;
+  showTab("ai");
   try {
     const st = await (await fetch("/edit/state?obj=" + encodeURIComponent(o.id))).json();
     if (!st.enabled) throw new Error(st.error || "AI Edit is not available for this object");
     ai.state = st;
     document.getElementById("aiedit-panel").style.display = "block";
     document.getElementById("ai-log").textContent = "";
-    aiLog(`<span class="meta">Editing <b>${esc(o.name)}</b> (its own print mesh, millimetres). Other objects are not touched.</span>`);
-    if (st.scale_note) aiLog(`<span class="meta">${esc(st.scale_note)}</span>`);
+    ai.scaleNote = `Editing ${o.name} (its own print mesh, millimetres). Other objects are not touched.` + (st.scale_note ? ` ${st.scale_note}` : "");
     aiRefreshLabel();
     if (st.current > 0) { await aiReloadModel(); }
   } catch (e) { aiLog(`FAILED: ${esc(e.message || e)}`, "bad"); document.getElementById("aiedit-panel").style.display = "block"; }
@@ -1707,7 +1786,7 @@ document.getElementById("btn-verify-close").onclick = () => { document.getElemen
 window.__sceneObjects = () => sceneObjects.map((o) => ({ id: o.id, p: o.group.position.toArray(), s: o.group.scale.toArray(), r: o.group.rotation.toArray().slice(0, 3) }));
 window.__mapUi = () => ({ bar: document.getElementById("map-bar").style.display, objPanel: document.getElementById("obj-panel").style.display, printObjDisabled: document.getElementById("btn-print-obj").disabled,
   printSceneDisabled: document.getElementById("btn-print-scene").disabled, editDisabled: document.getElementById("btn-edit-obj").disabled, dims: document.getElementById("obj-dims").textContent,
-  name: document.getElementById("obj-name").textContent, scale: document.getElementById("obj-scale").textContent, verifyVisible: document.getElementById("verify-panel").style.display === "block", info: document.getElementById("print-scene-info").textContent });
+  name: document.getElementById("obj-name").textContent, scale: document.getElementById("obj-scale").title, verifyVisible: document.getElementById("verify-panel").style.display === "block", info: document.getElementById("print-scene-info").textContent });
 
 
 // --- Shell: mode switch, print-bed outline, accuracy view, bottom sheet -----------------------------------------------------------
@@ -1800,7 +1879,7 @@ function renderAccuracy(md) {
     (uniq.length ? "<br><br>" + uniq.join("<br>") : "");
 }
 async function openAccuracy() {
-  accEl.style.display = "block";
+  if (document.body.dataset.tab !== "accuracy") setTab("accuracy");
   if (accLoaded) return;
   try {
     const r = await fetch("assets/demo/accuracy.md");
@@ -1817,30 +1896,25 @@ if (IS_EMBED) {
 }
 function setTab(name) {
   for (const [id, n] of [["tab-viewer", "viewer"], ["tab-ai", "ai"], ["btn-accuracy", "accuracy"]]) document.getElementById(id).setAttribute("aria-selected", String(n === name));
+  document.body.dataset.tab = name;
+  updateStatusBar();
 }
 function showTab(name) {
-  if (name === "accuracy") { openAccuracy(); setTab("accuracy"); return; }
-  accEl.style.display = "none"; setTab(name);
-  const side = document.getElementById("side-right");
-  if (name === "ai") { document.getElementById("sec-ai").open = true; document.getElementById("sec-ai").scrollIntoView({ behavior: REDUCED_MOTION ? "auto" : "smooth", block: "start" }); }
-  else side.scrollTo({ top: 0, behavior: REDUCED_MOTION ? "auto" : "smooth" });
+  setTab(name);
+  if (name === "accuracy") openAccuracy();
+  else requestAnimationFrame(onResize);  // the viewport card changes width between Viewer and AI Edit
 }
 document.getElementById("tab-viewer").onclick = () => showTab("viewer");
 document.getElementById("tab-ai").onclick = () => showTab("ai");
-document.getElementById("btn-accuracy").onclick = () => (accEl.style.display === "block" ? showTab("viewer") : showTab("accuracy"));
+document.getElementById("btn-accuracy").onclick = () => showTab(document.body.dataset.tab === "accuracy" ? "viewer" : "accuracy");
 document.getElementById("btn-accuracy-close").onclick = () => showTab("viewer");
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && accEl.style.display === "block") showTab("viewer"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.dataset.tab === "accuracy") showTab("viewer"); });
+window.__showTab = showTab;
 window.__accuracyOpen = openAccuracy;
-
-// bottom sheet on narrow screens
-{
-  const dock = document.getElementById("dock"), tg = document.getElementById("sheet-toggle");
-  tg.onclick = () => { const c = dock.classList.toggle("collapsed"); tg.setAttribute("aria-expanded", String(!c)); tg.textContent = c ? "Panels (show)" : "Panels (hide)"; };
-}
-
 
 // --- Parts: "show what SAM found" overlay (accent-coloured faces of the selected part, drawn over the model) ---------------------------
 const partsState = { data: null, on: false, overlays: [] };
+function setPartsSwitch(on) { const b = document.getElementById("btn-parts"); b.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-checked", String(on)); }
 function clearPartOverlay() {
   for (const o of partsState.overlays) { o.parent && o.parent.remove(o); o.geometry.dispose(); o.material.dispose(); }
   partsState.overlays = [];
@@ -1900,7 +1974,7 @@ function renderPartList() {
     row.className = "part-row";
     const nm = document.createElement("span");
     nm.className = "pn";
-    nm.textContent = p.name;
+    nm.innerHTML = `<i class="sw" aria-hidden="true"></i>${esc(p.name[0].toUpperCase() + p.name.slice(1))}`;
     const ct = document.createElement("span");
     ct.className = "pc";
     ct.innerHTML = `<span class="chip">${p.views_found} of ${p.views_total} views</span>`;
@@ -1918,7 +1992,7 @@ function renderPartList() {
 async function loadParts(url = "/open/parts/parts.json") {
   partsState.data = null; partsState.on = false;
   clearPartOverlay();
-  document.getElementById("btn-parts").setAttribute("aria-pressed", "false");
+  setPartsSwitch(false);
   try {
     const r = await fetch(url);
     if (r.ok) partsState.data = await r.json();
@@ -1927,9 +2001,9 @@ async function loadParts(url = "/open/parts/parts.json") {
 }
 document.getElementById("btn-parts").onclick = () => {
   partsState.on = !partsState.on;
-  document.getElementById("btn-parts").setAttribute("aria-pressed", String(partsState.on));
+  setPartsSwitch(partsState.on);
   const n = buildPartOverlay();
-  if (partsState.on && !n) { partsState.on = false; document.getElementById("btn-parts").setAttribute("aria-pressed", "false"); document.getElementById("parts-empty").textContent = "The part could not be matched to the displayed mesh (it was edited or replaced)."; document.getElementById("parts-empty").style.display = "block"; }
+  if (partsState.on && !n) { partsState.on = false; setPartsSwitch(false); document.getElementById("parts-empty").textContent = "The part could not be matched to the displayed mesh (it was edited or replaced)."; document.getElementById("parts-empty").style.display = "block"; }
 };
 window.__partsUi = () => ({ overlayFaces: partsState.overlays.reduce((n, o) => n + o.geometry.attributes.position.count / 3, 0), on: partsState.on, rows: document.querySelectorAll("#part-list .part-row").length,
   legend: document.getElementById("vp-part-legend").style.display, legendText: document.getElementById("vp-part-legend-text").textContent, enabled: !document.getElementById("btn-parts").disabled });

@@ -40,7 +40,7 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
       // 1. object view (Demo run in Object mode)
       await page.goto("http://127.0.0.1:5091/", { waitUntil: "domcontentloaded" });
       await ready();
-      await page.click("#btn-demo-run");
+      await page.evaluate(() => document.getElementById("btn-demo-run").click());
       await page.waitForFunction(() => window.__partsUi && window.__partsUi().enabled, { timeout: 20000 });
       await ready(); await sleep(900);
       await sheetTop();
@@ -48,6 +48,7 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
 
       if (all) {
         // 5. "show what SAM found" on the real mug, orbited so the handle faces the camera
+        await page.click("#tab-ai"); await sleep(300);
         await page.click("#btn-parts");
         const box = await page.locator("canvas").boundingBox();
         for (const dx of [250, 400]) {
@@ -60,6 +61,7 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
         await page.click("#btn-vp-reset");
 
         // 2. scene view (Map)
+        await page.click("#tab-viewer");
         await page.click("#mode-map");
         await page.waitForFunction(() => window.__getSceneObjects && window.__getSceneObjects().length > 1, { timeout: 40000 });
         await ready(); await sleep(1200);
@@ -74,7 +76,7 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
       await ready();
       await page.waitForFunction(() => window.__aiState && window.__aiState() && window.__partsUi && window.__partsUi().enabled, { timeout: 15000 });
       if (all) {  // AI Edit states: empty (v0, no edits yet), skeleton (edit state still loading), error (a refused edit), disabled (no edit server)
-        const toAi = () => page.evaluate(() => { document.getElementById("sec-ai").scrollIntoView(); });
+        const toAi = () => page.click("#tab-ai");
         await toAi(); await sleep(300);
         await page.screenshot({ path: path.join(OUT, `3a_ai_empty_${tag}.png`) });
         await page.fill("#ai-input", "make the handle thinner"); await page.click("#ai-send");
@@ -85,20 +87,21 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
         await sk.route("**/edit/state", async (r) => { await sleep(6000); r.continue().catch(() => {}); });
         await sk.goto("http://127.0.0.1:5092/", { waitUntil: "domcontentloaded" });
         await sk.waitForFunction(() => window.__sceneReady === true, { timeout: 40000 });
-        await sk.evaluate(() => { document.getElementById("sec-ai").scrollIntoView(); }); await sleep(500);
+        await sk.click("#tab-ai"); await sleep(500);
         await sk.screenshot({ path: path.join(OUT, `3b_ai_skeleton_${tag}.png`) });
         await sk.close();
         const dis = await ctx.newPage();
         await dis.goto("http://127.0.0.1:5091/", { waitUntil: "domcontentloaded" });
         await dis.waitForFunction(() => window.__sceneReady === true && !window.__isLoading(), { timeout: 40000 });
-        await dis.click("#btn-demo-run"); await sleep(1500);
-        await dis.evaluate(() => { document.getElementById("sec-ai").scrollIntoView(); }); await sleep(400);
+        await dis.evaluate(() => document.getElementById("btn-demo-run").click()); await sleep(1500);
+        await dis.click("#tab-ai"); await sleep(400);
         await dis.screenshot({ path: path.join(OUT, `3d_ai_disabled_${tag}.png`) });
         await dis.close();
         await page.reload({ waitUntil: "domcontentloaded" });
         await ready();
         await page.waitForFunction(() => window.__aiState && window.__aiState() && window.__partsUi && window.__partsUi().enabled, { timeout: 15000 });
       }
+      await page.click("#tab-ai");
       for (const [text, sel] of [["make the handle 2 mm thicker", ".entry.ok"], ["make the handle thinner", ".entry.bad"]]) {
         await page.fill("#ai-input", text); await page.click("#ai-send");
         await page.waitForFunction((s) => document.querySelector("#ai-log " + s), sel, { timeout: 60000 });

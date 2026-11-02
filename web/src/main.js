@@ -14,25 +14,25 @@ let cleanup = null;
 
 const LOGO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="square" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>';
 
-const CRUMBS = { projects: [["Projects"]], new: [["Projects", "#/projects"], ["New project"]], help: [["Help"]] };
-const crumbHtml = (name) => (CRUMBS[name] || []).map(([t, h], i, a) => `${i ? '<span class="sep" aria-hidden="true">/</span>' : ""}${h && i < a.length - 1 ? `<a href="${h}">${t}</a>` : `<b>${t}</b>`}`).join("");
+const CRUMBS = { home: [["Projects", "#/projects"], ["New project", "#/new"]], projects: [["Projects"]], new: [["Projects", "#/projects"], ["New project"]], help: [["Help"]], login: [["Sign in"]] };
+const crumbHtml = (name) => (CRUMBS[name] || []).map(([t, h], i, a) => `${i ? '<span class="sep" aria-hidden="true">/</span>' : ""}${h ? `<a href="${h}">${t}</a>` : `<b>${t}</b>`}`).join("");
 
 function shell(inner, { bare = false, route: routeName = "" } = {}) {
   const signedIn = Boolean(ctx.user);
   const initial = signedIn ? esc((ctx.user.email || "?")[0].toUpperCase()) : "";
   app.innerHTML = `
     ${bare ? "" : `<header id="topbar">
-      <a id="brand" href="#/" aria-label="WorldKit home">${LOGO}<b>WorldKit</b><span>Film it. Print it.</span></a>
+      <a id="brand" href="#/" aria-label="WorldKit home">${LOGO}<b>WorldKit</b></a>
       <nav id="crumb" aria-label="Breadcrumb">${crumbHtml(routeName)}</nav>
-      <div class="spacer"></div>
-      <nav aria-label="Main">
-        ${signedIn ? `<a class="btn" href="#/projects">Projects</a><a class="btn${routeName === "projects" ? " primary" : ""}" href="#/new">New</a>
+      <nav id="topnav" aria-label="Main">
+        ${signedIn ? `<a href="#/projects">Projects</a><span class="sep" aria-hidden="true">/</span>
           <div class="menu"><button id="user-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu"><span class="avatar" aria-hidden="true">${initial}</span><span id="who">${esc(ctx.user.email)}</span></button>
             <div id="user-pop" role="menu" hidden><div class="hint" id="user-mail">${esc(ctx.user.email)}</div><a role="menuitem" href="#/help">Help</a><button id="logout" type="button" role="menuitem">Log out</button></div></div>`
-                   : `<a class="btn" href="#/help">Help</a><a class="btn${routeName === "home" || routeName === "login" ? "" : " primary"}" href="#/login">Sign in</a>`}
+                   : `<a href="#/help">Help</a><span class="sep" aria-hidden="true">/</span><a href="#/login">Sign in</a>`}
       </nav>
     </header>`}
-    <main id="page">${inner}</main>`;
+    <main id="page" class="page-${routeName}">${inner}</main>
+    ${bare ? "" : `<footer id="statusbar"><span>WorldKit</span><span class="mono">STL <i aria-hidden="true">/</i> mm</span></footer>`}`;
   const lo = document.getElementById("logout");
   if (lo) lo.onclick = async () => { await supabase.auth.signOut(); ctx.navigate("#/"); };
   const ub = document.getElementById("user-btn"), pop = document.getElementById("user-pop");
