@@ -193,7 +193,9 @@ def _load(model_dir: Path) -> dict:
     rp = Path(model_dir) / "report.json"
     if rp.is_file():
         pp = json.loads(rp.read_text(encoding="utf-8")).get("print_prep", {})
-        scale_note = f"height source: {pp.get('height_source')}" + (" (a PLACEHOLDER size, not a measurement)" if pp.get("is_estimate") else "")
+        src = pp.get("height_source")
+        scale_note = f"height source: {src}" + (" (estimated from a reference such as a coin; an estimate, not a measurement)" if src == "reference_calibrated" else
+                                                 " (measured by the user)" if src == "user" else " (a PLACEHOLDER size, not a measurement)" if pp.get("is_estimate") else "")
     data = {"units": "mm", "source": "model_print.stl" + ("" if stl_units == "mm" else " x10 (legacy cm STL)"), "scale_note": scale_note, "current": 0, "rejected": [],
             "versions": [{"version": 0, "parent": None, "instruction": None, "stl": "edits/v0.stl", "created": time.strftime("%Y-%m-%dT%H:%M:%S")}]}
     vj.write_text(json.dumps(data, indent=1), encoding="utf-8")

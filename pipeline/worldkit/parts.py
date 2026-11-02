@@ -83,6 +83,57 @@ def vote_part(V, F, normals, frames: list) -> dict:
     return {"selected": sel, "views_total": views_total, "views_found": views_found}
 
 
+def grow_protrusion(V, F, seed: np.ndarray, up_axis: int = 1, margin_rel: float = 0.04) -> np.ndarray:
+    """Grow SAM-voted seed vertices along the mesh over the whole protruding part (a handle ring), stopping at the body junction.
+
+    The body is a surface of revolution about the vertical axis; its outer radius at each height is measured on the side OPPOSITE the seeds (so a
+    handle does not bias it). A vertex belongs to the protrusion if it is farther from the axis than that body radius plus a margin; the result is
+    the connected set of such vertices that contains seeds. Vertices of the body wall are never added."""
+    import scipy.sparse as sp
+    from scipy.sparse.csgraph import connected_components
+
+    if not seed.any():
+        return seed
+    # GLB vertices are duplicated along UV seams: weld by position so the mesh graph is connected, then map the answer back to every duplicate
+    q = np.round(np.asarray(V) * 1e5).astype(np.int64)
+    uniq, first, inv = np.unique(q, axis=0, return_index=True, return_inverse=True)
+    inv = inv.reshape(-1)
+    if len(uniq) < len(V):
+        seed_w = np.zeros(len(uniq), bool)
+        seed_w[inv[seed]] = True
+        out_w = grow_protrusion(np.asarray(V)[first], inv[np.asarray(F)], seed_w, up_axis, margin_rel)
+        return out_w[inv]
+    h = [i for i in range(3) if i != up_axis]
+    y = V[:, up_axis]
+    lo, hi = float(y.min()), float(y.max())
+    low = V[y < lo + 0.25 * (hi - lo)]  # the foot: no handle there
+    c = np.array([(low[:, h[0]].min() + low[:, h[0]].max()) / 2, (low[:, h[1]].min() + low[:, h[1]].max()) / 2])
+    d = V[:, h] - c
+    r = np.linalg.norm(d, axis=1)
+    az = np.arctan2(d[:, 1], d[:, 0])
+    seed_az = np.arctan2(np.sin(az[seed]).mean(), np.cos(az[seed]).mean())
+    opposite = np.abs(np.angle(np.exp(1j * (az - seed_az)))) > np.radians(100)
+    bins = np.linspace(lo, hi + 1e-9, 41)
+    which = np.clip(np.digitize(y, bins) - 1, 0, 39)
+    body_r = np.full(40, np.nan)
+    for b in range(40):
+        m = opposite & (which == b)
+        if m.sum() >= 5:
+            body_r[b] = np.percentile(r[m], 90)  # outer wall (the inner wall is closer to the axis)
+    ok = ~np.isnan(body_r)
+    if not ok.any():
+        return seed
+    body_r = np.interp(np.arange(40), np.nonzero(ok)[0], body_r[ok])
+    cand = r > body_r[which] * (1.0 + margin_rel)
+    cand |= seed  # the votes themselves are always kept
+    e = np.asarray(trimesh.Trimesh(V, F, process=False).edges_unique)
+    keep = cand[e[:, 0]] & cand[e[:, 1]]
+    g = sp.coo_matrix((np.ones(keep.sum()), (e[keep, 0], e[keep, 1])), shape=(len(V), len(V)))
+    _, lab = connected_components(g, directed=False)
+    seeds_lab = np.unique(lab[seed])
+    return cand & np.isin(lab, seeds_lab)
+
+
 def glb_to_stl_transform(V_glb: np.ndarray, stl: trimesh.Trimesh, mm_per_unit: float, body_height_mm: float):
     """Similarity (fixed scale) taking GLB vertices (Y up) into the print mesh frame (mm, Z up, base plate under the object).
     Returns (function points->points, rms error mm). Tries the four Z rotations of the Y-up -> Z-up map."""
@@ -144,9 +195,10 @@ def find_part(run_dir: Path, part_id: str = "handle", concept: str = "mug handle
     if not frames:
         raise SystemExit("no frame had both an object mask and a good pose fit")
     v = vote_part(V, F, normals, frames)
-    sel = v["selected"]
-    out = {"id": part_id, "name": part_id, "concept": concept, "views_total": v["views_total"], "views_found": v["views_found"], "vertex_count": int(sel.sum()),
-           "method": "SAM 3.1 part masks voted onto the mesh vertices (2D votes, edges approximate)", "glb_keys_b64": _b64(np.round(V[sel] * KEY_SCALE).astype(np.int32))}
+    sel_votes = v["selected"]
+    sel = grow_protrusion(V, F, sel_votes) if concept.endswith("handle") or part_id == "handle" else sel_votes
+    out = {"id": part_id, "name": part_id, "concept": concept, "views_total": v["views_total"], "views_found": v["views_found"], "vertex_count": int(sel.sum()), "vertices_voted": int(sel_votes.sum()),
+           "method": "SAM 3.1 part masks voted onto the mesh vertices, then grown along the mesh over the whole protrusion up to the body junction (edges approximate)", "glb_keys_b64": _b64(np.round(V[sel] * KEY_SCALE).astype(np.int32))}
     rep = json.loads((run_dir / "report.json").read_text(encoding="utf-8")) if (run_dir / "report.json").is_file() else {}
     pp, stl_path = rep.get("print_prep") or {}, run_dir / "model_print.stl"
     if sel.any() and pp.get("scale_factor") and stl_path.is_file():

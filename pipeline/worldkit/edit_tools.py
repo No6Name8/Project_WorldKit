@@ -331,6 +331,7 @@ def mirror(mesh: trimesh.Trimesh, axis: str = "x") -> trimesh.Trimesh:
 
 # Named parts found by worldkit.parts (SAM 3.1 masks voted onto the mesh), loaded by edit.run_edit: id -> {"stl_points", "views_found", "views_total"}
 PARTS: dict = {}
+MIN_PART_COVERAGE = 0.5  # SAM must have found the part in at least half of the usable views
 
 
 def set_parts(parts: dict | None) -> None:
@@ -346,6 +347,9 @@ def thicken_part(mesh: trimesh.Trimesh, part: str, by_mm: float = 2.0) -> trimes
     p = PARTS.get(part)
     if p is None or p.get("stl_points") is None:
         raise EditError(f"no usable part {part!r}; known parts with a print-mesh selection: {[k for k, v in PARTS.items() if v.get('stl_points') is not None]}")
+    found, total = p.get("views_found") or 0, p.get("views_total") or 0
+    if total == 0 or found / total < MIN_PART_COVERAGE:
+        raise EditError(f"SAM found the {part} in only {found} of {total} views, too few to edit it reliably. Nothing was changed.")
     if not 0.2 <= by_mm <= 6:
         raise EditError("by_mm must be between 0.2 and 6")
     d, _ = cKDTree(p["stl_points"]).query(mesh.vertices)
@@ -365,6 +369,29 @@ _TOOLS = {"scale_to": scale_to, "emboss_text": emboss_text, "drill_hole": drill_
           "split": split, "thicken": thicken, "mirror": mirror, "thicken_part": thicken_part}
 
 
+def sentence_for(name: str, args: dict, before: trimesh.Trimesh, after: trimesh.Trimesh, info: dict | None) -> str:
+    """One plain sentence describing an applied tool call (no tool names, no JSON)."""
+    f = lambda v: f"{float(v):g}"
+    if info:
+        return f"Thickened {info['part']} by {info['by_mm']:g} mm (SAM found {info['views_found']} of {info['views_total']} views)"
+    if name == "scale_to":
+        return f"Scaled to {after.extents[2]:.0f} mm tall" if abs(after.extents[2] - before.extents[2]) > 0.05 else "Scaled (size unchanged)"
+    if name == "emboss_text":
+        verb = "Raised" if (args.get("mode") == "raise" or (args.get("mode") is None and args.get("face") == "front")) else "Engraved"
+        return f'{verb} "{args.get("text", "")}" on the {"front" if args.get("face") == "front" else "base"}'
+    if name == "drill_hole":
+        return f"Drilled a {f(args.get('diameter_mm', 0))} mm hole" + (" all the way through" if args.get("through", True) else "")
+    if name == "flatten_base":
+        return f"Flattened the base by {f(args.get('depth_mm', 0.5))} mm"
+    if name == "split":
+        return f"Cut at {args.get('axis', 'z')} = {f(args.get('offset_mm', 0)) if args.get('offset_mm') is not None else 'the middle'} mm and kept the {args.get('keep', 'upper')} half"
+    if name == "thicken":
+        return f"Thickened thin walls to at least {f(args.get('min_wall_mm', 0))} mm"
+    if name == "mirror":
+        return f"Mirrored along {args.get('axis', 'x')}"
+    return f"Applied {name}"
+
+
 def apply_tool(mesh: trimesh.Trimesh, name: str, args: dict) -> tuple[trimesh.Trimesh, dict]:
     """Run one tool by name; returns (new mesh, summary). Unknown tools / bad arguments raise EditError."""
     fn = _TOOLS.get(name)
@@ -376,7 +403,7 @@ def apply_tool(mesh: trimesh.Trimesh, name: str, args: dict) -> tuple[trimesh.Tr
         raise EditError(f"bad arguments for {name}: {exc}") from exc
     info = new.metadata.get("part_info")
     return new, {
-        **({"sentence": f"Thickened {info['part']} by {info['by_mm']:g} mm (SAM found {info['views_found']} of {info['views_total']} views)", "part": info} if info else {}),
+        "sentence": sentence_for(name, args, mesh, new, info), **({"part": info} if info else {}),
         "ok": True, "tool": name, "notes": new.metadata.get("edit_notes", []), "size_mm_before": [round(float(v), 2) for v in mesh.extents], "size_mm_after": [round(float(v), 2) for v in new.extents],
         "volume_change_mm3": round(float(new.volume - mesh.volume), 1), "watertight": bool(new.is_watertight), "faces": int(len(new.faces)),
     }

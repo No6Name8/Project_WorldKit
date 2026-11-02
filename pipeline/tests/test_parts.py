@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from tests.test_edit import model_dir  # noqa: F401  (fixture)
 from tests.test_edit_tools import make_mug
 from worldkit import edit_tools as et
 from worldkit import parts as pt
@@ -64,3 +65,43 @@ def test_thicken_part_grows_only_the_part_and_reads_as_a_sentence():
 def test_b64_roundtrip():
     a = np.random.default_rng(0).normal(size=(5, 3)).astype(np.float32)
     assert np.array_equal(pt.unb64(pt._b64(a), np.float32), a)
+
+
+def test_low_sam_coverage_refuses_with_a_plain_sentence_through_the_edit_loop(model_dir):
+    """3 of 8 views is under half: the edit is refused, nothing changes, and the reason is a sentence the log can show."""
+    import json
+
+    from tests.test_edit import FakeWonder, reply, spark_ok, tool_call
+    from worldkit import edit
+
+    mug = trimesh.load(model_dir / "model_print.stl", force="mesh")
+    info = et.handle_info(mug)
+    sel = np.linalg.norm(mug.vertices - np.asarray(info["bar_center_point_mm"]), axis=1) < 8
+    (model_dir / "parts").mkdir()
+    (model_dir / "parts" / "parts.json").write_text(json.dumps({"parts": [{"id": "handle", "name": "handle", "views_total": 8, "views_found": 3, "vertex_count": int(sel.sum()),
+                                                                           "stl_points_b64": pt._b64(mug.vertices[sel].astype(np.float32))}]}))
+    wonder = FakeWonder([reply([tool_call("thicken_part", {"part": "handle", "by_mm": 2})]), reply(text="Could not."),
+                         reply([tool_call("thicken_part", {"part": "handle", "by_mm": 2})]), reply(text="Could not.")])
+    r = edit.run_edit(model_dir, "make the handle thicker", client=wonder, ask_spark=spark_ok)
+    try:
+        assert not r["applied"]
+        calls = r.get("tool_calls") or r["attempts"][-1]["tool_calls"]
+        assert calls[0]["error"] == "SAM found the handle in only 3 of 8 views, too few to edit it reliably. Nothing was changed."
+        assert edit._load(model_dir)["current"] == 0
+    finally:
+        et.set_parts({})
+
+
+def test_growth_covers_the_whole_handle_ring_and_stops_at_the_body():
+    body = trimesh.creation.cylinder(radius=40.0, height=160.0, sections=64)
+    body.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))  # axis along Y
+    ring = trimesh.creation.torus(major_radius=18.0, minor_radius=4.0, major_sections=48, minor_sections=16)
+    ring.apply_translation([58.0, 20.0, 0])  # on the +x side in the upper half; its inner edge touches the body
+    mesh = trimesh.util.concatenate([body, ring])
+    V, F = np.asarray(mesh.vertices), np.asarray(mesh.faces)
+    is_ring = np.arange(len(V)) >= len(body.vertices)
+    seed = is_ring & (V[:, 1] > 26)  # SAM only saw the upper half of the ring
+    grown = pt.grow_protrusion(V, F, seed)
+    outside = is_ring & (np.linalg.norm(V[:, [0, 2]], axis=1) > 42.0)  # the part of the ring that is not buried in the body wall
+    assert grown[outside].all() and grown[is_ring].mean() > 0.9  # the whole visible ring, including the half SAM never saw
+    assert not grown[~is_ring].any()  # and not a single body vertex
