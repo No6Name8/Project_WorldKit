@@ -1,0 +1,125 @@
+/* WorldKit design tokens. Three layers: primitive (raw values) -> semantic (meaning) -> component (parts).
+   Dark is the default. Components in index.html use semantic/component tokens only, never raw values. */
+
+:root {
+  /* ---- primitive: neutral ramp (cool grey) ---- */
+  --gray-1000: #0b0d10;
+  --gray-950: #0f1215;
+  --gray-900: #14171b;
+  --gray-850: #191d22;
+  --gray-800: #1f2429;
+  --gray-700: #2a3037;
+  --gray-600: #3a424b;
+  --gray-500: #566069;
+  --gray-400: #7a8691;
+  --gray-300: #a3adb7;
+  --gray-200: #c9d1d8;
+  --gray-100: #e7ebee;
+  --white: #ffffff;
+  /* ---- primitive: the one accent (blue) and the status hues ---- */
+  --blue-700: #234f9f;
+  --blue-600: #2f6bd0;
+  --blue-500: #4c8df6;
+  --blue-400: #79a9f8;
+  --green-500: #3fb27f;
+  --amber-500: #d9a441;
+  --red-500: #e5645b;
+  --green-bg: #12261e;
+  --amber-bg: #2a2214;
+  --red-bg: #2c1816;
+
+  /* ---- primitive: type, space, radius, motion ---- */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
+  --fs-xs: 11px;   /* labels, units, captions */
+  --fs-sm: 12px;   /* dense body, tables */
+  --fs-md: 13px;   /* controls, default body */
+  --fs-lg: 16px;   /* panel/object titles */
+  --lh-tight: 1.25;
+  --lh-body: 1.45;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-1: 2px;
+  --radius-2: 4px;
+  --border-w: 1px;
+
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-slow: 180ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --topbar-h: 44px;
+  --sidebar-w: 264px;
+  --inspector-w: 336px;
+
+  /* ---- semantic: surfaces, text, borders ---- */
+  --bg-app: var(--gray-950);
+  --bg-viewport: var(--gray-900);
+  --bg-surface: var(--gray-900);
+  --bg-raised: var(--gray-850);
+  --bg-field: var(--gray-1000);
+  --bg-hover: var(--gray-800);
+  --bg-selected: #172236;
+  --text-primary: var(--gray-100);
+  --text-secondary: var(--gray-300);
+  --text-muted: var(--gray-400);
+  --text-on-accent: var(--white);
+  --border-subtle: var(--gray-800);
+  --border-default: var(--gray-700);
+  --border-strong: var(--gray-600);
+  --accent: var(--blue-500);
+  --accent-solid: var(--blue-600);
+  --accent-solid-hover: var(--blue-500);
+  --focus-ring: var(--blue-400);
+  --status-ok: var(--green-500);
+  --status-warn: var(--amber-500);
+  --status-err: var(--red-500);
+  --status-idle: var(--gray-500);
+  --status-ok-bg: var(--green-bg);
+  --status-warn-bg: var(--amber-bg);
+  --status-err-bg: var(--red-bg);
+  --elev-1: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --elev-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --scrim: rgba(11, 13, 16, 0.72);
+
+  /* ---- semantic: 3D viewport ---- */
+  --vp-background: var(--gray-900);
+  --vp-grid-major: var(--gray-600);
+  --vp-grid-minor: var(--gray-800);
+  --vp-select: var(--blue-500);
+  --vp-bed: var(--white);
+
+  /* ---- component ---- */
+  --btn-bg: var(--bg-raised);
+  --btn-bg-hover: var(--bg-hover);
+  --btn-border: var(--border-default);
+  --btn-primary-bg: var(--accent-solid);
+  --btn-primary-bg-hover: var(--accent-solid-hover);
+  --btn-height: 28px;
+  --field-height: 28px;
+  --row-height: 28px;
+}
+
+/* Light theme (opt-in with <html data-theme="light">): semantic layer only. */
+:root[data-theme="light"] {
+  --bg-app: #f3f5f7; --bg-viewport: #e6eaee; --bg-surface: #ffffff; --bg-raised: #f6f8fa; --bg-field: #ffffff;
+  --bg-hover: #e9edf1; --bg-selected: #e3edfd; --text-primary: #14171b; --text-secondary: #3b444d; --text-muted: #5b6671;
+  --border-subtle: #e1e5e9; --border-default: #cbd2d9; --border-strong: #aab3bc;
+  --accent: #2f6bd0; --accent-solid: #2f6bd0; --accent-solid-hover: #234f9f; --focus-ring: #2f6bd0;
+  --status-ok-bg: #e4f4ec; --status-warn-bg: #fbf1dd; --status-err-bg: #fbe6e4;
+  --vp-background: #e6eaee; --vp-grid-major: #aab3bc; --vp-grid-minor: #d3d9df; --vp-bed: #3b444d;
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; }
+}
