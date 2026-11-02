@@ -26,6 +26,20 @@ vercel env add VITE_SUPABASE_PUBLISHABLE_KEY production
 vercel --prod
 ```
 
+## Prebuilt deploy (what worked from Windows)
+
+`vercel --prod` uploads every source file and timed out here, and `vercel build` fails when `npm ci` hits locked files. This works: build locally, then deploy the output.
+
+```powershell
+npm --prefix web run build
+# copy web/dist to .vercel/output/static and write .vercel/output/config.json:
+#   {"version":3,"routes":[{"src":"/sw.js","headers":{"cache-control":"no-cache"},"continue":true},
+#     {"src":"/manifest.webmanifest","headers":{"content-type":"application/manifest+json"},"continue":true},{"handle":"filesystem"}]}
+vercel deploy --prebuilt --prod --token $env:VERCEL_TOKEN
+```
+
+The build must run with `web/.env.local` present (the Supabase values are baked into the bundle). Stop any running `vite preview` first, or `npm ci` fails on locked files.
+
 ## Notes
 
 - Hash routing (`#/projects`), so no rewrite rules are needed.

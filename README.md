@@ -59,6 +59,8 @@ cd ..\pipeline
 
 Deployment steps are in `docs/DEPLOY.md`. Limits: the free Supabase plan refuses single files over 50 MB (the app says so before uploading; film about 20 seconds); the hosted viewer has no edit server, so AI Edit needs `python -m worldkit.serve` on the laptop.
 
+**Live: https://web-flame-psi-45.vercel.app** (sign in with an account on the Supabase project; processing still needs the laptop worker).
+
 Verified against a real Supabase project with `node web/tests/e2e_real.mjs` (sign in, upload, live status, worker dry run, viewer, delete). The dry run publishes the demo mug, so that run shows the demo model, not the uploaded video. Screenshots: `docs/web/`.
 
 Planned (not built): uploads over 50 MB (resumable), processing without a laptop, push notification when a project finishes, AI Edit from the hosted viewer, sharing a project with another account, a worker that subscribes instead of polling.

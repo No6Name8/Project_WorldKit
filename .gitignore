@@ -80,3 +80,5 @@ Thumbs.db
 !viewer/assets/demo/**
 !viewer/vendor/**
 !pipeline/samples/mug_on_table.mp4
+
+/.env.local
