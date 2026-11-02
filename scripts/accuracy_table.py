@@ -130,8 +130,8 @@ def main(argv=None) -> int:
             continue
         unmatched_model.discard(norm(mo['name']))
         if mo.get("is_ref"):
-            references.append(name)  # the scale reference must never score itself
-            continue
+            references.append(name)  # a scale reference never scores the dimension it defines (its height); its other dimensions are still real checks
+            dims = {k: v for k, v in dims.items() if k != "height_mm"}
         if not dims:
             unscored.append(name)
             continue
