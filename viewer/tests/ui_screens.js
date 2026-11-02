@@ -73,6 +73,32 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
       await page.reload({ waitUntil: "domcontentloaded" });
       await ready();
       await page.waitForFunction(() => window.__aiState && window.__aiState() && window.__partsUi && window.__partsUi().enabled, { timeout: 15000 });
+      if (all) {  // AI Edit states: empty (v0, no edits yet), skeleton (edit state still loading), error (a refused edit), disabled (no edit server)
+        const toAi = () => page.evaluate(() => { document.getElementById("sec-ai").scrollIntoView(); });
+        await toAi(); await sleep(300);
+        await page.screenshot({ path: path.join(OUT, `3a_ai_empty_${tag}.png`) });
+        await page.fill("#ai-input", "make the handle thinner"); await page.click("#ai-send");
+        await page.waitForFunction(() => document.querySelector("#ai-log .entry.bad"), null, { timeout: 60000 });
+        await sleep(400); await toAi();
+        await page.screenshot({ path: path.join(OUT, `3c_ai_error_${tag}.png`) });
+        const sk = await ctx.newPage();
+        await sk.route("**/edit/state", async (r) => { await sleep(6000); r.continue().catch(() => {}); });
+        await sk.goto("http://127.0.0.1:5092/", { waitUntil: "domcontentloaded" });
+        await sk.waitForFunction(() => window.__sceneReady === true, { timeout: 40000 });
+        await sk.evaluate(() => { document.getElementById("sec-ai").scrollIntoView(); }); await sleep(500);
+        await sk.screenshot({ path: path.join(OUT, `3b_ai_skeleton_${tag}.png`) });
+        await sk.close();
+        const dis = await ctx.newPage();
+        await dis.goto("http://127.0.0.1:5091/", { waitUntil: "domcontentloaded" });
+        await dis.waitForFunction(() => window.__sceneReady === true && !window.__isLoading(), { timeout: 40000 });
+        await dis.click("#btn-demo-run"); await sleep(1500);
+        await dis.evaluate(() => { document.getElementById("sec-ai").scrollIntoView(); }); await sleep(400);
+        await dis.screenshot({ path: path.join(OUT, `3d_ai_disabled_${tag}.png`) });
+        await dis.close();
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await ready();
+        await page.waitForFunction(() => window.__aiState && window.__aiState() && window.__partsUi && window.__partsUi().enabled, { timeout: 15000 });
+      }
       for (const [text, sel] of [["make the handle 2 mm thicker", ".entry.ok"], ["make the handle thinner", ".entry.bad"]]) {
         await page.fill("#ai-input", text); await page.click("#ai-send");
         await page.waitForFunction((s) => document.querySelector("#ai-log " + s), sel, { timeout: 60000 });

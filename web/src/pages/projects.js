@@ -14,7 +14,7 @@ export async function renderProjects(root, ctx) {
       <div><div class="name">${esc(p.name)}</div>
         <div class="meta"><span class="chip ${esc(p.status)}">${esc(s.label)}</span><span class="chip">${esc(p.mode)}</span><span class="mono">${esc(formatDate(p.created_at))}</span></div></div>
       <div class="actions">
-        ${p.status === "done" ? `<a class="btn primary" href="#/project/${esc(p.id)}">Open</a>` : ""}
+        ${p.status === "done" ? `<a class="btn accent-outline" href="#/project/${esc(p.id)}">Open</a>` : `<button type="button" class="btn" disabled title="Available when the project is done">Open</button>`}
         <button type="button" class="danger" data-del="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">Delete</button>
       </div>${note}</article>`;
   };

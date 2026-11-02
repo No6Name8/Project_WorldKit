@@ -59,3 +59,8 @@ test("escaping and result paths", () => {
   assert.deepEqual(resultPaths({ result_path: "u/p", report: { files: ["model.glb", "parts/parts.json"] } }), ["u/p/model.glb", "u/p/parts/parts.json"]);
   assert.deepEqual(resultPaths({ result_path: "u/p", report: null }), []);
 });
+
+test("help is a route", async () => {
+  const { parseRoute } = await import("../src/lib.js");
+  assert.deepEqual(parseRoute("#/help"), { name: "help" });
+});

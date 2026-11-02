@@ -3,7 +3,7 @@ import { esc, resultPaths } from "../lib.js";
 
 /** Full-screen viewer for one finished project: the viewer (an iframe of /viewer/) gets signed URLs for the project's private result files. */
 export async function renderProject(app, id, ctx) {
-  app.innerHTML = '<main id="page"><div class="boot">Loading project</div></main>';
+  app.innerHTML = '<main id="page" aria-busy="true"><div class="cards"><div class="skel"></div><div class="skel"></div></div></main>';
   const fail = (msg) => { app.innerHTML = `<main id="page"><div class="msg err" role="alert">${esc(msg)}</div><p style="margin-top:var(--space-4)"><a class="btn" href="#/projects">Back to projects</a></p></main>`; };
 
   const { data: p, error } = await supabase.from("projects").select("*").eq("id", id).maybeSingle();

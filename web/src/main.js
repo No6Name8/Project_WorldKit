@@ -6,6 +6,7 @@ import { renderLogin } from "./pages/login.js";
 import { renderNew } from "./pages/new.js";
 import { renderProjects } from "./pages/projects.js";
 import { renderProject } from "./pages/project.js";
+import { renderHelp } from "./pages/help.js";
 
 const app = document.getElementById("app");
 const ctx = { session: null, user: null, navigate: (h) => { location.hash = h; }, rerender: () => route() };
@@ -13,20 +14,35 @@ let cleanup = null;
 
 const LOGO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="square" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>';
 
-function shell(inner, { bare = false } = {}) {
+const CRUMBS = { projects: [["Projects"]], new: [["Projects", "#/projects"], ["New project"]], help: [["Help"]] };
+const crumbHtml = (name) => (CRUMBS[name] || []).map(([t, h], i, a) => `${i ? '<span class="sep" aria-hidden="true">/</span>' : ""}${h && i < a.length - 1 ? `<a href="${h}">${t}</a>` : `<b>${t}</b>`}`).join("");
+
+function shell(inner, { bare = false, route: routeName = "" } = {}) {
   const signedIn = Boolean(ctx.user);
+  const initial = signedIn ? esc((ctx.user.email || "?")[0].toUpperCase()) : "";
   app.innerHTML = `
     ${bare ? "" : `<header id="topbar">
       <a id="brand" href="#/" aria-label="WorldKit home">${LOGO}<b>WorldKit</b><span>Film it. Print it.</span></a>
+      <nav id="crumb" aria-label="Breadcrumb">${crumbHtml(routeName)}</nav>
       <div class="spacer"></div>
       <nav aria-label="Main">
-        ${signedIn ? `<a class="btn" href="#/projects">Projects</a><a class="btn primary" href="#/new">New</a><span id="who">${esc(ctx.user.email)}</span><button id="logout" type="button">Log out</button>`
-                   : `<a class="btn primary" href="#/login">Sign in</a>`}
+        ${signedIn ? `<a class="btn" href="#/projects">Projects</a><a class="btn${routeName === "projects" ? " primary" : ""}" href="#/new">New</a>
+          <div class="menu"><button id="user-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu"><span class="avatar" aria-hidden="true">${initial}</span><span id="who">${esc(ctx.user.email)}</span></button>
+            <div id="user-pop" role="menu" hidden><div class="hint" id="user-mail">${esc(ctx.user.email)}</div><a role="menuitem" href="#/help">Help</a><button id="logout" type="button" role="menuitem">Log out</button></div></div>`
+                   : `<a class="btn" href="#/help">Help</a><a class="btn${routeName === "home" || routeName === "login" ? "" : " primary"}" href="#/login">Sign in</a>`}
       </nav>
     </header>`}
     <main id="page">${inner}</main>`;
   const lo = document.getElementById("logout");
   if (lo) lo.onclick = async () => { await supabase.auth.signOut(); ctx.navigate("#/"); };
+  const ub = document.getElementById("user-btn"), pop = document.getElementById("user-pop");
+  if (ub) {
+    const close = () => { pop.hidden = true; ub.setAttribute("aria-expanded", "false"); };
+    ub.onclick = (e) => { e.stopPropagation(); const open = pop.hidden; pop.hidden = !open; ub.setAttribute("aria-expanded", String(open)); };
+    document.addEventListener("click", (e) => { if (!pop.contains(e.target)) close(); }, { once: false });
+    pop.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  }
   return document.getElementById("page");
 }
 
@@ -45,9 +61,9 @@ async function route() {
     cleanup = await renderProject(app, r.id, ctx);
     return;
   }
-  const page = shell("");
+  const page = shell("", { route: r.name });
   if (!configured && r.name !== "home") { page.innerHTML = notConfigured(); return; }
-  const map = { home: renderHome, login: renderLogin, new: renderNew, projects: renderProjects };
+  const map = { home: renderHome, login: renderLogin, new: renderNew, projects: renderProjects, help: renderHelp };
   cleanup = await map[r.name](page, ctx);
 }
 

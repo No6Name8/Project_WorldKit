@@ -50,6 +50,7 @@ async function mockSupabase(page, state) {
     if (p === "/auth/v1/logout") return route.fulfill({ status: 204, headers: cors });
     if (p === "/rest/v1/projects") {
       if (m === "GET") {
+        if (state.delayMs) await sleep(state.delayMs);
         if (state.listError) return json({ message: "boom" }, 500);
         const id = url.searchParams.get("id");
         const rows = state.projects.filter((r) => !id || id === `eq.${r.id}`);
@@ -151,9 +152,21 @@ async function mockSupabase(page, state) {
       await page.waitForSelector(".empty");
       check(`[${tag}] the empty state offers a new project`, (await page.locator(".empty").innerText()).includes("No projects yet"));
       await shot("projects_empty");
+      // the other states for the screenshots: skeleton (slow list), disabled (nothing is done yet, every Open is disabled)
+      if (SHOTS) {
+        state.projects = JSON.parse(JSON.stringify(projects)).filter((p) => p.status === "processing" || p.status === "uploaded");
+        await page.reload(); await page.waitForSelector(".card"); await shot("projects_disabled");
+        state.projects = JSON.parse(JSON.stringify(projects)); state.delayMs = 4000;
+        await page.reload(); await sleep(700); await shot("projects_skeleton");
+        await page.waitForSelector(".card", { timeout: 15000 }); state.delayMs = 0;
+        await page.goto(BASE + "/#/help"); await page.waitForSelector("h1"); await shot("help");
+        await page.click("#user-btn"); await sleep(250); await shot("user_menu"); await page.keyboard.press("Escape");
+        state.projects = []; await page.goto(BASE + "/#/projects"); await page.reload(); await page.waitForSelector(".empty");
+      }
       state.listError = true;
       await page.reload(); await page.waitForSelector(".msg.err");
       check(`[${tag}] a load error is a sentence with a retry button`, (await page.locator(".msg.err").innerText()).includes("Could not load your projects") && await page.locator("#retry").count() === 1);
+      await shot("projects_error");
       state.listError = false; state.projects = JSON.parse(JSON.stringify(projects));
 
       // open the done project in the viewer through signed URLs

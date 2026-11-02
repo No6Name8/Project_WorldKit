@@ -15,15 +15,24 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="square" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>
     <b>WorldKit</b><span>Film it. Print it.</span>
   </div>
+  <nav id="crumb" aria-label="Breadcrumb">
+    <button id="btn-back" type="button" class="crumb-link">Projects</button><span class="crumb-root">Projects</span>
+    <span class="sep" aria-hidden="true">/</span><b id="crumb-name">No project</b>
+  </nav>
+  <div class="tabs" role="tablist" aria-label="Project sections">
+    <button id="tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
+    <button id="tab-ai" type="button" role="tab" aria-selected="false">AI Edit</button>
+    <button id="btn-accuracy" type="button" role="tab" aria-selected="false">Accuracy</button>
+  </div>
+  <div class="spacer"></div>
+  <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
   <div class="seg" role="group" aria-label="Mode">
     <button id="mode-object" type="button" aria-pressed="true">Object</button>
     <button id="mode-map" type="button" aria-pressed="false">Map</button>
   </div>
-  <div class="spacer"></div>
-  <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
-  <button id="btn-back" type="button" style="display:none">Projects</button>
-  <button id="btn-accuracy" type="button">Accuracy</button>
 </header>
+
+<footer id="statusbar" role="contentinfo"><span id="sb-left">No project</span><span id="sb-right">Units: mm <i aria-hidden="true">·</i> <span id="sb-saved">Not saved</span></span></footer>
 
 <div id="app">
   <div id="dock">
@@ -52,7 +61,7 @@
         <summary>Load</summary>
         <div class="sec-b">
           <div class="row">
-            <button id="btn-demo-run" class="primary grow" title="One coin-scaled run: the mug for Object, the desk scene for Map">Demo run</button>
+            <button id="btn-demo-run" class="grow" title="One coin-scaled run: the mug for Object, the desk scene for Map">Demo run</button>
           </div>
           <div class="row">
             <label class="file-btn"><button id="btn-load-scene" type="button">Scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
@@ -72,9 +81,11 @@
         <div class="sec-b">
           <div id="obj-panel">
             <h2 id="obj-name">Selected object</h2>
+            <div id="dim-cards" class="dims3" hidden></div>
             <div id="obj-dims"></div>
             <div class="note" id="obj-base">Dimensions exclude the print base plate.</div>
-            <div id="obj-scale"></div>
+            <div class="scale-line"><span id="obj-scale"></span><span id="obj-scale-flag" class="chip warn" hidden>estimate</span></div>
+            <div id="obj-mesh" class="mesh-line" hidden></div>
             <div class="row">
               <button id="btn-print-obj" class="primary grow">Download STL (mm)</button>
               <button id="btn-edit-obj">Edit</button>
@@ -111,14 +122,19 @@
             <div id="ai-status"></div>
             <div id="instruction-row">
               <input id="ai-input" type="text" placeholder='e.g. make the handle 2 mm thicker' aria-label="Edit instruction" />
-              <button id="ai-send" class="primary">Edit</button>
+              <button id="ai-send">Send</button>
             </div>
+            <div class="hint" id="ai-helper">One change at a time. Wonder edits the print mesh, Spark checks the before and after renders, and every edit can be undone.</div>
             <div class="row" style="margin-top: var(--space-2);">
               <button id="ai-undo">Undo</button>
               <button id="ai-download">Current version STL (mm)</button>
             </div>
           </div>
+          <div id="ai-skel" aria-hidden="true"><div class="skel"></div><div class="skel"></div><div class="skel" style="width:70%"></div></div>
           <div id="ai-empty">AI Edit is not connected. Start the edit server with python -m worldkit.serve RUN_DIR and reload this page.</div>
+          <div id="ai-disabled" aria-hidden="true">
+            <div class="instruction-row"><input type="text" disabled placeholder="Edit server not connected" tabindex="-1" /><button disabled tabindex="-1">Send</button></div>
+          </div>
         </div>
       </details>
 
@@ -338,7 +354,20 @@ function settleFloorAndShadows(object3d) {
   if (isFinite(b.min.y)) { grid.position.y = b.min.y; shadowFloor.position.y = b.min.y - 0.001; }
 }
 
-function frameCameraOn(object3d, boxOverride) {
+let camTween = null;
+const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function tweenCameraTo(pos, target, ms = 420) {
+  if (REDUCED_MOTION) { camera.position.copy(pos); orbit.target.copy(target); orbit.update(); camTween = null; return; }
+  camTween = { t0: performance.now(), ms, p0: camera.position.clone(), q0: orbit.target.clone(), p1: pos.clone(), q1: target.clone() };
+}
+function stepCameraTween(now) {
+  if (!camTween) return;
+  const k = Math.min(1, (now - camTween.t0) / camTween.ms), e = 1 - Math.pow(1 - k, 3); // ease-out cubic, no overshoot
+  camera.position.lerpVectors(camTween.p0, camTween.p1, e);
+  orbit.target.lerpVectors(camTween.q0, camTween.q1, e);
+  if (k >= 1) camTween = null;
+}
+function frameCameraOn(object3d, boxOverride, animate = false) {
   settleFloorAndShadows(objectsRoot);
   const box = boxOverride || new THREE.Box3().setFromObject(object3d);
   const size = new THREE.Vector3();
@@ -348,7 +377,10 @@ function frameCameraOn(object3d, boxOverride) {
   const radius = Math.max(size.length() / 2, 1e-4);
   const dist = radius / Math.sin((camera.fov * Math.PI) / 360) * 1.3;
   const dir = new THREE.Vector3(1, 0.8, 1).normalize();
-  camera.position.copy(center.clone().add(dir.multiplyScalar(dist)));
+  const to = center.clone().add(dir.multiplyScalar(dist));
+  if (animate) { tweenCameraTo(to, center); return { size, center }; }
+  camTween = null;
+  camera.position.copy(to);
   orbit.target.copy(center);
   orbit.update();
   return { size, center };
@@ -559,8 +591,8 @@ document.getElementById("file-load").addEventListener("change", (e) => {
 });
 window.__loadGLBFromArrayBuffer = loadGLBFromArrayBuffer;
 
-document.getElementById("btn-reset").onclick = () => frameObjects();
-document.getElementById("btn-vp-reset").onclick = () => frameObjects();
+document.getElementById("btn-reset").onclick = () => frameObjects(true);
+document.getElementById("btn-vp-reset").onclick = () => frameObjects(true);
 
 function resetTransform() {
   const entry = sceneObjects.find((o) => o.group === modelGroup);
@@ -1280,6 +1312,7 @@ async function openProject(msg) {
       if (has("parts/parts.json")) await loadParts(PROJECT_BASE + "parts/parts.json");
     }
     if (sceneObjects.length === 1 && msg.project.name) { sceneObjects[0].name = msg.project.name; refreshObjectList(); refreshSelection(); }
+    if (msg.project.name) setCrumb(msg.project.name);
     logEntry(`Opened project ${msg.project.name}`);
   } catch (e) { logEntry(`FAILED: could not open the project: ${e}`, true); }
 }
@@ -1318,6 +1351,7 @@ function aiLog(html, cls) {
 const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 function aiRefreshLabel() {
   const st = ai.state;
+  updateStatusBar();
   document.getElementById("ai-version").textContent = st ? `v${st.current}${st.current === 0 ? " original" : ""} | ${st.units}` : "";
   document.getElementById("ai-undo").disabled = !st || st.current === 0 || ai.busy;
   const chips = document.getElementById("ai-versions");
@@ -1407,6 +1441,7 @@ document.getElementById("ai-download").onclick = () => go("/edit/current.stl?x=1
 window.__aiState = () => ai.state;
 window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return aiSend(); };
 (async () => {
+  document.body.classList.add("ai-loading");
   try {
     const r = await fetch("/edit/state");
     if (!r.ok) return;
@@ -1420,6 +1455,7 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
     { const cur = sceneObjects.find((x) => x.group === modelGroup); if (cur) afterSelect(cur); }
     if (st.current > 0) { await new Promise((res) => setTimeout(res, 600)); await aiReloadModel(); aiLog(`Opened the current edited version v${st.current}`); }
   } catch (e) { /* the plain viewer server has no /edit: the panel stays hidden */ }
+  finally { document.body.classList.remove("ai-loading"); }
 })();
 
 
@@ -1515,10 +1551,40 @@ window.__outlineCount = () => outlineLines.length;
 function objectDims(o) {
   const spec = o.meta && o.meta.spec;
   const f = (v) => v.toFixed(1);
-  if (spec && spec.size_cm) return { text: `${f(spec.size_cm[0] * 10)} x ${f(spec.size_cm[1] * 10)} x ${f(spec.size_cm[2] * 10)} mm  W x H x D`, real: true };
+  if (spec && spec.size_cm) { const mm = spec.size_cm.map((v) => v * 10); return { text: `${f(mm[0])} x ${f(mm[1])} x ${f(mm[2])} mm  W x H x D`, real: true, mm }; }
   const b = new THREE.Box3().setFromObject(o.group).getSize(new THREE.Vector3());
-  if (calibrated) return { text: `${f(b.x * cmPerSceneUnit * 10)} x ${f(b.y * cmPerSceneUnit * 10)} x ${f(b.z * cmPerSceneUnit * 10)} mm  W x H x D`, real: true };
-  return { text: `${b.x.toFixed(2)} x ${b.y.toFixed(2)} x ${b.z.toFixed(2)} scene units, not calibrated`, real: false };
+  if (calibrated) { const mm = [b.x, b.y, b.z].map((v) => v * cmPerSceneUnit * 10); return { text: `${f(mm[0])} x ${f(mm[1])} x ${f(mm[2])} mm  W x H x D`, real: true, mm }; }
+  return { text: `${b.x.toFixed(2)} x ${b.y.toFixed(2)} x ${b.z.toFixed(2)} scene units, not calibrated`, real: false, mm: null };
+}
+// three small mono cards (W, H, D); the text line stays for screen readers and tests
+function setDimCards(mm) {
+  const box = document.getElementById("dim-cards");
+  if (!mm) { box.hidden = true; box.textContent = ""; return; }
+  box.hidden = false;
+  box.innerHTML = ["W", "H", "D"].map((l, i) => `<div class="dim-card"><small>${l}</small><b>${mm[i].toFixed(1)}<u>mm</u></b></div>`).join("");
+}
+function setMeshLine() {
+  const el = document.getElementById("obj-mesh");
+  const pp = window.__lastReport && window.__lastReport.print_prep;
+  if (!pp || pp.watertight === undefined) { el.hidden = true; return; }
+  const thin = pp.thin_wall_warning_count || 0;
+  const good = pp.watertight && pp.geometry_checks_passed !== false && thin === 0;
+  el.hidden = false;
+  el.innerHTML = `<span>Mesh check</span><span class="chip ${good ? "ok" : "warn"}">${pp.watertight ? "watertight" : "not watertight"}</span>` + (thin ? `<span class="chip warn">${thin} thin-wall warnings</span>` : "");
+}
+function updateStatusBar(projectName) {
+  const nm = projectName || (document.getElementById("crumb-name").dataset.set === "1" ? document.getElementById("crumb-name").textContent : "No project");
+  const ver = ai.state ? `v${ai.state.current}${ai.state.current === 0 ? " original" : ""}` : "original";
+  document.getElementById("sb-left").textContent = nm === "No project" ? nm : `${nm} / ${ver}`;
+  const saved = !!ai.state || IS_EMBED;
+  const el = document.getElementById("sb-saved");
+  el.textContent = saved ? "Saved" : "Local session";
+  el.className = saved ? "ok" : "";
+}
+function setCrumb(name) {
+  const c = document.getElementById("crumb-name");
+  c.textContent = name; c.dataset.set = "1";
+  updateStatusBar(name);
 }
 function scaleSourceText(o) {
   const m = window.__sceneManifest;
@@ -1540,9 +1606,16 @@ function afterSelect(o) {
   panel.style.display = "block";
   document.getElementById("obj-name").textContent = o.name;
   document.getElementById("obj-base").textContent = /^edit v/.test(window.__lastLoadLabel || "") ? "Edited print mesh: dimensions include the base plate." : "Dimensions exclude the print base plate.";
-  document.getElementById("obj-dims").textContent = objectDims(o).text;
-  document.getElementById("obj-scale").textContent = scaleSourceText(o) + (multi && spec0IsRef(o) ? " (this object is the reference)" : "");
+  const dm = objectDims(o);
+  document.getElementById("obj-dims").textContent = dm.text;
+  setDimCards(dm.mm);
+  const scaleTxt = scaleSourceText(o) + (multi && spec0IsRef(o) ? " (this object is the reference)" : "");
+  document.getElementById("obj-scale").textContent = scaleTxt;
+  document.getElementById("obj-scale-flag").hidden = !(dm.real && !/measured by you|user/i.test(scaleTxt));
+  setMeshLine();
+  setCrumb(multi ? ((window.__sceneManifest && window.__sceneManifest.name) || "Scene") : o.name);
   document.getElementById("btn-edit-obj").style.display = multi ? "" : "none";
+  document.getElementById("btn-print-obj").classList.toggle("primary", !multi); // in a scene the diorama button is the one primary action
   if (!multi) {
     const pbs = document.getElementById("btn-print-obj");
     const url = () => window.__runStl || (ai.state ? "/edit/current.stl?x=1" : null);
@@ -1593,7 +1666,7 @@ async function replaceObjectGeometry(id, arrayBuffer) {
   settleFloorAndShadows(objectsRoot);
   if (o.group === modelGroup) { setOutline(o); const cur = ai.state && (ai.state.versions || []).find((v) => v.version === ai.state.current);
     const mm = cur && cur.size_mm;
-    document.getElementById("obj-dims").textContent = (mm ? `${(mm[0] / 10).toFixed(1)} × ${(mm[2] / 10).toFixed(1)} × ${(mm[1] / 10).toFixed(1)} cm` : objectDims(o).text) + "  (edited)"; }
+    document.getElementById("obj-dims").textContent = (mm ? `${mm[0].toFixed(1)} x ${mm[2].toFixed(1)} x ${mm[1].toFixed(1)} mm  W x H x D` : objectDims(o).text) + "  (edited)"; if (mm) setDimCards([mm[0], mm[2], mm[1]]); }
   updateReadout();
 }
 window.__replaceObjectGeometry = replaceObjectGeometry;
@@ -1621,7 +1694,7 @@ function updateMapBar() {
   const hasVerify = m && m.verify && (m.verify.images || []).length && base;
   document.getElementById("btn-verify").style.display = hasVerify ? "" : "none";
 }
-document.getElementById("btn-reset-cam").onclick = () => frameObjects();
+document.getElementById("btn-reset-cam").onclick = () => frameObjects(true);
 document.getElementById("btn-verify").onclick = () => {
   const panel = document.getElementById("verify-panel");
   if (panel.style.display === "block") { panel.style.display = "none"; return; }
@@ -1644,7 +1717,7 @@ function objectsBox() {  // the printable objects only: the support surface (tab
   if (box.isEmpty()) box.setFromObject(objectsRoot);
   return box;
 }
-function frameObjects() { return frameCameraOn(objectsRoot, objectsBox()); }
+function frameObjects(animate = false) { return frameCameraOn(objectsRoot, objectsBox(), animate); }
 window.__frameObjects = frameObjects;
 let viewMode = "map";
 function syncMode() {
@@ -1740,12 +1813,23 @@ async function openAccuracy() {
 }
 if (IS_EMBED) {
   const back = document.getElementById("btn-back");
-  back.style.display = "";
   back.onclick = () => window.parent.postMessage({ type: "wk-back" }, location.origin);
 }
-document.getElementById("btn-accuracy").onclick = () => (accEl.style.display === "block" ? (accEl.style.display = "none") : openAccuracy());
-document.getElementById("btn-accuracy-close").onclick = () => { accEl.style.display = "none"; };
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") accEl.style.display = "none"; });
+function setTab(name) {
+  for (const [id, n] of [["tab-viewer", "viewer"], ["tab-ai", "ai"], ["btn-accuracy", "accuracy"]]) document.getElementById(id).setAttribute("aria-selected", String(n === name));
+}
+function showTab(name) {
+  if (name === "accuracy") { openAccuracy(); setTab("accuracy"); return; }
+  accEl.style.display = "none"; setTab(name);
+  const side = document.getElementById("side-right");
+  if (name === "ai") { document.getElementById("sec-ai").open = true; document.getElementById("sec-ai").scrollIntoView({ behavior: REDUCED_MOTION ? "auto" : "smooth", block: "start" }); }
+  else side.scrollTo({ top: 0, behavior: REDUCED_MOTION ? "auto" : "smooth" });
+}
+document.getElementById("tab-viewer").onclick = () => showTab("viewer");
+document.getElementById("tab-ai").onclick = () => showTab("ai");
+document.getElementById("btn-accuracy").onclick = () => (accEl.style.display === "block" ? showTab("viewer") : showTab("accuracy"));
+document.getElementById("btn-accuracy-close").onclick = () => showTab("viewer");
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && accEl.style.display === "block") showTab("viewer"); });
 window.__accuracyOpen = openAccuracy;
 
 // bottom sheet on narrow screens
@@ -1791,7 +1875,7 @@ function buildPartOverlay() {
       if (!out.length) return;
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
-      const mat = new THREE.MeshBasicMaterial({ color: css("--accent"), transparent: true, opacity: 0.6, depthTest: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.FrontSide });
+      const mat = new THREE.MeshBasicMaterial({ color: css("--vp-sam"), transparent: true, opacity: parseFloat(css("--sam-alpha")) || 0.55, depthTest: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.FrontSide });
       const ov = new THREE.Mesh(g, mat);
       ov.userData.__partOverlay = true;
       ov.raycast = () => {};
@@ -1866,6 +1950,7 @@ function animate() {
   const now = performance.now();
   if (physics && physics.isRunning()) { physics.tick((now - lastT) / 1000); physicsReadout(); }
   lastT = now;
+  stepCameraTween(now);
   orbit.update();
   renderer.render(scene, camera);
 }

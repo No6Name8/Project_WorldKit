@@ -3,30 +3,33 @@
 
 :root {
   /* ---- primitive: neutral ramp (cool grey) ---- */
-  --gray-1000: #0b0d10;
-  --gray-950: #0f1215;
-  --gray-900: #14171b;
-  --gray-850: #191d22;
-  --gray-800: #1f2429;
-  --gray-700: #2a3037;
-  --gray-600: #3a424b;
-  --gray-500: #566069;
-  --gray-400: #7a8691;
-  --gray-300: #a3adb7;
-  --gray-200: #c9d1d8;
-  --gray-100: #e7ebee;
+  --gray-1000: #0b0e12;
+  --gray-950: #0f1115;
+  --gray-900: #161a21;
+  --gray-850: #1c212a;
+  --gray-800: #232933;
+  --gray-700: #242a33;
+  --gray-600: #343c48;
+  --gray-500: #566170;
+  --gray-400: #7a8694;
+  --gray-300: #9aa6b2;
+  --gray-200: #c3cbd5;
+  --gray-100: #e6eaf0;
   --white: #ffffff;
   /* ---- primitive: the one accent (blue) and the status hues ---- */
-  --blue-700: #234f9f;
-  --blue-600: #2f6bd0;
-  --blue-500: #4c8df6;
-  --blue-400: #79a9f8;
-  --green-500: #3fb27f;
-  --amber-500: #d9a441;
-  --red-500: #e5645b;
-  --green-bg: #12261e;
-  --amber-bg: #2a2214;
-  --red-bg: #2c1816;
+  --blue-700: #1f4fa8;
+  --blue-600: #3b82f6;
+  --blue-500: #3b82f6;
+  --blue-400: #5b9bff;
+  --green-500: #34d399;
+  --amber-500: #f5b544;
+  --red-500: #f87171;
+  --teal-400: #2dd4bf;
+  --blue-bg: rgba(59, 130, 246, 0.12);
+  --grey-bg: rgba(154, 166, 178, 0.12);
+  --green-bg: rgba(52, 211, 153, 0.12);
+  --amber-bg: rgba(245, 181, 68, 0.12);
+  --red-bg: rgba(248, 113, 113, 0.12);
 
   /* ---- primitive: type, space, radius, motion ---- */
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -52,38 +55,46 @@
   --radius-2: 4px;
   --border-w: 1px;
 
-  --dur-fast: 120ms;
+  --dur-fast: 120ms;  /* hover, press */
   --dur-base: 160ms;
   --dur-slow: 180ms;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   --topbar-h: 44px;
+  --statusbar-h: 28px;
   --sidebar-w: 280px;
   --inspector-w: 360px;
 
   /* ---- semantic: surfaces, text, borders ---- */
   --bg-app: var(--gray-950);
-  --bg-viewport: var(--gray-900);
+  --bg-viewport: #12151b;
   --bg-surface: var(--gray-900);
   --bg-raised: var(--gray-850);
   --bg-field: var(--gray-1000);
   --bg-hover: var(--gray-800);
-  --bg-selected: #172236;
+  --bg-selected: #17233a;
   --text-primary: var(--gray-100);
   --text-secondary: var(--gray-200);
-  --text-muted: #98a4af;
-  --text-on-accent: var(--white);
-  --border-subtle: var(--gray-800);
+  --text-muted: var(--gray-300);
+  --text-on-accent: #0a0f1a;  /* dark text: white on #3b82f6 is only 3.7:1, this is 5.1:1 */
+  --border-subtle: #1d222b;
   --border-default: var(--gray-700);
   --border-strong: var(--gray-600);
   --accent: var(--blue-500);
   --accent-solid: var(--blue-600);
-  --accent-solid-hover: var(--blue-500);
+  --accent-solid-hover: var(--blue-400);
+  --accent-hover: var(--blue-400);
+  --accent-bg: var(--blue-bg);
+  --sam: var(--teal-400);      /* SAM part overlay, drawn at 55%. Never the accent colour. */
+  --sam-alpha: 0.55;
   --focus-ring: var(--blue-400);
   --status-ok: var(--green-500);
   --status-warn: var(--amber-500);
   --status-err: var(--red-500);
-  --status-idle: var(--gray-500);
+  --status-idle: var(--gray-300);
+  --status-idle-bg: var(--grey-bg);
+  --status-proc: var(--accent);
+  --status-proc-bg: var(--blue-bg);
   --status-ok-bg: var(--green-bg);
   --status-warn-bg: var(--amber-bg);
   --status-err-bg: var(--red-bg);
@@ -92,10 +103,11 @@
   --scrim: rgba(11, 13, 16, 0.72);
 
   /* ---- semantic: 3D viewport ---- */
-  --vp-background: var(--gray-900);
+  --vp-background: #12151b;
   --vp-grid-major: var(--gray-600);
   --vp-grid-minor: var(--gray-800);
   --vp-select: var(--blue-500);
+  --vp-sam: var(--teal-400);
   --vp-bed: var(--white);
 
   /* ---- component ---- */
@@ -114,7 +126,7 @@
   --bg-app: #f3f5f7; --bg-viewport: #e6eaee; --bg-surface: #ffffff; --bg-raised: #f6f8fa; --bg-field: #ffffff;
   --bg-hover: #e9edf1; --bg-selected: #e3edfd; --text-primary: #14171b; --text-secondary: #3b444d; --text-muted: #5b6671;
   --border-subtle: #e1e5e9; --border-default: #cbd2d9; --border-strong: #aab3bc;
-  --accent: #2f6bd0; --accent-solid: #2f6bd0; --accent-solid-hover: #234f9f; --focus-ring: #2f6bd0;
+  --text-on-accent: #ffffff; --accent: #2f6bd0; --accent-solid: #2f6bd0; --accent-solid-hover: #234f9f; --focus-ring: #2f6bd0;
   --status-ok-bg: #e4f4ec; --status-warn-bg: #fbf1dd; --status-err-bg: #fbe6e4;
   --vp-background: #e6eaee; --vp-grid-major: #aab3bc; --vp-grid-minor: #d3d9df; --vp-bed: #3b444d;
   color-scheme: light;

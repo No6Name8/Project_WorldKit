@@ -18,7 +18,7 @@ export function parseRoute(hash) {
   const parts = String(hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
   const [name = "home", id] = parts;
   if (name === "project" && id) return { name: "project", id: decodeURIComponent(id) };
-  if (["home", "login", "new", "projects"].includes(name)) return { name };
+  if (["home", "login", "new", "projects", "help"].includes(name)) return { name };
   return { name: "home" };
 }
 
