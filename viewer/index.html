@@ -597,6 +597,7 @@ fetch("/api/health")
     }
   })
   .catch(() => {
+    if (new URLSearchParams(location.search).has("embed")) { statusDot.className = ""; statusText.textContent = "Viewing a saved project. AI Edit needs the laptop edit server."; return; }
     statusDot.className = "bad";
     statusText.textContent = location.protocol === "file:" || !/^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? "Static viewer: no edit server" : "Backend unreachable. The gizmo still works, AI edits do not.";
   });
