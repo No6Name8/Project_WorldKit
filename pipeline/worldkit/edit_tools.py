@@ -339,8 +339,27 @@ def set_parts(parts: dict | None) -> None:
     PARTS.update(parts or {})
 
 
+MIN_WALL_MM = 1.2  # printable minimum: a part is never thinned below this
+
+
+def part_wall_mm(mesh: trimesh.Trimesh, part_points: np.ndarray, n: int = 6000) -> float | None:
+    """Thin end of the part's wall: the 10th percentile of the inward ray thickness at surface samples within 2.5 mm of the part."""
+    from scipy.spatial import cKDTree
+
+    pts, fi = mesh.sample(n, return_index=True, seed=0)
+    nrm = mesh.face_normals[fi]
+    near = cKDTree(part_points).query(pts)[0] < 2.5
+    pts, nrm = pts[near], nrm[near]
+    if len(pts) < 20:
+        return None
+    loc, ray, _ = mesh.ray.intersects_location(pts - nrm * 1e-3, -nrm, multiple_hits=False)
+    if len(ray) < 20:
+        return None
+    return float(np.percentile(np.linalg.norm(loc - pts[ray], axis=1), 10))
+
+
 def thicken_part(mesh: trimesh.Trimesh, part: str, by_mm: float = 2.0) -> trimesh.Trimesh:
-    """Grow one named part (e.g. the handle) by ``by_mm`` in cross-section: its surface moves outward by by_mm / 2 on every side, fading to zero
+    """Grow (positive) or thin (negative) one named part (e.g. the handle) by ``by_mm`` in cross-section: its surface moves along its normals by by_mm / 2 on every side, fading to zero
     4 mm away from the part so it blends into the body. The rest of the model does not change."""
     from scipy.spatial import cKDTree
 
@@ -350,8 +369,13 @@ def thicken_part(mesh: trimesh.Trimesh, part: str, by_mm: float = 2.0) -> trimes
     found, total = p.get("views_found") or 0, p.get("views_total") or 0
     if total == 0 or found / total < MIN_PART_COVERAGE:
         raise EditError(f"SAM found the {part} in only {found} of {total} views, too few to edit it reliably. Nothing was changed.")
-    if not 0.2 <= by_mm <= 6:
-        raise EditError("by_mm must be between 0.2 and 6")
+    if not 0.2 <= abs(by_mm) <= 6:
+        raise EditError("by_mm must be between 0.2 and 6 (positive to thicken, negative to thin)")
+    if by_mm < 0:
+        wall = part_wall_mm(mesh, p["stl_points"])
+        if wall is None or wall + by_mm < MIN_WALL_MM:
+            have = "an unmeasurable wall" if wall is None else f"a {max(wall + by_mm, 0):.1f} mm wall"
+            raise EditError(f"Thinning the {part} by {abs(by_mm):g} mm would leave {have}, below the {MIN_WALL_MM:g} mm minimum. Nothing was changed.")
     d, _ = cKDTree(p["stl_points"]).query(mesh.vertices)
     w = np.clip(1.0 - np.maximum(d - 2.0, 0.0) / 2.5, 0.0, 1.0)  # full effect within 2 mm of a selected GLB vertex (their spacing), none beyond 4.5 mm
     out = mesh.copy()
@@ -373,7 +397,8 @@ def sentence_for(name: str, args: dict, before: trimesh.Trimesh, after: trimesh.
     """One plain sentence describing an applied tool call (no tool names, no JSON)."""
     f = lambda v: f"{float(v):g}"
     if info:
-        return f"Thickened {info['part']} by {info['by_mm']:g} mm (SAM found {info['views_found']} of {info['views_total']} views)"
+        verb = "Thickened" if info["by_mm"] > 0 else "Thinned"
+        return f"{verb} {info['part']} by {abs(info['by_mm']):g} mm (SAM found {info['views_found']} of {info['views_total']} views)"
     if name == "scale_to":
         return f"Scaled to {after.extents[2]:.0f} mm tall" if abs(after.extents[2] - before.extents[2]) > 0.05 else "Scaled (size unchanged)"
     if name == "emboss_text":

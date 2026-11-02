@@ -105,3 +105,59 @@ def test_growth_covers_the_whole_handle_ring_and_stops_at_the_body():
     outside = is_ring & (np.linalg.norm(V[:, [0, 2]], axis=1) > 42.0)  # the part of the ring that is not buried in the body wall
     assert grown[outside].all() and grown[is_ring].mean() > 0.9  # the whole visible ring, including the half SAM never saw
     assert not grown[~is_ring].any()  # and not a single body vertex
+
+
+DEMO_MUG = __import__("pathlib").Path(__file__).resolve().parents[2] / "viewer" / "assets" / "demo" / "run_mug"
+
+
+def test_negative_thicken_part_thins_the_handle_but_never_below_the_minimum_wall(tmp_path):
+    """Real coin-scaled mug (tracked demo run) with its real SAM handle: -1.5 mm works, -6 mm would leave under 1.2 mm and is refused."""
+    import json
+    import shutil
+
+    from worldkit import edit
+
+    work = tmp_path / "run"
+    work.mkdir()
+    for f in ("model_print.stl", "report.json", "model.glb"):
+        shutil.copy(DEMO_MUG / f, work / f)
+    shutil.copytree(DEMO_MUG / "parts", work / "parts")
+    et.set_parts(edit.load_parts(work))
+    try:
+        mug = trimesh.load(work / "model_print.stl", force="mesh")
+        before = et.part_wall_mm(mug, et.PARTS["handle"]["stl_points"])
+        new, summ = et.apply_tool(mug, "thicken_part", {"part": "handle", "by_mm": -1.5})
+        after = et.part_wall_mm(new, et.PARTS["handle"]["stl_points"])
+        assert summ["watertight"] and summ["sentence"] == "Thinned handle by 1.5 mm (SAM found 11 of 12 views)"
+        assert after < before - 0.8 and after >= et.MIN_WALL_MM  # thinner, still printable
+        assert new.volume < mug.volume - 50
+        with pytest.raises(et.EditError, match="below the 1.2 mm minimum. Nothing was changed."):
+            et.apply_tool(mug, "thicken_part", {"part": "handle", "by_mm": -6})
+        with pytest.raises(et.EditError):
+            et.apply_tool(mug, "thicken_part", {"part": "handle", "by_mm": 0})
+    finally:
+        et.set_parts({})
+
+
+def test_thinner_instruction_through_the_edit_loop_with_a_fake_wonder(tmp_path):
+    import shutil
+
+    from tests.test_edit import FakeWonder, reply, spark_ok, tool_call
+    from worldkit import edit
+
+    work = tmp_path / "run"
+    work.mkdir()
+    for f in ("model_print.stl", "report.json", "model.glb"):
+        shutil.copy(DEMO_MUG / f, work / f)
+    shutil.copytree(DEMO_MUG / "parts", work / "parts")
+    wonder = FakeWonder([reply([tool_call("thicken_part", {"part": "handle", "by_mm": -1.5})]), reply(text="Thinned the handle.")])
+    r = edit.run_edit(work, "make the handle thinner", client=wonder, ask_spark=spark_ok)
+    try:
+        assert r["applied"]
+        calls = r.get("tool_calls") or r["attempts"][-1]["tool_calls"]
+        assert calls[0]["result"]["sentence"] == "Thinned handle by 1.5 mm (SAM found 11 of 12 views)"
+        # the tool the model is offered says it handles BOTH directions
+        spec = next(t for t in edit.TOOLS if t["function"]["name"] == "thicken_part")["function"]
+        assert "thinner" in spec["description"] and "NEGATIVE" in spec["description"]
+    finally:
+        et.set_parts({})

@@ -59,8 +59,10 @@ TOOLS = [
     _fn("split", "Cut with a plane axis=offset_mm and keep one half (capped, watertight).",
         {"axis": {"type": "string", "enum": ["x", "y", "z"]}, "offset_mm": {"type": "number"}, "keep": {"type": "string", "enum": ["upper", "lower"]}}),
     _fn("thicken", "Grow walls thinner than min_wall_mm (the outer size grows slightly).", {"min_wall_mm": {"type": "number"}}, ["min_wall_mm"]),
-    _fn("thicken_part", "Make ONE named part thicker (e.g. the handle) by by_mm in cross-section, leaving the rest unchanged. Only parts listed in named_parts with usable_for_thicken_part=true.",
-        {"part": {"type": "string", "description": "part id from named_parts"}, "by_mm": {"type": "number", "description": "0.2-6, default 2"}}, ["part"]),
+    _fn("thicken_part", "Change the thickness of ONE named part (e.g. the handle), leaving the rest of the model unchanged. Use it for BOTH 'thicker' and 'thinner': "
+        "by_mm is the change in cross-section in mm, POSITIVE to thicken (0.2 to 6, default 2) and NEGATIVE to thin (-0.2 to -6, e.g. -1.5). "
+        "A thinning that would leave a wall under 1.2 mm is refused. Only parts listed in named_parts with usable_for_thicken_part=true.",
+        {"part": {"type": "string", "description": "part id from named_parts"}, "by_mm": {"type": "number", "description": "positive = thicker, negative = thinner; mm, default 2"}}, ["part"]),
     _fn("mirror", "Mirror the model about the middle of its bounding box along an axis.", {"axis": {"type": "string", "enum": ["x", "y", "z"]}}, ["axis"]),
 ]
 
