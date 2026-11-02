@@ -1,6 +1,8 @@
-// Screenshots of the 4 key screens at 1440 px and 390 px (docs/ui/*.png) and a console-cleanliness check.
-//   node viewer/tests/ui_screens.js [--object RUN_DIR] [--scene SCENE_DIR]   (needs pipeline\.venv; uses ports 5091-5093)
-// Defaults use real local runs when they exist (pipeline/runs/mug_grounded, pipeline/runs/desk_coin), else the bundled demo assets.
+// Screenshots of the key screens (docs/ui/*.png) and a console-cleanliness check, all from the SAME tracked demo data:
+// the coin-scaled mug (assets/demo/run_mug, real SAM handle part) for Object and the coin-scaled desk scene (assets/demo/run_desk) for Map.
+//   node viewer/tests/ui_screens.js        (needs pipeline\.venv; uses ports 5091-5092)
+// 1_object, 2_scene, 3_ai_edit, 4_accuracy at 1440 and 390 px; 1_object and 3_ai_edit also at 1920x1080 and 1280x720; 5_parts_overlay at 1440 and 390.
+// The AI Edit screen uses serve_fake_real.py: real geometry edits on the real mug, with a SCRIPTED Wonder and Spark (no tokens spent).
 const { chromium } = require("playwright");
 const { spawn } = require("child_process");
 const path = require("path");
@@ -9,42 +11,45 @@ const fs = require("fs");
 const ROOT = path.resolve(__dirname, "..", "..");
 const PY = path.join(ROOT, "pipeline", ".venv", "Scripts", "python.exe");
 const OUT = path.join(ROOT, "docs", "ui");
-const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
-const objRun = arg("--object") || (fs.existsSync(path.join(ROOT, "pipeline", "runs", "mug_grounded", "model.glb")) ? path.join(ROOT, "pipeline", "runs", "mug_grounded") : null);
-const sceneRun = arg("--scene") || (fs.existsSync(path.join(ROOT, "pipeline", "runs", "desk_coin", "scene.json")) ? path.join(ROOT, "pipeline", "runs", "desk_coin") : null);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const WIDTHS = [{ w: 1440, h: 900, tag: "1440" }, { w: 390, h: 844, tag: "390" }];
+const SIZES = [
+  { w: 1440, h: 900, tag: "1440", all: true }, { w: 390, h: 844, tag: "390", all: true },
+  { w: 1920, h: 1080, tag: "1080p", all: false }, { w: 1280, h: 720, tag: "720p", all: false },
+];
 const errors = [];
 
-async function waitUp(port, url = "/api/health") { for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${port}${url}`)).ok) return; } catch (e) { /* starting */ } await sleep(500); } throw new Error("server " + port); }
+async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) return; } catch (e) { /* starting */ } await sleep(500); } throw new Error("server " + port); }
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const procs = [];
-  const start = (args, port, cwd = ROOT) => { const p = spawn(PY, args, { cwd, stdio: "ignore" }); procs.push(p); return waitUp(port); };
-  await start([path.join("viewer", "server.py"), ...(objRun ? ["--open", objRun] : []), "--port", "5091"], 5091);
-  await start(["-m", "worldkit.serve", ...(sceneRun ? [sceneRun] : []), "--port", "5093"].filter(Boolean), 5093, path.join(ROOT, "pipeline")).catch(() => null);
-  await start([path.join("viewer", "tests", "serve_fake.py"), "5092"], 5092);
+  const start = (args, port) => { const p = spawn(PY, args, { cwd: ROOT, stdio: "ignore" }); procs.push(p); return waitUp(port); };
+  await start([path.join("viewer", "server.py"), "--port", "5091"], 5091);
+  await start([path.join("viewer", "tests", "serve_fake_real.py"), "5092"], 5092);
   const browser = await chromium.launch();
   try {
-    for (const { w, h, tag } of WIDTHS) {
+    for (const { w, h, tag, all } of SIZES) {
+      console.log("size", tag);
       const ctx = await browser.newContext({ viewport: { width: w, height: h } });
       const page = await ctx.newPage();
       page.on("pageerror", (e) => errors.push(`${tag}: ${e}`));
       page.on("console", (m) => { if (m.type() === "error") errors.push(`${tag}: ${m.text()}`); });
+      const sheetTop = () => page.evaluate(() => { const d = document.getElementById("dock"); if (d) d.scrollTop = 0; });
       const ready = () => page.waitForFunction(() => window.__sceneReady === true && !window.__isLoading(), { timeout: 40000 });
 
-      // 1. object view
-      await page.goto(objRun ? "http://127.0.0.1:5091/" : "http://127.0.0.1:5091/", { waitUntil: "domcontentloaded" });
-      if (!objRun) await page.click("#btn-demo-mug");
+      // 1. object view (Demo run in Object mode)
+      await page.goto("http://127.0.0.1:5091/", { waitUntil: "domcontentloaded" });
+      await ready();
+      await page.click("#btn-demo-run");
+      await page.waitForFunction(() => window.__partsUi && window.__partsUi().enabled, { timeout: 20000 });
       await ready(); await sleep(900);
+      await sheetTop();
       await page.screenshot({ path: path.join(OUT, `1_object_${tag}.png`) });
 
-      // 1b. "show what SAM found" on the real mug (needs RUN_DIR/parts/parts.json from python -m worldkit.parts)
-      if (objRun && fs.existsSync(path.join(objRun, "parts", "parts.json"))) {
-        await page.waitForFunction(() => window.__partsUi && window.__partsUi().enabled, { timeout: 10000 });
+      if (all) {
+        // 5. "show what SAM found" on the real mug, orbited so the handle faces the camera
         await page.click("#btn-parts");
-        const box = await page.locator("canvas").boundingBox();  // orbit so the handle faces the camera
+        const box = await page.locator("canvas").boundingBox();
         for (const dx of [250, 400]) {
           await page.mouse.move(box.x + 36, box.y + 256); await page.mouse.down();
           await page.mouse.move(box.x + 36 + dx * Math.min(1, box.width / 840), box.y + 256, { steps: 12 }); await page.mouse.up();
@@ -52,33 +57,41 @@ async function waitUp(port, url = "/api/health") { for (let i = 0; i < 80; i++) 
         await sleep(500);
         await page.screenshot({ path: path.join(OUT, `5_parts_overlay_${tag}.png`) });
         await page.click("#btn-parts");
-        await page.click("#btn-reset");
+        await page.click("#btn-vp-reset");
+
+        // 2. scene view (Map)
+        await page.click("#mode-map");
+        await page.waitForFunction(() => window.__getSceneObjects && window.__getSceneObjects().length > 1, { timeout: 40000 });
+        await ready(); await sleep(1200);
+        await sheetTop();
+        await page.screenshot({ path: path.join(OUT, `2_scene_${tag}.png`) });
       }
 
-      // 2. scene view (real desk scene through worldkit.serve when available, else the demo scene)
-      if (sceneRun) await page.goto("http://127.0.0.1:5093/", { waitUntil: "domcontentloaded" }); else await page.click("#btn-demo-scene");
-      await ready(); await sleep(1200);
-      await page.screenshot({ path: path.join(OUT, `2_scene_${tag}.png`) });
-
-      // 3. AI Edit panel (scripted Wonder/Spark so no tokens are spent)
+      // 3. AI Edit with real geometry edits on the real mug (scripted Wonder and Spark)
       await page.goto("http://127.0.0.1:5092/", { waitUntil: "domcontentloaded" });
+      await page.evaluate(async () => { for (let i = 0; i < 12; i++) { const st = await (await fetch("/edit/state")).json(); if (!st.current) break; await fetch("/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); } });  // back to v0
+      await page.reload({ waitUntil: "domcontentloaded" });
       await ready();
-      await page.waitForFunction(() => window.__aiState && window.__aiState(), { timeout: 10000 });
-      await page.fill("#ai-input", "make it exactly 12 cm tall"); await page.click("#ai-send");
-      await page.waitForFunction(() => document.querySelector("#ai-log .entry.ok"), { timeout: 60000 });
-      await page.waitForFunction(() => (window.__lastLoadLabel || "") === "edit v1", { timeout: 15000 });
-      await page.fill("#ai-input", "this should be reject ed by the check"); await page.click("#ai-send");
-      await page.waitForFunction(() => document.querySelector("#ai-log .entry.bad"), { timeout: 60000 });
+      await page.waitForFunction(() => window.__aiState && window.__aiState() && window.__partsUi && window.__partsUi().enabled, { timeout: 15000 });
+      for (const [text, sel] of [["make the handle 2 mm thicker", ".entry.ok"], ["make the handle thinner", ".entry.bad"]]) {
+        await page.fill("#ai-input", text); await page.click("#ai-send");
+        await page.waitForFunction((s) => document.querySelector("#ai-log " + s), sel, { timeout: 60000 });
+        await sleep(600);
+      }
+      await page.waitForFunction(() => /^edit v[1-9]/.test(window.__lastLoadLabel || ""), { timeout: 15000 });
       await page.locator("#ai-log .entry.ok").first().click();
-      await sleep(600);
-      await page.locator("#aiedit-panel").scrollIntoViewIfNeeded();
+      await page.locator("#ai-log .entry.ok details.dt summary").first().click();
+      await sleep(500);
+      await page.locator("#ai-input").scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(OUT, `3_ai_edit_${tag}.png`) });
 
-      // 4. accuracy view
-      await page.click("#btn-accuracy");
-      await page.waitForSelector("table.acc", { timeout: 10000 });
-      await sleep(300);
-      await page.screenshot({ path: path.join(OUT, `4_accuracy_${tag}.png`) });
+      if (all) {
+        // 4. accuracy view
+        await page.click("#btn-accuracy");
+        await page.waitForSelector("table.acc", { timeout: 10000 });
+        await sleep(300);
+        await page.screenshot({ path: path.join(OUT, `4_accuracy_${tag}.png`) });
+      }
       await ctx.close();
     }
   } finally {

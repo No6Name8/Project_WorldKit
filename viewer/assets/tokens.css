@@ -31,9 +31,9 @@
   /* ---- primitive: type, space, radius, motion ---- */
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Cascadia Mono", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
-  --fs-xs: 11px;   /* labels, units, captions */
-  --fs-sm: 12px;   /* dense body, tables */
-  --fs-md: 13px;   /* controls, default body */
+  --fs-xs: 12px;   /* labels, units, captions */
+  --fs-sm: 13px;   /* dense body, tables */
+  --fs-md: 14px;   /* controls, default body */
   --fs-lg: 16px;   /* panel/object titles */
   --lh-tight: 1.25;
   --lh-body: 1.45;
@@ -58,8 +58,8 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   --topbar-h: 44px;
-  --sidebar-w: 264px;
-  --inspector-w: 336px;
+  --sidebar-w: 280px;
+  --inspector-w: 360px;
 
   /* ---- semantic: surfaces, text, borders ---- */
   --bg-app: var(--gray-950);
@@ -70,8 +70,8 @@
   --bg-hover: var(--gray-800);
   --bg-selected: #172236;
   --text-primary: var(--gray-100);
-  --text-secondary: var(--gray-300);
-  --text-muted: var(--gray-400);
+  --text-secondary: var(--gray-200);
+  --text-muted: #98a4af;
   --text-on-accent: var(--white);
   --border-subtle: var(--gray-800);
   --border-default: var(--gray-700);

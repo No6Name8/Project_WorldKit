@@ -20,6 +20,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/api/health`)).ok) break; } catch (e) { /* starting */ } await sleep(500); }
     browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
@@ -45,7 +46,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const row = await page.locator("#ai-log .entry.ok").first().innerText();
     check("the part edit reads as a plain sentence", row.includes("Thickened handle by 2 mm (SAM found 7 of 8 views)"), row.replace(/\n/g, " | "));
     check("no raw tool-call JSON in the row", !/[{}]|by_mm|thicken_part|"part"/.test(row), row.replace(/\n/g, " | "));
-    check("the row still shows the version and the verdict", row.includes("v1") && row.includes("applied as v1"));
+    check("the row still shows the version and Spark's verdict", row.includes("v1") && row.includes("Spark: looks right"));
     await page.waitForFunction(() => (window.__lastLoadLabel || "") === "edit v1", { timeout: 15000 });
     ui = await page.evaluate(() => window.__partsUi());
     check("the overlay is dropped when the edited mesh replaces the original", !ui.on && ui.overlayFaces === 0 && ui.legend === "none");

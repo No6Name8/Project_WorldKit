@@ -37,3 +37,7 @@ Empty (list, selection, AI Edit, ai-log), loading (a 2 px progress bar plus a mo
 ## Not done
 
 Figma file; light theme review; PWA manifest (none existed); the Object | Map switch loads the demo scene when no scene is open and otherwise isolates or shows all objects.
+
+## Step 2 changes
+
+Inspector order is Selection, Scale, AI Edit (open, the largest section, with the Parts block at its top), then one closed "Advanced" section (Transform, Move by text, Physics, Overlap check, Provenance; it remembers if you opened it). The move gizmo is hidden until Move, Rotate or Scale is chosen (Esc or "Hide gizmo" hides it). The edit log shows one plain sentence per edit ("Scaled to 120 mm tall. Spark: looks right."); the tool name and arguments sit under a "details" expander. Numbers that are results (accuracy %, views found, IoU) are monospace chips. Type is 14 px controls, 13 px dense body, 12 px labels; muted text is `#98a4af` (7:1 on the surface). Scenes open framed on the printable objects, the 256 mm bed is a solid 1 px accent outline, and "Reset view" is always in the viewport corner. The object list shows the run's own label (report.json `object_name`). "Demo run" loads one coin-scaled run (mug for Object, desk scene for Map) from tracked assets so screenshots and videos share data. On phones the measurements come first and the object list last, in the bottom sheet.

@@ -1,0 +1,28 @@
+{
+ "scale_ratio": 0.4454,
+ "scale_text": "1:2.2",
+ "size_mm": [
+  256.0,
+  218.8,
+  34.9
+ ],
+ "bed_mm": [
+  256.0,
+  256.0,
+  256.0
+ ],
+ "watertight": true,
+ "objects": [
+  "black_case",
+  "striped_mug"
+ ],
+ "repairs": [
+  "black_case: trimesh_repair",
+  "striped_mug: trimesh_repair"
+ ],
+ "warnings": [
+  "5% of sampled surface points are thinner than 1.2 mm at this scale: thin walls/handles may not print",
+  "scaled to 1:2.2 to fit the 256 mm bed: real sizes are 2.2x larger"
+ ],
+ "thin_feature_fraction": 0.054
+}

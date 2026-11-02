@@ -1,0 +1,66 @@
+{
+ "object_name": "black case",
+ "reconstruction_model": {
+  "name": "SAM 3D Objects",
+  "vendor": "Meta",
+  "is_meta_model": true
+ },
+ "best_view": {
+  "area_px": 7613,
+  "sharpness": 629.2,
+  "clipped": false,
+  "occlusion": 0.0
+ },
+ "best_frame": "sharp_02",
+ "mesh_qc": {
+  "ok": true,
+  "reasons": [],
+  "faces": 7180,
+  "extents": [
+   2.0,
+   0.657,
+   0.955
+  ]
+ },
+ "size_cm": [
+  15.44,
+  5.59,
+  14.22
+ ],
+ "print_ready": false,
+ "print_prep": {
+  "stl_units": "mm",
+  "scale_factor": 8.50712,
+  "target_height_cm": 5.59,
+  "upright_height_cm": 5.59,
+  "height_source": "reference_calibrated",
+  "is_estimate": true,
+  "dimensions_cm_after_print_orientation": [
+   17.865,
+   8.527,
+   5.75
+  ],
+  "volume_cm3": 691.937,
+  "watertight": true,
+  "watertight_repair_used": "none",
+  "min_wall_mm_checked": 1.2,
+  "thin_wall_warning_count": 0,
+  "thin_wall_sample_count": 1500,
+  "thin_wall_warnings": [],
+  "geometry_checks_passed": true,
+  "print_ready": false
+ },
+ "print_prep_error": null,
+ "measurement": {
+  "height_cm": 5.59,
+  "size_mm_whd": [
+   154.4,
+   55.9,
+   142.2
+  ],
+  "method": "scale source: coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)",
+  "scale_source": "scale source: coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)",
+  "is_scale_reference": false,
+  "uncertainty_note": "scene-level estimate (reference edge/height, weak perspective, generated proportions); not a measurement of this object"
+ }
+}

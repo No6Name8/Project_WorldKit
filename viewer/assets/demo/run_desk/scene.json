@@ -1,0 +1,205 @@
+{
+ "worldkit_scene": 1,
+ "mode": "map",
+ "source_video": "desk_scene_coin.mp4",
+ "frame": "sharp_52",
+ "units": "centimetres on the desk plane (Y up, origin at the scale reference)",
+ "cm_per_scene_unit": 1.0,
+ "scale_source": {
+  "text": "scale source: coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)",
+  "kind": "coin",
+  "name": "coin",
+  "size_mm": 21.5,
+  "frames_used": [
+   "sharp_52",
+   "sharp_60",
+   "sharp_63",
+   "sharp_64",
+   "sharp_65"
+  ],
+  "object_id": null,
+  "considered": [
+   "scale source: coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)"
+  ],
+  "notes": []
+ },
+ "scale_calibration": {
+  "reference": "coin",
+  "reference_size_mm": 21.5,
+  "relative_spread_mad": null,
+  "frames_used": 5
+ },
+ "objects": [
+  {
+   "id": "desk",
+   "name": "coffee table",
+   "mesh": "objects/desk/model.glb",
+   "report": "objects/desk/report.json",
+   "role": "parent",
+   "reconstruction_model": {
+    "name": "procedural plane",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "rotation_deg": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    68.3,
+    1.0,
+    59.9
+   ],
+   "printable": false
+  },
+  {
+   "id": "black_case",
+   "name": "black case",
+   "mesh": "objects/black_case/model.glb",
+   "report": "objects/black_case/report.json",
+   "role": "child",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "transform": {
+    "position": [
+     -8.400681534878084,
+     2.794971946374098,
+     -50.40590298101885
+    ],
+    "rotation_deg": [
+     0.0,
+     318.0,
+     0.0
+    ],
+    "scale": [
+     8.50703332094102,
+     8.50703332094102,
+     8.50703332094102
+    ]
+   },
+   "size_cm": [
+    15.44,
+    5.59,
+    14.22
+   ],
+   "size_mm": [
+    154.4,
+    55.9,
+    142.2
+   ],
+   "stl": "objects/black_case/model_print.stl",
+   "printable": true,
+   "is_scale_reference": false
+  },
+  {
+   "id": "striped_mug",
+   "name": "striped mug",
+   "mesh": "objects/striped_mug/model.glb",
+   "report": "objects/striped_mug/report.json",
+   "role": "child",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "transform": {
+    "position": [
+     36.09231661951504,
+     5.126800990237063,
+     -15.06087662241816
+    ],
+    "rotation_deg": [
+     0.0,
+     197.0,
+     0.0
+    ],
+    "scale": [
+     5.618375656720693,
+     5.618375656720693,
+     5.618375656720693
+    ]
+   },
+   "size_cm": [
+    8.97,
+    6.56,
+    11.3
+   ],
+   "size_mm": [
+    89.7,
+    65.6,
+    113.0
+   ],
+   "stl": "objects/striped_mug/model_print.stl",
+   "printable": true,
+   "is_scale_reference": false
+  }
+ ],
+ "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used",
+ "verify": {
+  "mean_iou_before": 0.408,
+  "mean_iou_after": 0.408,
+  "images": [
+   "verify/weak_view0_sharp_52.png",
+   "verify/weak_view1_sharp_60.png",
+   "verify/weak_view2_sharp_63.png",
+   "verify/vggt_view0_sharp_52.png",
+   "verify/vggt_view1_sharp_60.png",
+   "verify/vggt_view2_sharp_63.png"
+  ]
+ },
+ "diorama": {
+  "stl": "diorama.stl",
+  "scale_ratio": 0.4454,
+  "scale_text": "1:2.2",
+  "size_mm": [
+   256.0,
+   218.8,
+   34.9
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "black_case",
+   "striped_mug"
+  ],
+  "repairs": [
+   "black_case: trimesh_repair",
+   "striped_mug: trimesh_repair"
+  ],
+  "warnings": [
+   "5% of sampled surface points are thinner than 1.2 mm at this scale: thin walls/handles may not print",
+   "scaled to 1:2.2 to fit the 256 mm bed: real sizes are 2.2x larger"
+  ],
+  "thin_feature_fraction": 0.054
+ },
+ "skipped": [
+  {
+   "name": "candle in red holder",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "silver incense burner",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  }
+ ]
+}

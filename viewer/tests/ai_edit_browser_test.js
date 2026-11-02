@@ -20,6 +20,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/api/health`)).ok) break; } catch (e) { /* starting */ } await sleep(500); }
     browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "networkidle" });
@@ -35,17 +36,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.waitForFunction(() => document.getElementById("ai-status").innerText.includes("Wonder"), { timeout: 5000 }).catch(() => {});
     await page.waitForFunction(() => document.querySelector("#ai-log .entry.ok"), { timeout: 60000 });
     const ok = await page.locator("#ai-log .entry.ok").first().innerText();
-    check("an applied edit shows the tool call, the version and Spark's verdict", ok.includes("applied as v1") && ok.includes("scale_to") && ok.includes("looks right"), ok.replace(/\n/g, " | ").slice(0, 160));
+    const okFull = await page.locator("#ai-log .entry.ok").first().evaluate((e) => e.textContent);
+    check("an applied edit reads as a plain sentence with the version and Spark's verdict; the tool is under details", ok.includes("Scaled to 120 mm tall. Spark: looks right") && ok.includes("v1") && !/[{}]/.test(ok) && okFull.includes("scale_to"), ok.replace(/\n/g, " | ").slice(0, 160));
     check("the verification render is shown inline", await page.locator("#ai-log .entry.ok img").count() === 1);
     await page.waitForFunction(() => (window.__lastLoadLabel || "") === "edit v1", { timeout: 15000 });
     check("the model reloads after the edit (viewer shows the edited version)", (await page.locator("#ai-version").innerText()).includes("v1"));
     check("the status line clears and Undo becomes available", (await page.locator("#ai-status").innerText()) === "" && !(await page.locator("#ai-undo").isDisabled()));
 
-    await page.fill("#ai-input", "this should be reject ed by the check");
+    await page.fill("#ai-input", "this should be rejected by the check");
     await page.click("#ai-send");
     await page.waitForFunction(() => document.querySelector("#ai-log .entry.bad"), { timeout: 60000 });
     const bad = await page.locator("#ai-log .entry.bad").first().innerText();
-    check("a rejected edit says so, gives Spark's reason and leaves the model unchanged", bad.includes("not applied") && bad.includes("does not match") && (await page.locator("#ai-version").innerText()).includes("v1"), bad.replace(/\n/g, " | ").slice(0, 160));
+    check("a rejected edit says so, gives Spark's reason and leaves the model unchanged", bad.includes("Not applied") && bad.includes("does not match") && (await page.locator("#ai-version").innerText()).includes("v1"), bad.replace(/\n/g, " | ").slice(0, 160));
 
     await page.fill("#ai-input", "make it taste better");
     await page.click("#ai-send");

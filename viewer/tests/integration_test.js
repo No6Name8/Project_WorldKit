@@ -32,6 +32,7 @@ function check(name, cond, detail) {
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
+  await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
   const consoleErrors = [];
   const pageErrors = [];
   page.on("console", (msg) => { if (msg.type() === "error") consoleErrors.push(msg.text()); });
@@ -83,6 +84,7 @@ function check(name, cond, detail) {
   // reset or fight it).
   const box = await page.locator("canvas").boundingBox();
   const centerX = box.x + box.width / 2, centerY = box.y + box.height / 2;
+  await page.click("#mode-translate"); // the gizmo is hidden until a mode is chosen
   await page.mouse.move(centerX, centerY);
   await page.mouse.down();
   await page.mouse.move(centerX + 150, centerY, { steps: 10 });

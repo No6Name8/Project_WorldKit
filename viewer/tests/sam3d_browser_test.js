@@ -33,6 +33,7 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
   const report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -128,6 +129,7 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
   check("reset restores the exact original vertices", maxDelta < 1e-5, "max delta=" + maxDelta);
   await page.click("#btn-reset"); await page.waitForTimeout(150);
   const sp = await page.evaluate(() => window.__getModelScreenPosition());
+  await page.click("#mode-translate"); await page.waitForTimeout(100); // the gizmo is hidden until a mode is chosen
   const g0 = await page.evaluate(() => window.__getTransform());
   await page.mouse.move(sp.x, sp.y); await page.mouse.down(); await page.mouse.move(sp.x + 120, sp.y, { steps: 8 }); await page.mouse.up();
   const g1 = await page.evaluate(() => window.__getTransform());

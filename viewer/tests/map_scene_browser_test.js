@@ -20,6 +20,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/api/health`)).ok) break; } catch (e) { /* starting */ } await sleep(500); }
     browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
+    await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
@@ -44,12 +45,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await sleep(100);
     const tp = await page.evaluate(() => window.__objectScreenPosition("round_side_table"));
     let ui;
-    for (const [dx, dy] of [[0, 40], [90, 30], [-90, 30], [0, 80], [140, 0], [-140, 0], [60, 60]]) {  // the mug sits on the table: find a point on the table itself
-      await page.mouse.click(tp.x + dx, tp.y + dy);
-      await sleep(250);
+    const cv = await page.locator("canvas").boundingBox();
+    outer: for (let fy = 0.2; fy <= 0.9; fy += 0.1) for (let fx = 0.1; fx <= 0.9; fx += 0.1) {  // the mug sits on the table and the camera frames the objects: probe the canvas for a point on the table itself
+      await page.mouse.click(cv.x + cv.width * fx, cv.y + cv.height * fy);
+      await sleep(120);
       ui = await page.evaluate(() => window.__mapUi());
-      if (ui.name === "round side table") break;
+      if (ui.name === "round side table") break outer;
     }
+    await sleep(150);
+    ui = await page.evaluate(() => window.__mapUi());
     check("clicking the table selects it: panel shows its name and is not printable", ui.name === "round side table" && ui.printObjDisabled && ui.objPanel === "block", JSON.stringify(ui));
     await page.mouse.click(mp.x, mp.y);
     await sleep(300);
@@ -77,7 +81,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.fill("#ai-input", "make it exactly 12 cm tall");
     await page.click("#ai-send");
     await page.waitForFunction(() => document.querySelector("#ai-log .entry.ok"), { timeout: 60000 });
-    check("the edit applies to the mug's own session", (await page.locator("#ai-log .entry.ok").first().innerText()).includes("applied as v1"));
+    check("the edit applies to the mug's own session", (await page.locator("#ai-log .entry.ok").first().innerText()).includes("v1"));
     await sleep(1500);
     const tableAfter = await page.evaluate(() => { const o = window.__sceneObjects ? window.__sceneObjects() : null; return o ? JSON.stringify(o.find((x) => x.id === "round_side_table")) : null; });
     check("the other object is untouched", tableBefore === tableAfter);

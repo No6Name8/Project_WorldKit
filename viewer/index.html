@@ -51,20 +51,16 @@
         <summary>Load</summary>
         <div class="sec-b">
           <div class="row">
+            <button id="btn-demo-run" class="primary grow" title="One coin-scaled run: the mug for Object, the desk scene for Map">Demo run</button>
+          </div>
+          <div class="row">
             <label class="file-btn"><button id="btn-load-scene" type="button">Scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
             <label class="file-btn"><button id="btn-load-label" type="button">GLB file</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
           </div>
-          <div class="row" title="Bundled real reconstructions (no GPU or API key needed)">
+          <div class="row" title="Older bundled reconstructions (not coin-scaled)">
             <button id="btn-demo-mug">Demo: mug</button>
             <button id="btn-demo-scene">Demo: mug + table</button>
           </div>
-        </div>
-      </details>
-      <details class="sec" open>
-        <summary>Overlap check</summary>
-        <div class="sec-b">
-          <div class="row"><button id="btn-check-overlap">Check overlaps</button><button id="btn-export-scene">Export scene</button></div>
-          <div id="overlap-readout">single object loaded</div>
         </div>
       </details>
     </aside>
@@ -99,25 +95,21 @@
         </div>
       </details>
 
-      <details class="sec" open id="sec-parts">
-        <summary>Parts</summary>
-        <div class="sec-b">
-          <div class="row"><button id="btn-parts" type="button" aria-pressed="false" disabled>Show what SAM found</button></div>
-          <div id="part-list"></div>
-          <div id="parts-empty" class="hint">No part data for this model. Run python -m worldkit.parts RUN_DIR, then open the run again.</div>
-        </div>
-      </details>
-
-      <details class="sec" open>
+      <details class="sec grow-sec" open id="sec-ai">
         <summary>AI Edit</summary>
         <div class="sec-b">
+          <div class="row">
+            <button id="btn-parts" type="button" aria-pressed="false" disabled>Show what SAM found</button>
+          </div>
+          <div id="part-list"></div>
+          <div id="parts-empty" class="hint">No part data for this model. Run python -m worldkit.parts RUN_DIR, then open the run again.</div>
           <div id="aiedit-panel">
             <div class="ai-head"><span class="t">Wonder edits, Spark verifies</span><span id="ai-version"></span></div>
             <div id="ai-versions" aria-label="Versions"></div>
             <div id="ai-log"></div>
             <div id="ai-status"></div>
             <div id="instruction-row">
-              <input id="ai-input" type="text" placeholder='e.g. add the text WORLDKIT on the base' aria-label="Edit instruction" />
+              <input id="ai-input" type="text" placeholder='e.g. make the handle 2 mm thicker' aria-label="Edit instruction" />
               <button id="ai-send" class="primary">Edit</button>
             </div>
             <div class="row" style="margin-top: var(--space-2);">
@@ -125,17 +117,19 @@
               <button id="ai-download">Current version STL (mm)</button>
             </div>
           </div>
-          <div id="ai-empty">Select an object and press Edit to describe a change to its print mesh. Needs the edit server (python -m worldkit.serve).</div>
+          <div id="ai-empty">AI Edit is not connected. Start the edit server with python -m worldkit.serve RUN_DIR and reload this page.</div>
         </div>
       </details>
 
-      <details class="sec" open>
-        <summary>Transform</summary>
+      <details class="sec" id="sec-advanced">
+        <summary>Advanced</summary>
         <div class="sec-b">
+          <h3 class="subh">Transform</h3>
           <div class="row">
-            <button id="mode-translate" class="active">Move (W)</button>
+            <button id="mode-translate">Move (W)</button>
             <button id="mode-rotate">Rotate (E)</button>
             <button id="mode-scale">Scale (R)</button>
+            <button id="btn-gizmo-off" title="Hide the gizmo (Esc)">Hide gizmo</button>
           </div>
           <div class="row">
             <button id="btn-reset">Reset view</button>
@@ -143,23 +137,15 @@
             <button id="btn-export">Export GLB</button>
           </div>
           <div id="transform-readout">loading</div>
-        </div>
-      </details>
 
-      <details class="sec" open>
-        <summary>Move by text</summary>
-        <div class="sec-b">
+          <h3 class="subh">Move by text</h3>
           <div id="instruction-row">
             <input id="instruction-input" type="text" placeholder='e.g. move it 10 cm to the left' aria-label="Move instruction" />
             <button id="btn-send">Apply</button>
           </div>
           <div id="edit-log"></div>
-        </div>
-      </details>
 
-      <details class="sec" open>
-        <summary>Physics</summary>
-        <div class="sec-b">
+          <h3 class="subh">Physics</h3>
           <div class="row">
             <label class="inline">drop cm <input id="phys-drop" class="num" type="number" value="15" min="0" step="1" /></label>
             <label class="inline">mass kg <input id="phys-mass" class="num" type="number" value="0.3" min="0.01" step="0.05" /></label>
@@ -172,12 +158,12 @@
           <div id="sim-readout" style="display:none;">off</div>
           <div id="sim-hint" class="hint" style="display:none;">WASD move, Q/E down/up</div>
           <div id="phys-readout">Off. Simulates gravity on a cloned copy; edited objects are untouched. Collider: convex hull (approximation).</div>
-        </div>
-      </details>
 
-      <details class="sec" open>
-        <summary>Provenance</summary>
-        <div class="sec-b">
+          <h3 class="subh">Overlap check</h3>
+          <div class="row"><button id="btn-check-overlap">Check overlaps</button><button id="btn-export-scene">Export scene</button></div>
+          <div id="overlap-readout">single object loaded</div>
+
+          <h3 class="subh">Provenance</h3>
           <label class="hint" for="file-report">pipeline report.json</label>
           <input id="file-report" class="small" type="file" accept=".json,application/json" />
           <label class="hint" for="file-video" style="display:block;margin-top: var(--space-2);">source video</label>
@@ -192,7 +178,7 @@
   <main id="viewport">
     <div id="canvas-wrap"></div>
     <div id="wk-labels"></div>
-    <div id="vp-tools"></div>
+    <div id="vp-tools"><button id="btn-vp-reset" type="button" title="Frame the objects">Reset view</button></div>
     <div id="vp-legend"><i></i><span id="vp-legend-text"></span></div>
     <div id="vp-part-legend" role="status"><i></i><span id="vp-part-legend-text"></span></div>
     <div id="loading" role="status"><div class="bar"></div><span id="loading-text">Loading</span></div>
@@ -309,6 +295,14 @@ const gizmo = new TransformControls(camera, renderer.domElement);
 gizmo.addEventListener("dragging-changed", (e) => { orbit.enabled = !e.value; });
 gizmo.addEventListener("change", updateReadout);
 scene.add(gizmo.getHelper ? gizmo.getHelper() : gizmo);
+let gizmoOn = false; // the move gizmo stays hidden until the user picks Move / Rotate / Scale
+function applyGizmoVisibility() {
+  const h = gizmo.getHelper ? gizmo.getHelper() : gizmo;
+  h.visible = gizmoOn && !!gizmo.object;
+  gizmo.enabled = gizmoOn;
+}
+const _attach = gizmo.attach.bind(gizmo);
+gizmo.attach = (o) => { const r = _attach(o); applyGizmoVisibility(); return r; };
 gizmo.attach(modelGroup);
 
 // --- Loading ---------------------------------------------------------------
@@ -321,9 +315,9 @@ function settleFloorAndShadows(object3d) {
   if (isFinite(b.min.y)) { grid.position.y = b.min.y; shadowFloor.position.y = b.min.y - 0.001; }
 }
 
-function frameCameraOn(object3d) {
+function frameCameraOn(object3d, boxOverride) {
   settleFloorAndShadows(objectsRoot);
-  const box = new THREE.Box3().setFromObject(object3d);
+  const box = boxOverride || new THREE.Box3().setFromObject(object3d);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
   box.getSize(size);
@@ -385,6 +379,12 @@ function loadGLBFromURL(url, label) {
 
 // startup() below decides what to show first: an opened run directory, else the bundled sample
 
+{
+  const adv = document.getElementById("sec-advanced");
+  try { if (localStorage.getItem("wk-advanced") === "1") adv.open = true; } catch (e) { /* storage blocked: stays closed */ }
+  adv.addEventListener("toggle", () => { try { localStorage.setItem("wk-advanced", adv.open ? "1" : "0"); } catch (e) { /* ignore */ } });
+}
+
 // --- Gizmo mode buttons ----------------------------------------------------
 const modeButtons = {
   translate: document.getElementById("mode-translate"),
@@ -392,14 +392,19 @@ const modeButtons = {
   scale: document.getElementById("mode-scale"),
 };
 function setGizmoMode(mode) {
-  gizmo.setMode(mode);
+  if (mode) gizmo.setMode(mode); // (null hides the gizmo; TransformControls itself cannot have a null mode)
+  gizmoOn = !!mode;
+  applyGizmoVisibility();
   for (const [m, btn] of Object.entries(modeButtons)) btn.classList.toggle("active", m === mode);
 }
+document.getElementById("btn-gizmo-off").onclick = () => setGizmoMode(null);
+setGizmoMode(null);
 modeButtons.translate.onclick = () => setGizmoMode("translate");
 modeButtons.rotate.onclick = () => setGizmoMode("rotate");
 modeButtons.scale.onclick = () => setGizmoMode("scale");
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || simEnabled) return; // WASD drives the probe while the collision sim is on
+  if (e.key === "Escape" && gizmoOn) setGizmoMode(null);
   if (e.key === "w") setGizmoMode("translate");
   if (e.key === "e") setGizmoMode("rotate");
   if (e.key === "r") setGizmoMode("scale");
@@ -531,7 +536,8 @@ document.getElementById("file-load").addEventListener("change", (e) => {
 });
 window.__loadGLBFromArrayBuffer = loadGLBFromArrayBuffer;
 
-document.getElementById("btn-reset").onclick = () => frameCameraOn(objectsRoot);
+document.getElementById("btn-reset").onclick = () => frameObjects();
+document.getElementById("btn-vp-reset").onclick = () => frameObjects();
 
 function resetTransform() {
   const entry = sceneObjects.find((o) => o.group === modelGroup);
@@ -720,6 +726,10 @@ document.getElementById("file-report").addEventListener("change", (e) => {
 
 function renderProvenance(report) {
   window.__lastReport = report;
+  if (sceneObjects.length === 1 && report && report.object_name) {  // the run's own object label instead of the file name
+    sceneObjects[0].name = String(report.object_name);
+    queueMicrotask(() => { refreshObjectList(); refreshSelection(); });
+  }
   {
     const lines = [
       `mesh_backend: ${report.mesh_backend ?? "(not recorded)"}`,
@@ -794,6 +804,8 @@ function updateBanner() {
       ? `Scale set manually: ${i.object} = ${i.height_cm} cm (your number, applied to the whole scene; not verified by WorldKit).`
       : i.source === "reference_calibrated"
         ? `Scale estimated from a reference object (${i.reference || "reference"}${i.spread_pct != null ? ", +/-" + i.spread_pct + "% frame-to-frame spread" : ""}). An estimate, not a measurement.`
+        : i.source === "edit_server"
+          ? "Scale from the edited print mesh, in millimetres: the same size as the model it was edited from, only the edit differs."
         : i.source === "user"
           ? "Scale from the user-measured height in the report."
           : `Scale restored from ${i.source}.`;
@@ -978,7 +990,7 @@ async function loadSceneFromFiles(fileList) {
   }
   window.__sceneManifest = manifest;
   const first = sceneObjects.find((o) => !o.missing);
-  frameCameraOn(objectsRoot);
+  frameObjects();
   if (first) { modelGroup = first.group; gizmo.attach(modelGroup); }
   window.__sceneReady = true;
   window.__lastLoadLabel = "scene:" + manifest.frame;
@@ -1017,7 +1029,7 @@ function adoptSceneGLTF(gltf, label) {
   for (const m of meta.missing || []) sceneObjects.push({ id: m.id, name: m.name, group: new THREE.Group(), role: m.role, initial: null, meta: null, missing: true, unitHeight: 1 });
   modelGroup = (sceneObjects.find((o) => !o.missing) || primaryEntry).group;
   gizmo.attach(modelGroup);
-  frameCameraOn(objectsRoot);
+  frameObjects();
   window.__sceneReady = true;
   window.__lastLoadLabel = label;
   logEntry(`Loaded scene GLB ${label}: ${sceneObjects.map((o) => o.name).join(", ")}`);
@@ -1211,6 +1223,19 @@ async function loadSceneFromUrlInner(baseUrl) {
   }
   return loadSceneFromFiles(files);
 }
+async function loadDemoMug() {
+  window.__runStl = "/assets/demo/run_mug/model_print.stl";
+  await loadObjectFromUrls("/assets/demo/run_mug/model.glb", "/assets/demo/run_mug/report.json", "model.glb");
+  await loadParts("/assets/demo/run_mug/parts/parts.json");
+}
+async function loadDemoDesk() { await loadSceneFromUrl("/assets/demo/run_desk/"); }
+document.getElementById("btn-demo-run").onclick = async () => {
+  try {
+    if (document.getElementById("mode-map").getAttribute("aria-pressed") === "true" || sceneObjects.length > 1) await loadDemoDesk();
+    else await loadDemoMug();
+  } catch (e) { logEntry(`FAILED: demo run: ${e}`, true); }
+};
+window.__loadDemoRun = (kind) => (kind === "map" ? loadDemoDesk() : loadDemoMug());
 document.getElementById("btn-demo-mug").onclick = () => loadObjectFromUrls("/assets/demo/mug/model.glb", "/assets/demo/mug/report.json", "model.glb").catch((e) => logEntry(`Demo failed: ${e}`, true));
 document.getElementById("btn-demo-scene").onclick = () => loadSceneFromUrl("/assets/demo/scene/").catch((e) => logEntry(`Demo failed: ${e}`, true));
 window.__loadObjectFromUrls = loadObjectFromUrls;
@@ -1264,7 +1289,16 @@ async function aiReloadModel() {
   if (!r.ok) throw new Error("could not load the edited model");
   const buf = await r.arrayBuffer();
   if (ai.obj) await replaceObjectGeometry(ai.obj, buf);
-  else await loadGLBFromArrayBuffer(buf, `edit v${ai.state.current}`);
+  else {
+    await loadGLBFromArrayBuffer(buf, `edit v${ai.state.current}`);
+    // the edited GLB is the print mesh normalised to 2 units: its real size is known from the edit server (mm), so keep the scale honest
+    const cur = (ai.state.versions || []).find((v) => v.version === ai.state.current);
+    if (cur && cur.size_mm) {
+      cmPerSceneUnit = Math.max(...cur.size_mm) / 20; calibrated = true;
+      calibrationInfo = { source: "edit_server", info: {} };
+      updateBanner(); updateReadout();
+    }
+  }
   if (partsState.on) { partsState.on = false; document.getElementById("btn-parts").setAttribute("aria-pressed", "false"); }
   clearPartOverlay(); // the overlay marks the ORIGINAL mesh
 }
@@ -1285,23 +1319,23 @@ async function aiSend() {
     const imgUrl = (r.renders && r.renders.length) ? `/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}` : "";
     const img = imgUrl ? `<img class="thumb" src="${imgUrl}" alt="before and after render">` : "";
     const sentences = (r.tools || []).map((t) => t.sentence).filter(Boolean);
-    const toolNames = (r.tools || []).map((t) => `${esc(t.name)}${t.error ? " ERROR" : ""}`).join(", ") || "no tool";
-    // a part edit reads as a sentence ("Thickened handle by 2 mm (SAM found 7 of 8 views)"), never as tool-call arguments
-    const what = sentences.length ? `<div>${sentences.map(esc).join(" ")}</div>` : `<div class="mono">${toolNames}</div>`;
-    const row = (vtag, verdict, meta) => `<div><span class="vtag">${vtag}</span>${esc(text)}</div>${what}<div>${verdict}</div><div class="meta">${meta}</div>${img}`;
+    const toolErrors = (r.tools || []).map((t) => t.error).filter(Boolean);
+    const spark = r.spark || (r.spark_verified === false ? "unavailable, accepted on geometry checks" : "verified");
+    const detail = `${(r.tools || []).map((t) => `${t.name} ${JSON.stringify(t.arguments)}${t.error ? " ERROR: " + t.error : ""}`).join("\n") || "no tool called"}\n${r.seconds}s, retries ${r.retries ?? 0}`;
+    const row = (vtag, line) => `<div><span class="vtag">${vtag}</span>${esc(text)}</div><div class="res">${line}</div><details class="dt"><summary>details</summary><pre class="mono">${esc(detail)}</pre></details>${img}`;
     if (r.applied) {
       entry.className = "entry ok";
-      entry.innerHTML = row(`v${r.version}`, `applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}`, [`Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks" : "verified"))}`, sentences.length ? "" : esc(tools), `${r.seconds}s`].filter(Boolean).join(" | "));
+      entry.innerHTML = row(`v${r.version}`, `${esc(sentences.join(". ") || "Applied")}. Spark: ${esc(spark)}.`);
       await aiReloadModel();
     } else {
       entry.className = "entry bad";
-      entry.innerHTML = row(`no change`, `not applied, the model is unchanged: ${esc(r.reason)}`, [sentences.length ? "" : esc(tools), `${r.seconds}s`].filter(Boolean).join(" | "));
+      entry.innerHTML = row(`no change`, `Not applied, the model is unchanged. ${esc(toolErrors.length ? toolErrors.join(" ") : String(r.reason || "").replace(/^no successful tool call:\s*/i, ""))}`);
     }
     if (imgUrl) { entry.dataset.expandable = "1"; entry.tabIndex = 0; entry.title = "Click for the before/after render"; }
     status.textContent = "";
   } catch (e) {
     entry.className = "entry bad";
-    entry.innerHTML = `<div>${esc(text)}</div><div>FAILED: ${esc(e.message || e)}</div>`;
+    entry.innerHTML = `<div>${esc(text)}</div><div class="res">FAILED: ${esc(e.message || e)}</div>`;
     status.textContent = "";
   } finally { ai.busy = false; aiRefreshLabel(); }
 }
@@ -1328,7 +1362,7 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
     if (!r.ok) return;
     const st = await r.json();
     if (!st.enabled) return;
-    if (st.scene_mode) { ai.sceneMode = true; ai.objects = st.objects || []; return; } // in a scene the panel opens per object ("Edit with AI")
+    if (st.scene_mode) { ai.sceneMode = true; ai.objects = st.objects || []; document.getElementById("ai-empty").textContent = "Select an object, then press Edit in the Selection panel to describe a change to its print mesh."; return; } // in a scene the panel opens per object ("Edit with AI")
     ai.state = st;
     document.getElementById("aiedit-panel").style.display = "block";
     if (st.scale_note) aiLog(`<span class="meta">Scale: ${esc(st.scale_note)}. Sizes below are the model's own units (mm), not a measurement unless calibrated.</span>`);
@@ -1346,7 +1380,7 @@ function setLoading(on, text) {
   if (text) document.getElementById("loading-text").textContent = text;
 }
 function setLoadingText(t) { document.getElementById("loading-text").textContent = t; }
-window.__isLoading = () => document.getElementById("loading").style.display !== "none";
+window.__isLoading = () => getComputedStyle(document.getElementById("loading")).display !== "none";
 
 let labelsOn = true;
 const labelEls = new Map();
@@ -1455,6 +1489,7 @@ function afterSelect(o) {
   const multi = sceneObjects.length > 1;
   panel.style.display = "block";
   document.getElementById("obj-name").textContent = o.name;
+  document.getElementById("obj-base").textContent = /^edit v/.test(window.__lastLoadLabel || "") ? "Edited print mesh: dimensions include the base plate." : "Dimensions exclude the print base plate.";
   document.getElementById("obj-dims").textContent = objectDims(o).text;
   document.getElementById("obj-scale").textContent = scaleSourceText(o) + (multi && spec0IsRef(o) ? " (this object is the reference)" : "");
   document.getElementById("btn-edit-obj").style.display = multi ? "" : "none";
@@ -1536,12 +1571,12 @@ function updateMapBar() {
   const hasVerify = m && m.verify && (m.verify.images || []).length && base;
   document.getElementById("btn-verify").style.display = hasVerify ? "" : "none";
 }
-document.getElementById("btn-reset-cam").onclick = () => frameCameraOn(objectsRoot);
+document.getElementById("btn-reset-cam").onclick = () => frameObjects();
 document.getElementById("btn-verify").onclick = () => {
   const panel = document.getElementById("verify-panel");
   if (panel.style.display === "block") { panel.style.display = "none"; return; }
   const m = window.__sceneManifest, base = window.__sceneBase;
-  document.getElementById("verify-sum").textContent = m.verify ? `mean IoU ${m.verify.mean_iou_before} to ${m.verify.mean_iou_after}` : "";
+  document.getElementById("verify-sum").innerHTML = m.verify ? `mean IoU <span class="chip">${m.verify.mean_iou_before}</span> to <span class="chip">${m.verify.mean_iou_after}</span>` : "";
   document.getElementById("verify-imgs").innerHTML = (m.verify.images || []).map((p) => `<img src="${base}${p}" alt="${p}">`).join("");
   panel.style.display = "block";
 };
@@ -1553,6 +1588,14 @@ window.__mapUi = () => ({ bar: document.getElementById("map-bar").style.display,
 
 
 // --- Shell: mode switch, print-bed outline, accuracy view, bottom sheet -----------------------------------------------------------
+function objectsBox() {  // the printable objects only: the support surface (table, desk) does not decide the framing
+  const box = new THREE.Box3();
+  for (const o of sceneObjects) if (!o.missing && o.role !== "parent" && o.group.visible !== false) box.expandByObject(o.group);
+  if (box.isEmpty()) box.setFromObject(objectsRoot);
+  return box;
+}
+function frameObjects() { return frameCameraOn(objectsRoot, objectsBox()); }
+window.__frameObjects = frameObjects;
 let viewMode = "map";
 function syncMode() {
   const multi = sceneObjects.length > 1;
@@ -1563,7 +1606,7 @@ function syncMode() {
 }
 function applyViewMode() {
   for (const o of sceneObjects) if (!o.missing) o.group.visible = viewMode === "map" || o.group === modelGroup;
-  frameCameraOn(viewMode === "map" ? objectsRoot : modelGroup);
+  viewMode === "map" ? frameObjects() : frameCameraOn(modelGroup);
 }
 document.getElementById("mode-object").onclick = () => {
   if (sceneObjects.length < 2) return;
@@ -1571,7 +1614,7 @@ document.getElementById("mode-object").onclick = () => {
   syncMode(); applyViewMode();
 };
 document.getElementById("mode-map").onclick = () => {
-  if (sceneObjects.length < 2) { document.getElementById("btn-demo-scene").click(); return; }
+  if (sceneObjects.length < 2) { loadDemoDesk().catch((e) => logEntry(`FAILED: demo run: ${e}`, true)); return; }
   viewMode = "map";
   syncMode(); applyViewMode();
 };
@@ -1588,8 +1631,7 @@ function drawBed(d) {
   if (box.isEmpty()) box.setFromObject(objectsRoot);
   const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2, y = box.min.y + 0.05;
   const g = new THREE.BufferGeometry().setFromPoints([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => new THREE.Vector3(cx + a * half, y, cz + b * half)));
-  bedLine = new THREE.LineLoop(g, new THREE.LineDashedMaterial({ color: css("--vp-bed"), dashSize: half / 18, gapSize: half / 30 }));
-  bedLine.computeLineDistances();
+  bedLine = new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: css("--accent") }));
   bedLine.raycast = () => {};
   scene.add(bedLine);
   document.getElementById("vp-legend-text").textContent = `print bed 256 x 256 mm = ${sideCm.toFixed(1)} cm at real size (diorama ${d.scale_text})`;
@@ -1620,7 +1662,7 @@ function renderAccuracy(md) {
         continue;
       }
       const err = parseFloat(cells[4]);
-      html += `<tr><td>${esc(cells[0])}</td><td>${esc(cells[1].replace(/_/g, " "))}</td><td class="n">${esc(cells[2])}</td><td class="n">${esc(cells[3])}</td><td class="n ${accClass(err)}">${esc(cells[4])}</td><td class="src">${esc(cells[5] || "")}</td></tr>`;
+      html += `<tr><td>${esc(cells[0])}</td><td>${esc(cells[1].replace(/_/g, " "))}</td><td class="n">${esc(cells[2])}</td><td class="n">${esc(cells[3])}</td><td class="n ${accClass(err)}"><span class="chip">${esc(cells[4])}%</span></td><td class="src">${esc(cells[5] || "")}</td></tr>`;
       continue;
     }
     if (inTable && line.trim() === "") { html += "</tbody></table>"; inTable = false; }
@@ -1722,7 +1764,7 @@ function renderPartList() {
     nm.textContent = p.name;
     const ct = document.createElement("span");
     ct.className = "pc";
-    ct.textContent = `${p.views_found} of ${p.views_total} views`;
+    ct.innerHTML = `<span class="chip">${p.views_found} of ${p.views_total} views</span>`;
     const bar = document.createElement("span");
     bar.className = "pbar";
     bar.setAttribute("aria-hidden", "true");
@@ -1734,12 +1776,12 @@ function renderPartList() {
     box.appendChild(row);
   }
 }
-async function loadParts() {
+async function loadParts(url = "/open/parts/parts.json") {
   partsState.data = null; partsState.on = false;
   clearPartOverlay();
   document.getElementById("btn-parts").setAttribute("aria-pressed", "false");
   try {
-    const r = await fetch("/open/parts/parts.json");
+    const r = await fetch(url);
     if (r.ok) partsState.data = await r.json();
   } catch (e) { /* no parts file: the section shows its empty state */ }
   renderPartList();

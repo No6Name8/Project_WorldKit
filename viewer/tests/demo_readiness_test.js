@@ -38,6 +38,7 @@ async function waitUp(port) {
     const external = [];
     async function newPage() {
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+      await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
       await page.route("**/*", (route) => {
         const u = new URL(route.request().url());
         if (u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.protocol === "data:" || u.protocol === "blob:") return route.continue();

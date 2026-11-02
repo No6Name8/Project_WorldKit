@@ -186,7 +186,9 @@ td.e-na { color: var(--text-muted); }
   #dock.collapsed { max-height: 36px; overflow: hidden; }
   #sheet-toggle { display: flex; align-items: center; justify-content: center; position: sticky; top: 0; z-index: 2; height: 36px; flex: none; width: 100%; border: 0; border-bottom: var(--border-w) solid var(--border-subtle); border-radius: 0; background: var(--bg-surface); color: var(--text-secondary); font-size: var(--fs-xs); }
   #sheet-toggle::before { content: ""; width: 32px; height: 3px; background: var(--border-strong); margin-right: var(--space-2); }
-  .side { overflow: visible; border: 0 !important; }
+  .side { overflow: visible; border: 0 !important; flex: none; }
+  #sheet-toggle { order: -2; }
+  #side-right { order: -1; }  /* on phones the measurements come first, the object list last */  /* never shrink: the sheet scrolls instead of the sections overlapping */
   #viewport { bottom: 46vh; }
   #app { bottom: 0; }
   #vp-legend { bottom: var(--space-2); }
@@ -205,3 +207,18 @@ td.e-na { color: var(--text-muted); }
 .part-row .pnote { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--text-muted); }
 #vp-part-legend { position: absolute; right: var(--space-2); bottom: var(--space-2); display: none; z-index: 5; max-width: 60%; font-size: var(--fs-xs); font-family: var(--font-mono); color: var(--text-secondary); background: var(--bg-surface); border: var(--border-w) solid var(--border-default); border-radius: var(--radius-2); padding: var(--space-1) var(--space-2); }
 #vp-part-legend i { display: inline-block; width: 10px; height: 10px; background: var(--accent); opacity: 0.6; border-radius: var(--radius-1); margin-right: var(--space-2); vertical-align: -1px; }
+
+/* ---------- chips, details, sub-headings, grow section ---------- */
+.chip { display: inline-block; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); line-height: 1; padding: 3px var(--space-2); border: var(--border-w) solid var(--border-default); border-radius: var(--radius-1); background: var(--bg-field); color: var(--text-primary); }
+td.e-ok .chip { border-color: var(--status-ok); color: var(--status-ok); }
+td.e-warn .chip { border-color: var(--status-warn); color: var(--status-warn); }
+td.e-err .chip { border-color: var(--status-err); color: var(--status-err); }
+.entry .res { color: var(--text-primary); margin: var(--space-1) 0; }
+.entry details.dt { margin-top: var(--space-1); }
+.entry details.dt summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-muted); list-style: none; }
+.entry details.dt summary::before { content: "+ "; font-family: var(--font-mono); }
+.entry details.dt[open] summary::before { content: "- "; }
+.entry details.dt pre { margin: var(--space-1) 0 0; white-space: pre-wrap; word-break: break-word; font-size: var(--fs-xs); color: var(--text-secondary); }
+.subh { font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin: var(--space-4) 0 var(--space-2); border-top: var(--border-w) solid var(--border-subtle); padding-top: var(--space-3); }
+.subh:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+#sec-ai #ai-log { max-height: 46vh; min-height: 120px; }

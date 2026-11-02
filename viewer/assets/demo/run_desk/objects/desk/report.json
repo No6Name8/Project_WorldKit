@@ -1,0 +1,14 @@
+{
+ "object_name": "coffee table",
+ "reconstruction_model": {
+  "name": "procedural plane",
+  "vendor": "WorldKit",
+  "is_meta_model": false
+ },
+ "note": "the support surface is a flat slab, not reconstructed",
+ "size_cm": [
+  68.3,
+  1.0,
+  59.9
+ ]
+}

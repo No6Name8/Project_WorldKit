@@ -24,6 +24,7 @@ function check(name, cond, detail) {
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
+  await page.addInitScript(() => { try { localStorage.setItem("wk-advanced", "1"); } catch (e) { /* ignore */ } });
   const consoleErrors = [];
   page.on("console", (msg) => { if (msg.type() === "error") consoleErrors.push(msg.text()); });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));
