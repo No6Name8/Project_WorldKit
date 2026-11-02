@@ -117,7 +117,8 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
         if scene_mode:
             return {"kind": "scene", "base": "/open/", "name": model_dir.name}
         if (model_dir / "model.glb").is_file():
-            return {"kind": "object", "glb": "/open/model.glb", "report": "/open/report.json" if (model_dir / "report.json").is_file() else None, "name": model_dir.name}
+            return {"kind": "object", "glb": "/open/model.glb", "report": "/open/report.json" if (model_dir / "report.json").is_file() else None, "name": model_dir.name,
+                    "stl": "/edit/current.stl" if (model_dir / "model_print.stl").is_file() else None}
         return {"kind": None}
 
     @app.post("/api/edit")

@@ -76,7 +76,7 @@ function check(name, cond, detail) {
     `before.rotZ=${beforeAI.rotation_deg[2]} after.rotZ=${afterAI.rotation_deg[2]}`
   );
   const aiLogText = await page.locator("#edit-log").innerText();
-  check("AI edit log shows a real success, not an error", aiLogText.includes("✓") && !aiLogText.startsWith("✗"), aiLogText.slice(0, 150));
+  check("AI edit log shows a real success, not an error", aiLogText.includes("OK:") && !aiLogText.startsWith("FAILED:"), aiLogText.slice(0, 150));
 
   // --- Step 4: manual gizmo controls still work AFTER the AI edit (combined
   // transform -- the gizmo drag must compose with the AI's rotation, not

@@ -205,7 +205,7 @@ function check(name, cond, detail) {
     `before.x=${beforeAI.position_units[0]} after.x=${afterAI.position_units[0]}`
   );
   const logText = await page.locator("#edit-log").innerText();
-  check("edit log shows a real explanation, not an error", logText.includes("✓"), logText.slice(0, 200));
+  check("edit log shows a real explanation, not an error", logText.includes("OK:"), logText.slice(0, 200));
 
   // 7b. API failure path: intercept /api/edit to simulate the backend being
   // down/erroring, and confirm the UI degrades gracefully -- shows a real
@@ -223,7 +223,7 @@ function check(name, cond, detail) {
   const failureLogText = await page.locator("#edit-log").innerText();
   check(
     "a simulated API failure shows a real error in the log, not a silent failure",
-    failureLogText.includes("✗") && failureLogText.includes("simulated outage"),
+    failureLogText.includes("FAILED:") && failureLogText.includes("simulated outage"),
     failureLogText.slice(0, 200)
   );
   check(

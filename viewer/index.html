@@ -3,203 +3,205 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WorldKit Viewer</title>
-<style>
-  :root { color-scheme: dark; }
-  html, body { margin: 0; height: 100%; background: #14161b; font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
-  #canvas-wrap { position: fixed; inset: 0; }
-  canvas { display: block; }
-
-  .panel {
-    position: fixed; background: rgba(22, 24, 30, 0.92); border: 1px solid #2d313c;
-    border-radius: 10px; color: #e6e8ee; padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-    backdrop-filter: blur(6px);
-  }
-  #top-left { top: 14px; left: 14px; width: 280px; }
-  #top-right { top: 14px; right: 14px; width: 220px; }
-  #bottom-right { bottom: 14px; right: 14px; width: 260px; }
-  #bottom-right video { width: 100%; border-radius: 6px; margin-top: 6px; display: none; }
-  #provenance-readout { font-size: 11px; line-height: 1.5; color: #a8adba; white-space: pre-wrap; margin-top: 8px; }
-  input[type=file].small { font-size: 11px; width: 100%; color: #a8adba; margin-top: 4px; }
-  #top-left h1 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
-  #scale-banner {
-    font-size: 11.5px; line-height: 1.4; padding: 8px; border-radius: 6px; margin-bottom: 10px;
-    background: #3a2a10; border: 1px solid #7a5a1a; color: #ffcf7a;
-  }
-  .row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-  button {
-    background: #262a34; color: #e6e8ee; border: 1px solid #3a3f4b; border-radius: 6px;
-    padding: 6px 10px; font-size: 12.5px; cursor: pointer;
-  }
-  button:hover { background: #30353f; }
-  button.active { background: #3b6fe0; border-color: #3b6fe0; color: white; }
-  #transform-readout { font-size: 11px; line-height: 1.6; color: #a8adba; white-space: pre; margin-top: 6px; }
-  label.file-btn { display: inline-block; }
-  input[type=file] { display: none; }
-
-  #scene-panel { top: 96px; right: 14px; width: 250px; max-height: 34vh; overflow-y: auto; }
-  #physics-panel { top: calc(96px + 34vh + 20px); right: 14px; width: 250px; }
-  .ptitle { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
-  #object-list button { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
-  #object-list button.missing { color: #ff8080; border-color: #7a3a3a; }
-  #overlap-readout, #phys-readout { font-size: 11px; line-height: 1.5; color: #a8adba; white-space: pre-wrap; margin-top: 6px; }
-  #overlap-readout .warn { color: #ffcf7a; }
-  .num { width: 56px; background: #1b1e25; border: 1px solid #3a3f4b; border-radius: 6px; color: #e6e8ee; padding: 4px; font-size: 12px; }
-  #scale-banner.ok { background: #10301f; border-color: #1f7a45; color: #8ff0b5; }
-  #aiedit-panel { bottom: 14px; left: 450px; width: 440px; display: none; }
-  #ai-log { font-size: 12px; max-height: 150px; overflow-y: auto; margin: 8px 0; color: #c3c7d1; }
-  #ai-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
-  #ai-log .ok { color: #8ff0b5; } #ai-log .bad { color: #ff9a9a; } #ai-log .meta { color: #8b90a0; font-size: 11px; }
-  #ai-log img { width: 100%; border-radius: 4px; margin-top: 4px; }
-  #ai-status { font-size: 11.5px; color: #ffcf7a; min-height: 16px; }
-  #loading { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 50; background: rgba(20,22,27,0.72); color: #e6e8ee; font-size: 15px; }
-  #loading .spin { width: 18px; height: 18px; border: 3px solid #3a3f4b; border-top-color: #3b6fe0; border-radius: 50%; margin-right: 12px; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  #map-bar { top: 14px; left: 50%; transform: translateX(-50%); display: none; padding: 8px 12px; align-items: center; gap: 8px; white-space: nowrap; }
-  #map-bar label { font-size: 12px; color: #a8adba; }
-  #obj-panel { top: 420px; left: 14px; width: 292px; display: none; }
-  #obj-panel .dims { font-size: 13px; margin: 6px 0; } #obj-panel .small { font-size: 11px; color: #8b90a0; margin-top: 4px; }
-  #obj-panel button:disabled, #map-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
-  #verify-panel { top: 70px; left: 50%; transform: translateX(-50%); width: min(1100px, 92vw); max-height: 78vh; overflow-y: auto; display: none; z-index: 30; }
-  #verify-panel img { width: 100%; border-radius: 6px; margin: 6px 0 10px; }
-  .wk-label { position: fixed; pointer-events: none; transform: translate(-50%, -100%); background: rgba(22,24,30,0.82); color: #e6e8ee; font-size: 11.5px; padding: 2px 7px; border-radius: 5px; border: 1px solid #3a3f4b; white-space: nowrap; z-index: 20; }
-  .wk-label.sel { border-color: #35d0ff; color: #35d0ff; }
-  #bottom-left { bottom: 14px; left: 14px; width: 420px; }
-  #edit-log { font-size: 12px; max-height: 110px; overflow-y: auto; margin-top: 8px; color: #c3c7d1; }
-  #edit-log .entry { padding: 6px 0; border-top: 1px solid #262a34; }
-  #edit-log .err { color: #ff8080; }
-  #instruction-row { display: flex; gap: 6px; }
-  #instruction-row input[type=text] {
-    flex: 1; background: #1b1e25; border: 1px solid #3a3f4b; border-radius: 6px;
-    color: #e6e8ee; padding: 8px; font-size: 13px;
-  }
-  #status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: #777; }
-  #status-dot.ok { background: #3ed07e; }
-  #status-dot.bad { background: #ff5c5c; }
-</style>
+<meta name="theme-color" content="#0f1215" />
+<title>WorldKit</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/assets/tokens.css" />
+<link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-<div id="canvas-wrap"></div>
+<header id="topbar">
+  <div id="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="square" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>
+    <b>WorldKit</b><span>Film it. Print it.</span>
+  </div>
+  <div class="seg" role="group" aria-label="Mode">
+    <button id="mode-object" type="button" aria-pressed="true">Object</button>
+    <button id="mode-map" type="button" aria-pressed="false">Map</button>
+  </div>
+  <div class="spacer"></div>
+  <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
+  <button id="btn-accuracy" type="button">Accuracy</button>
+</header>
 
-<div id="top-left" class="panel">
-  <h1>WorldKit Viewer</h1>
-  <div id="scale-banner">⚠ Scale is NOT physically calibrated. This mesh's size comes from a
-    placeholder estimate (printprep default_fallback, 10&nbsp;cm), not a real measurement.
-    Numbers below are consistent within this scene, not guaranteed physical centimeters.</div>
-  <div class="row">
-    <button id="mode-translate" class="active">Move (W)</button>
-    <button id="mode-rotate">Rotate (E)</button>
-    <button id="mode-scale">Scale (R)</button>
+<div id="app">
+  <div id="dock">
+    <button id="sheet-toggle" type="button" aria-expanded="true">Panels</button>
+
+    <aside id="side-left" class="side" aria-label="Objects">
+      <section class="sec" open>
+        <div class="sec-h"><span>Objects</span></div>
+        <div id="map-bar">
+          <span id="map-title"></span>
+          <div class="row">
+            <button id="btn-print-scene" class="primary grow" disabled>Print whole scene (diorama)</button>
+          </div>
+          <span id="print-scene-info"></span>
+          <div class="row">
+            <button id="btn-reset-cam">Reset camera</button>
+            <button id="btn-verify">Verify images</button>
+            <label class="inline"><input type="checkbox" id="chk-labels" checked /> Labels</label>
+          </div>
+        </div>
+        <div class="sec-b">
+          <div id="object-list"></div>
+        </div>
+      </section>
+      <details class="sec" open>
+        <summary>Load</summary>
+        <div class="sec-b">
+          <div class="row">
+            <label class="file-btn"><button id="btn-load-scene" type="button">Scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
+            <label class="file-btn"><button id="btn-load-label" type="button">GLB file</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
+          </div>
+          <div class="row" title="Bundled real reconstructions (no GPU or API key needed)">
+            <button id="btn-demo-mug">Demo: mug</button>
+            <button id="btn-demo-scene">Demo: mug + table</button>
+          </div>
+        </div>
+      </details>
+      <details class="sec" open>
+        <summary>Overlap check</summary>
+        <div class="sec-b">
+          <div class="row"><button id="btn-check-overlap">Check overlaps</button><button id="btn-export-scene">Export scene</button></div>
+          <div id="overlap-readout">single object loaded</div>
+        </div>
+      </details>
+    </aside>
+
+    <aside id="side-right" class="side" aria-label="Inspector">
+      <section class="sec" open>
+        <div class="sec-h"><span>Selection</span></div>
+        <div class="sec-b">
+          <div id="obj-panel">
+            <h2 id="obj-name">Selected object</h2>
+            <div id="obj-dims"></div>
+            <div class="note" id="obj-base">Dimensions exclude the print base plate.</div>
+            <div id="obj-scale"></div>
+            <div class="row">
+              <button id="btn-print-obj" class="primary grow">Download STL (mm)</button>
+              <button id="btn-edit-obj">Edit</button>
+            </div>
+            <div class="note" id="obj-note"></div>
+          </div>
+          <div id="obj-empty">Nothing selected. Click an object in the list or in the viewport.</div>
+        </div>
+      </section>
+
+      <details class="sec" open>
+        <summary>Scale</summary>
+        <div class="sec-b">
+          <div id="scale-banner"></div>
+          <div class="row" title="Manual calibration: type the REAL height of the selected object, measured by you">
+            <input id="calib-height" class="num" type="number" min="0.1" step="0.1" placeholder="cm" aria-label="Real height in cm" />
+            <button id="btn-calibrate">Set real height</button>
+          </div>
+        </div>
+      </details>
+
+      <details class="sec" open>
+        <summary>AI Edit</summary>
+        <div class="sec-b">
+          <div id="aiedit-panel">
+            <div class="ai-head"><span class="t">Wonder edits, Spark verifies</span><span id="ai-version"></span></div>
+            <div id="ai-versions" aria-label="Versions"></div>
+            <div id="ai-log"></div>
+            <div id="ai-status"></div>
+            <div id="instruction-row">
+              <input id="ai-input" type="text" placeholder='e.g. add the text WORLDKIT on the base' aria-label="Edit instruction" />
+              <button id="ai-send" class="primary">Edit</button>
+            </div>
+            <div class="row" style="margin-top: var(--space-2);">
+              <button id="ai-undo">Undo</button>
+              <button id="ai-download">Current version STL (mm)</button>
+            </div>
+          </div>
+          <div id="ai-empty">Select an object and press Edit to describe a change to its print mesh. Needs the edit server (python -m worldkit.serve).</div>
+        </div>
+      </details>
+
+      <details class="sec" open>
+        <summary>Transform</summary>
+        <div class="sec-b">
+          <div class="row">
+            <button id="mode-translate" class="active">Move (W)</button>
+            <button id="mode-rotate">Rotate (E)</button>
+            <button id="mode-scale">Scale (R)</button>
+          </div>
+          <div class="row">
+            <button id="btn-reset">Reset view</button>
+            <button id="btn-reset-transform">Reset transform</button>
+            <button id="btn-export">Export GLB</button>
+          </div>
+          <div id="transform-readout">loading</div>
+        </div>
+      </details>
+
+      <details class="sec" open>
+        <summary>Move by text</summary>
+        <div class="sec-b">
+          <div id="instruction-row">
+            <input id="instruction-input" type="text" placeholder='e.g. move it 10 cm to the left' aria-label="Move instruction" />
+            <button id="btn-send">Apply</button>
+          </div>
+          <div id="edit-log"></div>
+        </div>
+      </details>
+
+      <details class="sec" open>
+        <summary>Physics</summary>
+        <div class="sec-b">
+          <div class="row">
+            <label class="inline">drop cm <input id="phys-drop" class="num" type="number" value="15" min="0" step="1" /></label>
+            <label class="inline">mass kg <input id="phys-mass" class="num" type="number" value="0.3" min="0.01" step="0.05" /></label>
+          </div>
+          <div class="row">
+            <button id="btn-phys-start">Simulate</button>
+            <button id="btn-phys-reset">Reset sim</button>
+            <button id="btn-sim-toggle">Collision probe</button>
+          </div>
+          <div id="sim-readout" style="display:none;">off</div>
+          <div id="sim-hint" class="hint" style="display:none;">WASD move, Q/E down/up</div>
+          <div id="phys-readout">Off. Simulates gravity on a cloned copy; edited objects are untouched. Collider: convex hull (approximation).</div>
+        </div>
+      </details>
+
+      <details class="sec" open>
+        <summary>Provenance</summary>
+        <div class="sec-b">
+          <label class="hint" for="file-report">pipeline report.json</label>
+          <input id="file-report" class="small" type="file" accept=".json,application/json" />
+          <label class="hint" for="file-video" style="display:block;margin-top: var(--space-2);">source video</label>
+          <input id="file-video" class="small" type="file" accept="video/*" />
+          <video id="provenance-video" controls></video>
+          <div id="provenance-readout">No report loaded. Shows report.json fields read-only; it does not change the loaded mesh.</div>
+        </div>
+      </details>
+    </aside>
   </div>
-  <div class="row">
-    <button id="btn-export">Export GLB</button>
-    <label class="file-btn"><button id="btn-load-label" type="button">Load GLB</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
-    <button id="btn-reset">Reset view</button>
-    <button id="btn-reset-transform">Reset transform</button>
-  </div>
-  <div class="row" title="Manual calibration: type the REAL height of the selected object, measured by you">
-    <input id="calib-height" class="num" type="number" min="0.1" step="0.1" placeholder="cm" />
-    <button id="btn-calibrate">Set real height</button>
-  </div>
-  <div id="transform-readout">loading…</div>
+
+  <main id="viewport">
+    <div id="canvas-wrap"></div>
+    <div id="wk-labels"></div>
+    <div id="vp-tools"></div>
+    <div id="vp-legend"><i></i><span id="vp-legend-text"></span></div>
+    <div id="loading" role="status"><div class="bar"></div><span id="loading-text">Loading</span></div>
+    <div id="verify-panel">
+      <div class="head"><b>Verification against the real frames</b><span id="verify-sum"></span><button id="btn-verify-close">Close</button></div>
+      <div class="hint">Each image: real frame | scene before the Muse Spark correction rounds | after. Coloured silhouettes are the reconstructed objects; mean silhouette IoU against the SAM 3.1 masks is in the titles.</div>
+      <div id="verify-imgs"></div>
+    </div>
+  </main>
 </div>
 
-<div id="top-right" class="panel">
-  <div class="row" style="margin-bottom:6px;">
-    <button id="btn-sim-toggle">Enable collision probe</button>
+<div id="accuracy-view" role="dialog" aria-label="Accuracy">
+  <div class="wrap">
+    <div class="row" style="justify-content: space-between;"><h2>Accuracy: real vs model</h2><button id="btn-accuracy-close">Close</button></div>
+    <div class="hint">Model sizes are measured on the exported print STL (mm), base plate excluded. Error is (model - real) / real.</div>
+    <div class="acc-legend"><span><i class="a"></i>within 3%</span><span><i class="b"></i>3 to 8%</span><span><i class="c"></i>over 8%</span></div>
+    <div id="accuracy-body"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:75%"></div></div>
+    <div class="acc-note" id="accuracy-note"></div>
   </div>
-  <div id="sim-readout" style="font-size:11px; line-height:1.6; color:#a8adba; white-space:pre; display:none;">off</div>
-  <div id="sim-hint" style="font-size:11px; color:#6b7080; display:none; margin-top:4px;">WASD move · Q/E down/up</div>
-</div>
-
-<div id="scene-panel" class="panel">
-  <div class="ptitle">Scene objects</div>
-  <div id="object-list"></div>
-  <div class="row" style="margin-top:6px;">
-    <label class="file-btn"><button id="btn-load-scene" type="button">Load scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
-    <button id="btn-export-scene">Export scene</button>
-    <button id="btn-check-overlap">Check overlaps</button>
-  </div>
-  <div class="row" title="Bundled real reconstructions (no GPU or API key needed)">
-    <button id="btn-demo-mug">Demo: mug</button>
-    <button id="btn-demo-scene">Demo: mug + table</button>
-  </div>
-  <div id="overlap-readout">single object loaded</div>
-</div>
-
-<div id="physics-panel" class="panel">
-  <div class="ptitle">Physics (Rapier rigid body)</div>
-  <div class="row">
-    <label style="font-size:11px;color:#a8adba;">drop cm <input id="phys-drop" class="num" type="number" value="15" min="0" step="1" /></label>
-    <label style="font-size:11px;color:#a8adba;">mass kg <input id="phys-mass" class="num" type="number" value="0.3" min="0.01" step="0.05" /></label>
-  </div>
-  <div class="row">
-    <button id="btn-phys-start">Simulate</button>
-    <button id="btn-phys-reset">Reset sim</button>
-  </div>
-  <div id="phys-readout">Off. Simulates gravity on a cloned copy; your edited objects are untouched. Collider: convex hull (approximation).</div>
-</div>
-
-<div id="bottom-right" class="panel">
-  <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Provenance (optional)</div>
-  <label style="font-size:11px; color:#a8adba;">pipeline report.json</label>
-  <input id="file-report" class="small" type="file" accept=".json,application/json" />
-  <label style="font-size:11px; color:#a8adba; margin-top:8px; display:block;">source video</label>
-  <input id="file-video" class="small" type="file" accept="video/*" />
-  <video id="provenance-video" controls></video>
-  <div id="provenance-readout">No report loaded. This panel shows report.json fields read-only -- it does not change the loaded mesh.</div>
-</div>
-
-<div id="loading"><div class="spin"></div><span id="loading-text">Loading…</span></div>
-<div id="wk-labels"></div>
-
-<div id="map-bar" class="panel">
-  <b id="map-title" style="font-size:13px;"></b>
-  <button id="btn-reset-cam">Reset camera</button>
-  <label><input type="checkbox" id="chk-labels" checked /> Labels</label>
-  <button id="btn-verify">Verify images</button>
-  <button id="btn-print-scene" disabled>Print whole scene</button>
-  <span id="print-scene-info" style="font-size:11.5px;color:#a8adba;"></span>
-</div>
-
-<div id="obj-panel" class="panel">
-  <div class="ptitle" id="obj-name">Selected object</div>
-  <div class="dims" id="obj-dims"></div>
-  <div class="small" id="obj-scale"></div>
-  <div class="row" style="margin:6px 0 0;">
-    <button id="btn-print-obj">Print this</button>
-    <button id="btn-edit-obj">Edit with AI</button>
-  </div>
-  <div class="small" id="obj-note"></div>
-</div>
-
-<div id="verify-panel" class="panel">
-  <div class="ptitle">Verification against the real frames <span id="verify-sum" style="font-weight:400;color:#8b90a0"></span> <button id="btn-verify-close" style="float:right;">Close</button></div>
-  <div style="font-size:11.5px;color:#a8adba;">Each image: real frame | scene before the Muse Spark correction rounds | after. Coloured silhouettes are the reconstructed objects; mean silhouette IoU against the SAM 3.1 masks is in the titles.</div>
-  <div id="verify-imgs"></div>
-</div>
-
-<div id="aiedit-panel" class="panel">
-  <div class="ptitle">AI Edit <span style="font-weight:400;color:#8b90a0">- Muse Wonder edits, Muse Spark verifies</span> <span id="ai-version" style="float:right;color:#8b90a0"></span></div>
-  <div id="ai-log"></div>
-  <div id="ai-status"></div>
-  <div id="instruction-row">
-    <input id="ai-input" type="text" placeholder='e.g. "add the text WORLDKIT on the base"' />
-    <button id="ai-send">Edit</button>
-  </div>
-  <div class="row" style="margin:8px 0 0;">
-    <button id="ai-undo">Undo</button>
-    <button id="ai-download">Download STL</button>
-  </div>
-</div>
-
-<div id="bottom-left" class="panel">
-  <div><span id="status-dot"></span><span id="status-text">checking Muse Spark…</span></div>
-  <div id="instruction-row">
-    <input id="instruction-input" type="text" placeholder='e.g. "move it 10 cm to the left"' />
-    <button id="btn-send">Apply</button>
-  </div>
-  <div id="edit-log"></div>
 </div>
 
 <script type="importmap">
@@ -236,16 +238,18 @@ let cmPerSceneUnit = 1.0; // recomputed once the model loads, from its real boun
 const wrap = document.getElementById("canvas-wrap");
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
+const vpW = () => Math.max(wrap.clientWidth, 1), vpH = () => Math.max(wrap.clientHeight, 1);
+renderer.setSize(vpW(), vpH());
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 wrap.appendChild(renderer.domElement);
 
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x14161b);
+scene.background = new THREE.Color(css("--vp-background"));
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000);
+const camera = new THREE.PerspectiveCamera(45, vpW() / vpH(), 0.01, 1000);
 camera.position.set(2.5, 2, 2.5);
 // glTF's spec mandates Y-up vertex data from a compliant exporter, and
 // three.js/GridHelper both default to Y-up -- tried overriding to Z-up here
@@ -269,7 +273,7 @@ dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 20;
 dirLight.shadow.bias = -0.0004; dirLight.shadow.normalBias = 0.02;
 scene.add(dirLight);
 
-const grid = new THREE.GridHelper(10, 20, 0x3a3f4b, 0x24272f);
+const grid = new THREE.GridHelper(10, 20, css("--vp-grid-major"), css("--vp-grid-minor"));
 scene.add(grid);
 const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.4 }));
 shadowFloor.rotation.x = -Math.PI / 2;
@@ -550,12 +554,12 @@ fetch("/api/health")
       statusText.textContent = "Muse Spark ready";
     } else {
       statusDot.className = "bad";
-      statusText.textContent = "Muse Spark unavailable (no key) — use the Move/Rotate/Scale gizmo instead";
+      statusText.textContent = "Muse Spark unavailable (no key). The gizmo still works.";
     }
   })
   .catch(() => {
     statusDot.className = "bad";
-    statusText.textContent = "Backend unreachable — gizmo still works, AI edits won't";
+    statusText.textContent = "Backend unreachable. The gizmo still works, AI edits do not.";
   });
 
 function sendInstruction() {
@@ -571,14 +575,14 @@ function sendInstruction() {
     .then((r) => r.json().then((data) => ({ status: r.status, data })))
     .then(({ status, data }) => {
       if (status !== 200 || !data.ok) {
-        logEntry(`✗ ${data.error_type || "error"}: ${data.error || "unknown error"}`, true);
+        logEntry(`FAILED: ${data.error_type || "error"}: ${data.error || "unknown error"}`, true);
         return;
       }
       applyEditTransform(data.transform);
-      logEntry(`✓ ${data.transform.explanation}`);
+      logEntry(`OK: ${data.transform.explanation}`);
       input.value = "";
     })
-    .catch((err) => logEntry(`✗ request failed: ${err}`, true));
+    .catch((err) => logEntry(`FAILED: request failed: ${err}`, true));
 }
 document.getElementById("btn-send").onclick = sendInstruction;
 document.getElementById("instruction-input").addEventListener("keydown", (e) => {
@@ -613,7 +617,7 @@ function simSetEnabled(enabled) {
   probe.visible = enabled;
   document.getElementById("sim-readout").style.display = enabled ? "block" : "none";
   document.getElementById("sim-hint").style.display = enabled ? "block" : "none";
-  document.getElementById("btn-sim-toggle").textContent = enabled ? "Disable collision probe" : "Enable collision probe";
+  document.getElementById("btn-sim-toggle").textContent = enabled ? "Probe: on" : "Collision probe";
   if (enabled) {
     const box = new THREE.Box3().setFromObject(objectsRoot);
     probe.position.set(box.max.x + 0.3, (box.min.y + box.max.y) / 2, 0);
@@ -630,7 +634,7 @@ function updateSimReadout() {
   const p = probe.position;
   el.textContent =
     `probe (units): ${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}\n` +
-    `status: ${lastSimResult.blocked ? "⛔ COLLISION" : "✓ clear"}` +
+    `status: ${lastSimResult.blocked ? "COLLISION" : "clear"}` +
     (lastSimResult.hitDistance != null ? ` (${lastSimResult.hitDistance.toFixed(3)} units ahead)` : "");
 }
 
@@ -705,6 +709,7 @@ document.getElementById("file-report").addEventListener("change", (e) => {
 });
 
 function renderProvenance(report) {
+  window.__lastReport = report;
   {
     const lines = [
       `mesh_backend: ${report.mesh_backend ?? "(not recorded)"}`,
@@ -764,24 +769,29 @@ document.getElementById("file-video").addEventListener("change", (e) => {
 
 
 // --- Scale: banner, report-derived and manual calibration ------------------------------------------------------------
+function refreshSelection() {
+  const cur = sceneObjects.find((o) => o.group === modelGroup);
+  if (cur && !cur.missing && typeof afterSelect === "function") afterSelect(cur);
+}
 function updateBanner() {
   const el = document.getElementById("scale-banner");
   if (!el) return;
+  queueMicrotask(refreshSelection); // dimensions and scale source depend on the calibration state
   if (calibrated && calibrationInfo) {
     el.classList.add("ok");
     const i = calibrationInfo;
     el.textContent = i.source === "manual"
       ? `Scale set manually: ${i.object} = ${i.height_cm} cm (your number, applied to the whole scene; not verified by WorldKit).`
       : i.source === "reference_calibrated"
-        ? `Scale estimated from a reference object (${i.reference || "reference"}, ±${i.spread_pct ?? "?"}% self-consistency). An estimate, not a measurement.`
+        ? `Scale estimated from a reference object (${i.reference || "reference"}${i.spread_pct != null ? ", +/-" + i.spread_pct + "% frame-to-frame spread" : ""}). An estimate, not a measurement.`
         : i.source === "user"
           ? "Scale from the user-measured height in the report."
           : `Scale restored from ${i.source}.`;
   } else {
     el.classList.remove("ok");
     el.textContent = sceneObjects.length > 1
-      ? "⚠ Scene scale is NOT calibrated: 1 scene unit is shown as 1 cm, which is arbitrary. Type a real height for the selected object to calibrate."
-      : "⚠ Scale is NOT physically calibrated. This mesh's size comes from a placeholder estimate (10 cm), not a real measurement. Numbers below are consistent within this scene, not guaranteed physical centimeters.";
+      ? "Scene scale is NOT calibrated: 1 scene unit is shown as 1 cm, which is arbitrary. Type a real height for the selected object to calibrate."
+      : "Scale is NOT physically calibrated. This mesh's size comes from a placeholder estimate (10 cm), not a real measurement. Numbers below are consistent within this scene, not guaranteed physical centimeters.";
   }
 }
 
@@ -839,7 +849,17 @@ function refreshObjectList() {
   box.textContent = "";
   for (const o of sceneObjects) {
     const b = document.createElement("button");
-    b.textContent = `${o.name}${o.role === "parent" ? " · parent" : ""}${o.missing ? " · MISSING MESH" : ""}`;
+    const spec = (o.meta && o.meta.spec) || {};
+    const mk = document.createElement("span");
+    mk.className = "mk " + (o.missing ? "err" : o.role === "parent" ? "" : spec.stl ? "ok" : sceneObjects.length > 1 ? "warn" : "ok");
+    mk.title = o.missing ? "mesh missing" : o.role === "parent" ? "support surface (not printable)" : spec.stl ? "printable STL available" : "no STL for this object";
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = o.name;
+    const tg = document.createElement("span");
+    tg.className = "tg";
+    tg.textContent = o.missing ? "MISSING" : o.role === "parent" ? "surface" : spec.is_scale_reference ? "ref" : "";
+    b.append(mk, nm, tg);
     b.dataset.id = o.id;
     if (o.missing) b.classList.add("missing");
     if (o.group === modelGroup) b.classList.add("active");
@@ -856,6 +876,7 @@ function selectObject(id) {
   gizmo.attach(modelGroup);
   window.__selectedId = o.id;
   afterSelect(o);
+  if (viewMode === "object" && sceneObjects.length > 1) applyViewMode();
   refreshObjectList();
   updateReadout();
   if (o.meta && o.meta.report) renderProvenance(o.meta.report);
@@ -1094,7 +1115,7 @@ function checkOverlaps(opts = {}) {
   const bad = out.filter((r) => r.fraction > 0.01);
   const el = document.getElementById("overlap-readout");
   if (sceneObjects.length < 2) el.textContent = "single object loaded";
-  else el.innerHTML = bad.length ? bad.map((r) => `<span class="warn">⚠ ${r.a} overlaps ${r.inside}: ${(r.fraction * 100).toFixed(0)}% of its sampled surface is inside</span>`).join("<br>") : "✓ no penetration between objects (sampled-vertex test; resting contact allowed)";
+  else el.innerHTML = bad.length ? bad.map((r) => `<span class="warn">${r.a} overlaps ${r.inside}: ${(r.fraction * 100).toFixed(0)}% of its sampled surface is inside</span>`).join("<br>") : "✓ no penetration between objects (sampled-vertex test; resting contact allowed)";
   window.__lastOverlaps = out;
   return out;
 }
@@ -1128,7 +1149,7 @@ function physicsReadout() {
   el.textContent = `t=${st.sim_time_s}s ${st.settled ? "· SETTLED" : "· falling/rolling"}\n` +
     (b ? `${b.id}: y=${b.position_units[1].toFixed(3)} u, ${b.speed_m_s.toFixed(2)} m/s, ${b.mass_kg.toFixed(2)} kg\ncollider: ${b.collider}\n` : "") +
     `support: ${st.support ? st.support.collider : "-"}\n` +
-    (st.scale_is_physical ? "size: calibrated scale" : "⚠ size is NOT calibrated: simulated at the displayed size (1 unit = " + cmPerSceneUnit.toFixed(2) + " cm)");
+    (st.scale_is_physical ? "size: calibrated scale" : "size is NOT calibrated: simulated at the displayed size (1 unit = " + cmPerSceneUnit.toFixed(2) + " cm)");
 }
 document.getElementById("btn-phys-start").onclick = () => physicsStart().catch((e) => logEntry(`Physics failed to start: ${e}`, true));
 document.getElementById("btn-phys-reset").onclick = () => { if (physics) { physics.reset(); physicsReadout(); } };
@@ -1189,7 +1210,7 @@ async function startup() {
   try {
     const cfg = await (await fetch("/api/autoload")).json();
     if (cfg.kind === "scene") { await loadSceneFromUrl(cfg.base); logEntry(`Opened run ${cfg.name}`); return; }
-    if (cfg.kind === "object") { await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); return; }
+    if (cfg.kind === "object") { window.__runStl = cfg.stl || null; await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); return; }
     if (cfg.error) logEntry(cfg.error, true);
   } catch (e) { logEntry(`Could not open the requested run: ${e}`, true); }
   loadGLBFromURL("assets/sample_mug.glb", "sample_mug.glb");
@@ -1203,6 +1224,8 @@ function aiLog(html, cls) {
   const d = document.createElement("div");
   d.className = "entry " + (cls || "");
   d.innerHTML = html;
+  d.addEventListener("click", () => { if (d.dataset.expandable) d.classList.toggle("open"); });
+  d.addEventListener("keydown", (e) => { if (d.dataset.expandable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); d.classList.toggle("open"); } });
   const box = document.getElementById("ai-log");
   box.prepend(d);
   return d;
@@ -1210,8 +1233,20 @@ function aiLog(html, cls) {
 const esc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 function aiRefreshLabel() {
   const st = ai.state;
-  document.getElementById("ai-version").textContent = st ? `version v${st.current}${st.current === 0 ? " (original)" : ""}  |  ${st.units}` : "";
+  document.getElementById("ai-version").textContent = st ? `v${st.current}${st.current === 0 ? " original" : ""} | ${st.units}` : "";
   document.getElementById("ai-undo").disabled = !st || st.current === 0 || ai.busy;
+  const chips = document.getElementById("ai-versions");
+  chips.textContent = "";
+  for (const v of (st && st.versions) || []) {
+    const c = document.createElement("button");
+    c.className = "vchip";
+    c.textContent = `v${v.version}`;
+    c.title = v.instruction ? `${v.instruction}${v.size_mm ? " | " + v.size_mm.join(" x ") + " mm" : ""}` : "original";
+    c.setAttribute("aria-current", String(v.version === st.current));
+    c.disabled = ai.busy || v.version === st.current;
+    c.onclick = () => aiUndo(v.version);
+    chips.appendChild(c);
+  }
   document.getElementById("ai-send").disabled = ai.busy;
 }
 async function aiReloadModel() {
@@ -1228,43 +1263,47 @@ async function aiSend() {
   ai.busy = true; aiRefreshLabel(); input.value = "";
   const status = document.getElementById("ai-status");
   status.textContent = "Muse Wonder is choosing tools, then Muse Spark verifies (about 15-60 s)...";
-  const entry = aiLog(`<b>You:</b> ${esc(text)}<div class="meta">working...</div>`);
+  const entry = aiLog(`<div>${esc(text)}</div><div class="meta">working</div>`);
   try {
     const resp = await fetch("/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instruction: text, obj: ai.obj }) });
     const r = await resp.json();
     if (!resp.ok || r.ok === false) throw new Error(r.error || r.detail || `HTTP ${resp.status}`);
     ai.state = r.state;
     const tools = (r.tools || []).map((t) => `${t.name}(${JSON.stringify(t.arguments)})${t.error ? " ERROR: " + t.error : ""}`).join("; ");
-    const img = (r.renders && r.renders.length) ? `<a href="/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}" target="_blank"><img src="/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}"></a>` : "";
+    const imgUrl = (r.renders && r.renders.length) ? `/edit/render/${r.renders[0]}${ai.obj ? "?obj=" + encodeURIComponent(ai.obj) : ""}` : "";
+    const img = imgUrl ? `<img class="thumb" src="${imgUrl}" alt="before and after render">` : "";
+    const toolNames = (r.tools || []).map((t) => `${esc(t.name)}${t.error ? " ERROR" : ""}`).join(", ") || "no tool";
+    const row = (vtag, verdict, meta) => `<div><span class="vtag">${vtag}</span>${esc(text)}</div><div class="mono">${toolNames}</div><div>${verdict}</div><div class="meta">${meta}</div>${img}`;
     if (r.applied) {
       entry.className = "entry ok";
-      entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✓ applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}: ${esc(tools)}<div class="meta">Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks only" : ""))} · ${r.seconds}s</div>${img}`;
+      entry.innerHTML = row(`v${r.version}`, `applied as v${r.version}${r.retries ? " (after " + r.retries + " retry)" : ""}`, `Spark: ${esc(r.spark || (r.spark_verified === false ? "unavailable - accepted on geometry checks" : "verified"))} | ${esc(tools)} | ${r.seconds}s`);
       await aiReloadModel();
     } else {
       entry.className = "entry bad";
-      entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✗ not applied, the model is unchanged: ${esc(r.reason)}<div class="meta">${esc(tools)} · ${r.seconds}s</div>${img}`;
+      entry.innerHTML = row(`no change`, `not applied, the model is unchanged: ${esc(r.reason)}`, `${esc(tools)} | ${r.seconds}s`);
     }
+    if (imgUrl) { entry.dataset.expandable = "1"; entry.tabIndex = 0; entry.title = "Click for the before/after render"; }
     status.textContent = "";
   } catch (e) {
     entry.className = "entry bad";
-    entry.innerHTML = `<b>You:</b> ${esc(text)}<br>✗ ${esc(e.message || e)}`;
+    entry.innerHTML = `<div>${esc(text)}</div><div>FAILED: ${esc(e.message || e)}</div>`;
     status.textContent = "";
   } finally { ai.busy = false; aiRefreshLabel(); }
 }
-async function aiUndo() {
+async function aiUndo(to) {
   if (ai.busy) return;
   try {
-    const r = await (await fetch("/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ obj: ai.obj }) })).json();
+    const r = await (await fetch("/undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ obj: ai.obj, ...(typeof to === "number" ? { to } : {}) }) })).json();
     if (!r.ok) throw new Error(r.detail || "undo failed");
     ai.state = r.state;
-    aiLog(`↶ undo: back to v${r.version}`);
+    aiLog(`<span class="vtag">v${r.version}</span> undo: back to v${r.version}`);
     await aiReloadModel();
-  } catch (e) { aiLog(`✗ ${esc(e.message || e)}`, "bad"); }
+  } catch (e) { aiLog(`FAILED: ${esc(e.message || e)}`, "bad"); }
   aiRefreshLabel();
 }
 document.getElementById("ai-send").onclick = aiSend;
 document.getElementById("ai-input").addEventListener("keydown", (e) => { if (e.key === "Enter") aiSend(); });
-document.getElementById("ai-undo").onclick = aiUndo;
+document.getElementById("ai-undo").onclick = () => aiUndo();
 document.getElementById("ai-download").onclick = () => { window.location.href = "/edit/current.stl?x=1" + aiQ(); };
 window.__aiState = () => ai.state;
 window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return aiSend(); };
@@ -1279,6 +1318,7 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
     document.getElementById("aiedit-panel").style.display = "block";
     if (st.scale_note) aiLog(`<span class="meta">Scale: ${esc(st.scale_note)}. Sizes below are the model's own units (mm), not a measurement unless calibrated.</span>`);
     aiRefreshLabel();
+    { const cur = sceneObjects.find((x) => x.group === modelGroup); if (cur) afterSelect(cur); }
     if (st.current > 0) { await new Promise((res) => setTimeout(res, 600)); await aiReloadModel(); aiLog(`Opened the current edited version v${st.current}`); }
   } catch (e) { /* the plain viewer server has no /edit: the panel stays hidden */ }
 })();
@@ -1332,7 +1372,7 @@ let hoverId = null;
 function setHighlight(entry, on) {
   entry.group.traverse((m) => {
     if (!m.isMesh || !m.material || !m.material.emissive) return;
-    if (on) { if (!hoverBackup.has(m)) hoverBackup.set(m, m.material.emissive.clone()); m.material.emissive.set(0x1d3b66); }
+    if (on) { if (!hoverBackup.has(m)) hoverBackup.set(m, m.material.emissive.clone()); m.material.emissive.copy(new THREE.Color(css("--vp-select")).multiplyScalar(0.3)); }
     else if (hoverBackup.has(m)) { m.material.emissive.copy(hoverBackup.get(m)); hoverBackup.delete(m); }
   });
 }
@@ -1363,7 +1403,7 @@ function setOutline(entry) {
   if (sceneObjects.length < 2) return;
   entry.group.traverse((m) => {
     if (!m.isMesh || m.userData.__outline) return;
-    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), new THREE.LineBasicMaterial({ color: 0x35d0ff, depthTest: true, transparent: true, opacity: 0.95 }));
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), new THREE.LineBasicMaterial({ color: css("--vp-select"), depthTest: true, transparent: true, opacity: 0.95 }));
     lines.userData.__outline = true;
     lines.raycast = () => {};
     m.add(lines);
@@ -1375,21 +1415,42 @@ window.__outlineCount = () => outlineLines.length;
 // object panel
 function objectDims(o) {
   const spec = o.meta && o.meta.spec;
-  if (spec && spec.size_cm) return { text: `${spec.size_cm[0]} × ${spec.size_cm[1]} × ${spec.size_cm[2]} cm (W × H × D)`, real: true };
+  const f = (v) => v.toFixed(1);
+  if (spec && spec.size_cm) return { text: `${f(spec.size_cm[0] * 10)} x ${f(spec.size_cm[1] * 10)} x ${f(spec.size_cm[2] * 10)} mm  W x H x D`, real: true };
   const b = new THREE.Box3().setFromObject(o.group).getSize(new THREE.Vector3());
-  if (calibrated) return { text: `${(b.x * cmPerSceneUnit).toFixed(1)} × ${(b.y * cmPerSceneUnit).toFixed(1)} × ${(b.z * cmPerSceneUnit).toFixed(1)} cm (calibrated)`, real: true };
-  return { text: `${b.x.toFixed(2)} × ${b.y.toFixed(2)} × ${b.z.toFixed(2)} scene units (not calibrated)`, real: false };
+  if (calibrated) return { text: `${f(b.x * cmPerSceneUnit * 10)} x ${f(b.y * cmPerSceneUnit * 10)} x ${f(b.z * cmPerSceneUnit * 10)} mm  W x H x D`, real: true };
+  return { text: `${b.x.toFixed(2)} x ${b.y.toFixed(2)} x ${b.z.toFixed(2)} scene units, not calibrated`, real: false };
+}
+function scaleSourceText(o) {
+  const m = window.__sceneManifest;
+  if (sceneObjects.length > 1 && m && m.scale_source) return m.scale_source.text || "";
+  const rep = window.__lastReport;
+  if (rep && rep.measurement && rep.measurement.scale_source) return rep.measurement.scale_source;
+  if (rep && rep.scale_calibration && rep.scale_calibration.reference_diameter_cm) return `scale source: ${rep.scale_calibration.reference}, ${(rep.scale_calibration.reference_diameter_cm * 10).toFixed(1)} mm diameter`;
+  if (calibrated && calibrationInfo) {
+    const i = calibrationInfo;
+    return i.source === "manual" ? `scale source: manual height entry, ${i.height_cm} cm (not verified)` : `scale source: ${i.reference || i.source}`;
+  }
+  return "scale source: none (placeholder size, not real)";
 }
 function spec0IsRef(o) { return !!(o.meta && o.meta.spec && o.meta.spec.is_scale_reference); }
 function afterSelect(o) {
   setOutline(o);
   const panel = document.getElementById("obj-panel");
-  if (sceneObjects.length < 2) { panel.style.display = "none"; return; }
+  const multi = sceneObjects.length > 1;
   panel.style.display = "block";
   document.getElementById("obj-name").textContent = o.name;
   document.getElementById("obj-dims").textContent = objectDims(o).text;
-  const ss = window.__sceneManifest && window.__sceneManifest.scale_source;
-  document.getElementById("obj-scale").textContent = ss ? (ss.text || "").replace("scale source: ", "scale source: ") + (spec0IsRef(o) ? "  (this object IS the reference)" : "") : "";
+  document.getElementById("obj-scale").textContent = scaleSourceText(o) + (multi && spec0IsRef(o) ? " (this object is the reference)" : "");
+  document.getElementById("btn-edit-obj").style.display = multi ? "" : "none";
+  if (!multi) {
+    const pbs = document.getElementById("btn-print-obj");
+    const url = () => window.__runStl || (ai.state ? "/edit/current.stl?x=1" : null);
+    pbs.disabled = !url();
+    pbs.onclick = () => { const u = url(); if (u) window.location.href = u; };
+    document.getElementById("obj-note").textContent = url() ? "STL is in millimetres. Geometry is generated, not measured." : "No STL for this model. Open a run folder with python viewer/server.py --open RUN_DIR.";
+    return;
+  }
   const spec = (o.meta && o.meta.spec) || {};
   const base = window.__sceneBase;
   const stl = spec.stl && base ? base + spec.stl : null;
@@ -1401,7 +1462,7 @@ function afterSelect(o) {
   eb.disabled = !canEdit;
   eb.onclick = () => openAiForObject(o);
   document.getElementById("obj-note").textContent = !stl ? (spec.printable === false ? "Not printable (support surface)." : "No STL in this scene folder (open it with `python -m worldkit.serve <scene_dir>`).") :
-    "STL is in millimetres, at the object's real size when the scene has a scale reference (see the scale source line)." + (canEdit ? "" : " AI Edit needs the edit server.");
+    "STL is in millimetres at the scale source above. Geometry is generated, not measured." + (canEdit ? "" : " Edit needs the edit server.");
 }
 async function openAiForObject(o) {
   ai.obj = o.id;
@@ -1415,7 +1476,7 @@ async function openAiForObject(o) {
     if (st.scale_note) aiLog(`<span class="meta">${esc(st.scale_note)}</span>`);
     aiRefreshLabel();
     if (st.current > 0) { await aiReloadModel(); }
-  } catch (e) { aiLog(`✗ ${esc(e.message || e)}`, "bad"); document.getElementById("aiedit-panel").style.display = "block"; }
+  } catch (e) { aiLog(`FAILED: ${esc(e.message || e)}`, "bad"); document.getElementById("aiedit-panel").style.display = "block"; }
 }
 async function replaceObjectGeometry(id, arrayBuffer) {
   const o = sceneObjects.find((x) => x.id === id);
@@ -1443,7 +1504,9 @@ function updateMapBar() {
   const m = window.__sceneManifest;
   const multi = sceneObjects.length > 1;
   bar.style.display = multi ? "flex" : "none";
-  if (!multi) { document.getElementById("obj-panel").style.display = "none"; return; }
+  syncMode();
+  drawBed(null);
+  if (!multi) { if (sceneObjects[0] && !sceneObjects[0].missing) afterSelect(sceneObjects[0]); return; }
   document.getElementById("map-title").textContent = m && m.mode === "map" ? "Map" : "Scene";
   const d = m && m.diorama;
   const base = window.__sceneBase;
@@ -1452,8 +1515,9 @@ function updateMapBar() {
   pb.onclick = () => { if (d && d.stl && base) window.location.href = base + d.stl; };
   const ssb = m && m.scale_source;
   document.getElementById("map-title").title = ssb ? ssb.text : "";
-  document.getElementById("print-scene-info").textContent = d ? `diorama ${d.scale_text}, ${(d.size_mm || []).join(" × ")} mm${(d.warnings || []).length ? " ⚠" : ""}` : "";
+  document.getElementById("print-scene-info").textContent = d ? `diorama ${d.scale_text}, ${(d.size_mm || []).join(" × ")} mm${(d.warnings || []).length ? ", " + d.warnings.length + " warning" + (d.warnings.length > 1 ? "s" : "") : ""}` : "";
   pb.title = d ? (d.warnings || []).join("\n") : "";
+  drawBed(d);
   const hasVerify = m && m.verify && (m.verify.images || []).length && base;
   document.getElementById("btn-verify").style.display = hasVerify ? "" : "none";
 }
@@ -1462,7 +1526,7 @@ document.getElementById("btn-verify").onclick = () => {
   const panel = document.getElementById("verify-panel");
   if (panel.style.display === "block") { panel.style.display = "none"; return; }
   const m = window.__sceneManifest, base = window.__sceneBase;
-  document.getElementById("verify-sum").textContent = m.verify ? `mean IoU ${m.verify.mean_iou_before} → ${m.verify.mean_iou_after}` : "";
+  document.getElementById("verify-sum").textContent = m.verify ? `mean IoU ${m.verify.mean_iou_before} to ${m.verify.mean_iou_after}` : "";
   document.getElementById("verify-imgs").innerHTML = (m.verify.images || []).map((p) => `<img src="${base}${p}" alt="${p}">`).join("");
   panel.style.display = "block";
 };
@@ -1472,12 +1536,120 @@ window.__mapUi = () => ({ bar: document.getElementById("map-bar").style.display,
   printSceneDisabled: document.getElementById("btn-print-scene").disabled, editDisabled: document.getElementById("btn-edit-obj").disabled, dims: document.getElementById("obj-dims").textContent,
   name: document.getElementById("obj-name").textContent, scale: document.getElementById("obj-scale").textContent, verifyVisible: document.getElementById("verify-panel").style.display === "block", info: document.getElementById("print-scene-info").textContent });
 
+
+// --- Shell: mode switch, print-bed outline, accuracy view, bottom sheet -----------------------------------------------------------
+let viewMode = "map";
+function syncMode() {
+  const multi = sceneObjects.length > 1;
+  if (!multi) viewMode = "map"; // the next scene opens as a map; "object" is only ever chosen by the user inside a scene
+  const shown = multi ? viewMode : "object";
+  document.getElementById("mode-object").setAttribute("aria-pressed", String(shown === "object"));
+  document.getElementById("mode-map").setAttribute("aria-pressed", String(shown === "map"));
+}
+function applyViewMode() {
+  for (const o of sceneObjects) if (!o.missing) o.group.visible = viewMode === "map" || o.group === modelGroup;
+  frameCameraOn(viewMode === "map" ? objectsRoot : modelGroup);
+}
+document.getElementById("mode-object").onclick = () => {
+  if (sceneObjects.length < 2) return;
+  viewMode = "object";
+  syncMode(); applyViewMode();
+};
+document.getElementById("mode-map").onclick = () => {
+  if (sceneObjects.length < 2) { document.getElementById("btn-demo-scene").click(); return; }
+  viewMode = "map";
+  syncMode(); applyViewMode();
+};
+let bedLine = null;
+function drawBed(d) {
+  if (bedLine) { bedLine.parent && bedLine.parent.remove(bedLine); bedLine.geometry.dispose(); bedLine.material.dispose(); bedLine = null; }
+  const legend = document.getElementById("vp-legend");
+  legend.style.display = "none";
+  if (!d || !d.scale_ratio || !calibrated || sceneObjects.length < 2) return;
+  const sideCm = 25.6 / d.scale_ratio;            // the 256 mm bed, expressed at real size
+  const half = (sideCm / cmPerSceneUnit) / 2;
+  const box = new THREE.Box3();
+  for (const o of sceneObjects) if (!o.missing && o.role !== "parent") box.expandByObject(o.group); // footprint of the printable objects, not the support slab
+  if (box.isEmpty()) box.setFromObject(objectsRoot);
+  const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2, y = box.min.y + 0.05;
+  const g = new THREE.BufferGeometry().setFromPoints([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => new THREE.Vector3(cx + a * half, y, cz + b * half)));
+  bedLine = new THREE.LineLoop(g, new THREE.LineDashedMaterial({ color: css("--vp-bed"), dashSize: half / 18, gapSize: half / 30 }));
+  bedLine.computeLineDistances();
+  bedLine.raycast = () => {};
+  scene.add(bedLine);
+  document.getElementById("vp-legend-text").textContent = `print bed 256 x 256 mm = ${sideCm.toFixed(1)} cm at real size (diorama ${d.scale_text})`;
+  legend.style.display = "block";
+}
+window.__bedVisible = () => !!bedLine;
+window.__bedInfo = () => bedLine && (() => { const b = new THREE.Box3().setFromObject(bedLine); return { min: b.min.toArray(), max: b.max.toArray(), cm: cmPerSceneUnit, objs: new THREE.Box3().setFromObject(objectsRoot).getSize(new THREE.Vector3()).toArray() }; })();
+
+// accuracy view: renders docs/accuracy.md (copied to assets/demo/accuracy.md by scripts/accuracy_table.py) as tables
+const accEl = document.getElementById("accuracy-view");
+let accLoaded = false;
+function accClass(err) {
+  if (err == null || Number.isNaN(err)) return "e-na";
+  const a = Math.abs(err);
+  return a <= 3 ? "e-ok" : a <= 8 ? "e-warn" : "e-err";
+}
+function renderAccuracy(md) {
+  const body = document.getElementById("accuracy-body");
+  const notes = [];
+  let html = "", inTable = false;
+  const clean = (t) => esc(t.replace(/\*\*/g, "").replace(/`/g, ""));
+  for (const line of md.split("\n")) {
+    if (line.startsWith("## ")) { if (inTable) html += "</tbody></table>"; inTable = false; html += `<h3>${clean(line.slice(3))}</h3>`; continue; }
+    if (line.startsWith("|")) {
+      const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+      if (cells[0] === "object" || /^-+:?$/.test(cells[0].replace(/\s/g, ""))) {
+        if (cells[0] === "object" && !inTable) { html += '<table class="acc"><thead><tr><th>object</th><th>dimension</th><th class="n">real mm</th><th class="n">model mm</th><th class="n">error %</th><th>scale source</th></tr></thead><tbody>'; inTable = true; }
+        continue;
+      }
+      const err = parseFloat(cells[4]);
+      html += `<tr><td>${esc(cells[0])}</td><td>${esc(cells[1].replace(/_/g, " "))}</td><td class="n">${esc(cells[2])}</td><td class="n">${esc(cells[3])}</td><td class="n ${accClass(err)}">${esc(cells[4])}</td><td class="src">${esc(cells[5] || "")}</td></tr>`;
+      continue;
+    }
+    if (inTable && line.trim() === "") { html += "</tbody></table>"; inTable = false; }
+    if (line.trim() && !line.startsWith("#") && !line.startsWith("Mean absolute")) notes.push(clean(line));
+    else if (line.startsWith("Mean absolute")) html += `<p class="hint mono">${clean(line)}</p>`;
+  }
+  if (inTable) html += "</tbody></table>";
+  body.innerHTML = html || '<div class="hint">No accuracy data.</div>';
+  const uniq = [...new Set(notes)].filter((n) => !n.startsWith("Ground truth:"));
+  document.getElementById("accuracy-note").innerHTML =
+    "<b>How ground truth was measured:</b> the mug was measured by hand with a ruler (height 70 mm, rim outer diameter 85 mm, base diameter 65 mm). These numbers are used only to score results, never to scale or tune a model. No other desk object has been measured, so those are listed as unscored. The coin diameter (21.5 mm) is a looked-up preset, not measured." +
+    (uniq.length ? "<br><br>" + uniq.join("<br>") : "");
+}
+async function openAccuracy() {
+  accEl.style.display = "block";
+  if (accLoaded) return;
+  try {
+    const r = await fetch("/assets/demo/accuracy.md");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    renderAccuracy(await r.text());
+    accLoaded = true;
+  } catch (e) {
+    document.getElementById("accuracy-body").innerHTML = `<div class="entry bad">Could not load the accuracy table: ${esc(e.message || e)}</div>`;
+  }
+}
+document.getElementById("btn-accuracy").onclick = () => (accEl.style.display === "block" ? (accEl.style.display = "none") : openAccuracy());
+document.getElementById("btn-accuracy-close").onclick = () => { accEl.style.display = "none"; };
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") accEl.style.display = "none"; });
+window.__accuracyOpen = openAccuracy;
+
+// bottom sheet on narrow screens
+{
+  const dock = document.getElementById("dock"), tg = document.getElementById("sheet-toggle");
+  tg.onclick = () => { const c = dock.classList.toggle("collapsed"); tg.setAttribute("aria-expanded", String(!c)); tg.textContent = c ? "Panels (show)" : "Panels (hide)"; };
+}
+
 // --- Render loop -----------------------------------------------------------
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+function onResize() {
+  camera.aspect = vpW() / vpH();
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(vpW(), vpH());
+}
+window.addEventListener("resize", onResize);
+new ResizeObserver(onResize).observe(wrap);
 
 let lastT = performance.now();
 function animate() {
