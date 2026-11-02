@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-TOOL_NAMES = ["scale_to", "emboss_text", "drill_hole", "flatten_base", "split", "thicken", "mirror"]
+TOOL_NAMES = ["scale_to", "emboss_text", "drill_hole", "flatten_base", "split", "thicken", "mirror", "thicken_part"]
 
 
 class EditError(ValueError):
@@ -141,6 +141,7 @@ def model_facts(mesh: trimesh.Trimesh) -> dict:
         "volume_mm3": round(float(mesh.volume), 1), "watertight": bool(mesh.is_watertight),
         "base_floor_thickness_mm": None if floor_thickness(mesh) is None else round(floor_thickness(mesh), 2),
         "handle": handle_info(mesh),
+        "named_parts": [{"id": k, "sam_views_found": v.get("views_found"), "sam_views_total": v.get("views_total"), "usable_for_thicken_part": v.get("stl_points") is not None} for k, v in PARTS.items()],
         "front_face": "the -y side", "base_face": "the underside (z = 0)",
     }
 
@@ -328,8 +329,40 @@ def mirror(mesh: trimesh.Trimesh, axis: str = "x") -> trimesh.Trimesh:
     return _finish(out, "mirror")
 
 
+# Named parts found by worldkit.parts (SAM 3.1 masks voted onto the mesh), loaded by edit.run_edit: id -> {"stl_points", "views_found", "views_total"}
+PARTS: dict = {}
+
+
+def set_parts(parts: dict | None) -> None:
+    PARTS.clear()
+    PARTS.update(parts or {})
+
+
+def thicken_part(mesh: trimesh.Trimesh, part: str, by_mm: float = 2.0) -> trimesh.Trimesh:
+    """Grow one named part (e.g. the handle) by ``by_mm`` in cross-section: its surface moves outward by by_mm / 2 on every side, fading to zero
+    4 mm away from the part so it blends into the body. The rest of the model does not change."""
+    from scipy.spatial import cKDTree
+
+    p = PARTS.get(part)
+    if p is None or p.get("stl_points") is None:
+        raise EditError(f"no usable part {part!r}; known parts with a print-mesh selection: {[k for k, v in PARTS.items() if v.get('stl_points') is not None]}")
+    if not 0.2 <= by_mm <= 6:
+        raise EditError("by_mm must be between 0.2 and 6")
+    d, _ = cKDTree(p["stl_points"]).query(mesh.vertices)
+    w = np.clip(1.0 - np.maximum(d - 2.0, 0.0) / 2.5, 0.0, 1.0)  # full effect within 2 mm of a selected GLB vertex (their spacing), none beyond 4.5 mm
+    out = mesh.copy()
+    out.vertices = mesh.vertices + mesh.vertex_normals * (by_mm / 2.0) * w[:, None]
+    from manifold3d import Manifold, Mesh
+
+    if str(Manifold(Mesh(vert_properties=out.vertices.astype("float32"), tri_verts=out.faces.astype("uint32"))).status()) != "Error.NoError":
+        raise EditError(f"thicken_part: growing the {part} made the surface self-intersect; try a smaller by_mm")
+    res = _finish(out, "thicken_part")
+    res.metadata["part_info"] = {"part": part, "by_mm": float(by_mm), "views_found": p.get("views_found"), "views_total": p.get("views_total")}
+    return res
+
+
 _TOOLS = {"scale_to": scale_to, "emboss_text": emboss_text, "drill_hole": drill_hole, "flatten_base": flatten_base,
-          "split": split, "thicken": thicken, "mirror": mirror}
+          "split": split, "thicken": thicken, "mirror": mirror, "thicken_part": thicken_part}
 
 
 def apply_tool(mesh: trimesh.Trimesh, name: str, args: dict) -> tuple[trimesh.Trimesh, dict]:
@@ -341,7 +374,9 @@ def apply_tool(mesh: trimesh.Trimesh, name: str, args: dict) -> tuple[trimesh.Tr
         new = fn(mesh, **args)
     except TypeError as exc:
         raise EditError(f"bad arguments for {name}: {exc}") from exc
+    info = new.metadata.get("part_info")
     return new, {
+        **({"sentence": f"Thickened {info['part']} by {info['by_mm']:g} mm (SAM found {info['views_found']} of {info['views_total']} views)", "part": info} if info else {}),
         "ok": True, "tool": name, "notes": new.metadata.get("edit_notes", []), "size_mm_before": [round(float(v), 2) for v in mesh.extents], "size_mm_after": [round(float(v), 2) for v in new.extents],
         "volume_change_mm3": round(float(new.volume - mesh.volume), 1), "watertight": bool(new.is_watertight), "faces": int(len(new.faces)),
     }

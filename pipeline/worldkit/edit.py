@@ -59,6 +59,8 @@ TOOLS = [
     _fn("split", "Cut with a plane axis=offset_mm and keep one half (capped, watertight).",
         {"axis": {"type": "string", "enum": ["x", "y", "z"]}, "offset_mm": {"type": "number"}, "keep": {"type": "string", "enum": ["upper", "lower"]}}),
     _fn("thicken", "Grow walls thinner than min_wall_mm (the outer size grows slightly).", {"min_wall_mm": {"type": "number"}}, ["min_wall_mm"]),
+    _fn("thicken_part", "Make ONE named part thicker (e.g. the handle) by by_mm in cross-section, leaving the rest unchanged. Only parts listed in named_parts with usable_for_thicken_part=true.",
+        {"part": {"type": "string", "description": "part id from named_parts"}, "by_mm": {"type": "number", "description": "0.2-6, default 2"}}, ["part"]),
     _fn("mirror", "Mirror the model about the middle of its bounding box along an axis.", {"axis": {"type": "string", "enum": ["x", "y", "z"]}}, ["axis"]),
 ]
 
@@ -133,6 +135,14 @@ def _views_for(calls: list[dict], before: trimesh.Trimesh, after: trimesh.Trimes
             out.append({"name": "underside (looking up at the base)", "eye": (0, 0, -1), "up": (0, 1, 0), "focus": (ctr[0], ctr[1], 0.0), "zoom": 1.9})
         elif c["name"] == "emboss_text":
             out.append({"name": "front close-up", "eye": (0, -1, 0.1), "focus": ((before.bounds[0][0] + before.bounds[1][0]) / 2, before.bounds[0][1], 0.5 * before.extents[2]), "zoom": 1.6})
+        elif c["name"] == "thicken_part" and (et.PARTS.get(a.get("part")) or {}).get("stl_points") is not None:
+            pts = et.PARTS[a["part"]]["stl_points"]
+            ctr = pts.mean(0)
+            mid = (before.bounds[0] + before.bounds[1]) / 2
+            d = ctr - mid
+            d[2] = 0
+            n = np.linalg.norm(d)
+            out.append({"name": f"{a['part']} close-up", "eye": tuple((d / n if n > 1e-6 else np.array([0, -1.0, 0])) * 0.9 + np.array([0, 0, 0.25])), "focus": tuple(ctr), "zoom": 1.9})
         elif c["name"] == "drill_hole" and a.get("position") is not None:
             n = np.asarray(a.get("direction") or (0, 0, 1), float)
             out.append({"name": "hole close-up (looking along its axis)", "eye": tuple(n), "focus": tuple(a["position"]), "zoom": 2.2})
@@ -285,6 +295,20 @@ def _usage_add(acc: dict, usage) -> None:
     acc["reasoning_tokens"] = acc.get("reasoning_tokens", 0) + int((details.get("reasoning_tokens") if isinstance(details, dict) else 0) or 0)
 
 
+def load_parts(model_dir: Path) -> dict:
+    """Named parts stored by ``python -m worldkit.parts RUN_DIR`` (see parts.py): id -> {stl_points, views_found, views_total}."""
+    f = Path(model_dir) / "parts" / "parts.json"
+    if not f.is_file():
+        return {}
+    from .parts import unb64
+
+    out = {}
+    for p in json.loads(f.read_text(encoding="utf-8")).get("parts", []):
+        pts = unb64(p["stl_points_b64"], np.float32).astype(float) if p.get("stl_points_b64") else None
+        out[p["id"]] = {"stl_points": pts, "views_found": p.get("views_found"), "views_total": p.get("views_total")}
+    return out
+
+
 def wonder_tool_step(client, messages: list[dict], mesh: trimesh.Trimesh, usage_acc: dict):
     """One bounded tool-calling conversation: Wonder calls tools, we run them on ``mesh`` and answer, until it stops calling tools.
     Returns (final mesh, calls[{name, arguments, result|error}], assistant_text). Wonder is called at most MAX_TOOL_TURNS times."""
@@ -336,6 +360,7 @@ def run_edit(model_dir: Path, instruction: str, *, client=None, ask_spark=ask_mu
     ed = model_dir / "edits"
     cur = next(v for v in data["versions"] if v["version"] == data["current"])
     before = trimesh.load(model_dir / cur["stl"], force="mesh")
+    et.set_parts(load_parts(model_dir))
     facts = et.model_facts(before)
     facts["current_version"] = cur["version"]
     if data.get("scale_note"):

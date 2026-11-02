@@ -162,7 +162,7 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
         images = r.get("renders") or last.get("images") or []
         spark = r.get("spark") or last.get("spark") or {}
         return {"ok": True, "applied": bool(r["applied"]), "version": r.get("version"), "reason": r["verdict"]["reason"], "spark": spark.get("reason"),
-                "spark_verified": r["verdict"].get("spark_verified"), "tools": [{"name": c["name"], "arguments": c["arguments"], "error": c.get("error")} for c in calls],
+                "spark_verified": r["verdict"].get("spark_verified"), "tools": [{"name": c["name"], "arguments": c["arguments"], "error": c.get("error"), "sentence": (c.get("result") or {}).get("sentence")} for c in calls],
                 "renders": [Path(p).name for p in images], "seconds": r.get("seconds"), "retries": r.get("retries", len(attempts) - 1 if isinstance(attempts, list) else 0),
                 "tokens": r.get("cost", {}), "state": state(root)}
 
