@@ -31,7 +31,7 @@ import numpy as np
 import trimesh
 from PIL import Image, ImageDraw
 
-from . import appearance, frames as frames_mod, printprep, reconstruct, refscale, scale_cal, segment
+from . import appearance, coindetect, frames as frames_mod, printprep, reconstruct, refscale, scale_cal, segment
 from . import scene as sc
 from . import texture_project as tp
 from .meta_api import MetaAPIUnavailable, ask_muse_spark_with_usage
@@ -52,6 +52,7 @@ List each object ONCE, as a whole: a cap, lid or label belongs to its bottle or 
 Do NOT list: coins or cards used as scale references, hands or people, walls, floor, background furniture, cables, shadows, or the surface itself.
 Give each object a short noun phrase (1-3 words) that an image segmenter can find, and make the phrases distinct (add a colour if two objects are similar).
 Also name the surface the objects rest on.
+Also set "shiny_or_transparent": true for objects made of polished metal, mirror, glass or clear plastic (a 3D reconstructor fails on these).
 For each object also give "parts": segmenter phrases for pieces that belong to it and should be merged into it (e.g. the red holder of a candle), and "aliases": up to 2 alternative phrases for the same whole object (e.g. "incense burner" for "silver ornament").
 Reply with ONLY one JSON object: {{"objects": [{{"name": "white candle", "parts": ["red candle holder"], "aliases": ["candle"], "description": "short"}}], "surface": "desk"}}"""
 
@@ -69,7 +70,7 @@ def discover_objects(image_paths: list[Path], ask=ask_muse_spark_with_usage) -> 
         if not n or low in seen or re.search(r"\b(coin|hand|wall|floor|background|person|sofa|couch|carpet|rug|cushion)\b", low):
             continue
         seen.add(low)
-        names.append({"name": n, "description": str(o.get("description", "")), "parts": [str(x) for x in (o.get("parts") or []) if str(x).strip()][:3],
+        names.append({"name": n, "description": str(o.get("description", "")), "shiny": bool(o.get("shiny_or_transparent")), "parts": [str(x) for x in (o.get("parts") or []) if str(x).strip()][:3],
                       "aliases": [str(x) for x in (o.get("aliases") or []) if str(x).strip()][:2]})
     part_names = {x.lower() for o in names for x in o["parts"]}
     names = [o for o in names if o["name"].lower() not in part_names]
@@ -493,6 +494,63 @@ def _unique_ids(names: list[str]) -> dict[str, str]:
     return ids
 
 
+def verify_loop(items, cams, masks, size_of, rgbs, frames, vdir: Path, tag: str, rep: dict, no_spark: bool = False) -> dict:
+    """IoU of every object's rendered silhouette against its SAM mask in ``frames``, up to 2 Muse Spark correction rounds (a correction is kept only if
+    that object's IoU improves), and real|before|after images. Modifies the items' transforms (the caller restores them if it needs the originals).
+    ``cams`` can be any camera with ``project(points) -> (xy, depth)`` (weak-perspective ``CameraPose`` or a VGGT pinhole camera)."""
+    ious0 = object_ious(items, cams, masks, size_of)
+    before_t = {it.id: dict(it.transform) for it in items}
+    vdir.mkdir(exist_ok=True)
+    rounds, ious_cur = [], ious0
+    names_of = {it.id: it.name for it in items}
+    spark_calls = 0
+    for rnd in range(1, 3):
+        worst = min(frames, key=lambda s: np.nanmean([ious_cur[i].get(s, np.nan) for i in ious_cur]))
+        p1, p2 = vdir / f"{tag}_round{rnd}_real.png", vdir / f"{tag}_round{rnd}_render.png"
+        Image.fromarray(rgbs[worst]).save(p1)
+        render_overlay(rgbs[worst], items, cams[worst], size_of[worst], f"render before round {rnd}").save(p2)
+        if no_spark:
+            break
+        try:
+            text, usage = ask_muse_spark_with_usage([p1, p2], CORRECT_PROMPT.format(objs=", ".join(names_of.values()), ious=json.dumps({names_of[i]: v for i, v in ious_cur.items()})))
+            spark_calls += 1
+        except MetaAPIUnavailable as exc:
+            rep["warnings"].append(f"Muse Spark unavailable for verification: {exc}")
+            break
+        corr = parse_corrections(text, names_of)
+        accepted, rejected = [], []
+        for c in corr:
+            it = next(x for x in items if x.id == c["id"])
+            new_t = apply_correction(it.transform, c)
+            trial = object_ious([it], cams, masks, size_of, {it.id: new_t})
+            old = mean_iou({it.id: ious_cur[it.id]})
+            if mean_iou(trial) > old + 0.005:
+                it.transform = new_t
+                accepted.append({**c, "iou_before": round(old, 3), "iou_after": round(mean_iou(trial), 3)})
+                ious_cur = {**ious_cur, it.id: trial[it.id]}
+            else:
+                rejected.append({**c, "reason": "IoU did not improve"})
+        rounds.append({"round": rnd, "worst_view": worst, "spark_corrections": corr, "applied": accepted, "rejected": rejected, "usage": usage})
+        if not accepted:
+            break
+    ious1 = object_ious(items, cams, masks, size_of)
+    for i, s in enumerate(frames):
+        real = Image.fromarray(rgbs[s])
+        b0 = np.nanmean([ious0[k].get(s, np.nan) for k in ious0])
+        b1 = np.nanmean([ious1[k].get(s, np.nan) for k in ious1])
+        bimg = render_overlay(rgbs[s], items, cams[s], size_of[s], f"BEFORE verify  mean IoU {b0:.2f}", overrides=before_t)
+        aimg = render_overlay(rgbs[s], items, cams[s], size_of[s], f"AFTER verify  mean IoU {b1:.2f}")
+        comp = Image.new("RGB", (real.width * 3 + 16, real.height), (255, 255, 255))
+        comp.paste(real, (0, 0))
+        comp.paste(bimg, (real.width + 8, 0))
+        comp.paste(aimg, (2 * real.width + 16, 0))
+        ImageDraw.Draw(comp).text((6, 6), f"REAL ({tag} cameras)", fill=(255, 255, 255))
+        comp.save(vdir / f"{tag}_view{i}_{s}.png")
+    return {"frames": list(frames), "iou_before": ious0, "iou_after": ious1, "mean_iou_before": round(mean_iou(ious0), 3), "mean_iou_after": round(mean_iou(ious1), 3),
+            "rounds": rounds, "spark_calls": spark_calls, "before_transforms": before_t, "after_transforms": {it.id: dict(it.transform) for it in items},
+            "images": sorted(f"verify/{q.name}" for q in vdir.glob(f"{tag}_view*.png"))}
+
+
 def run(args) -> dict:
     from . import object as obj_cli
 
@@ -509,7 +567,21 @@ def run(args) -> dict:
         T[name] = round(time.time() - t0, 1)
         return r
 
-    sharp = timed("frames", frames_mod.extract_sharp_frames, args.video, out, fps=args.fps, keep_n=args.keep_frames)
+    early_specs = refscale.specs_from_args(getattr(args, "coin", None), getattr(args, "ref_diameter_cm", None), bool(getattr(args, "card", False)), getattr(args, "ref", None),
+                                           getattr(args, "ref_concept", "coin"))
+    scan_coin = any(sp.kind == "coin" for sp in early_specs)
+    sharp = timed("frames", frames_mod.extract_sharp_frames, args.video, out, fps=args.fps, keep_n=(max(args.keep_frames, 90) if scan_coin else args.keep_frames))
+    coin_color: dict = {}
+    if scan_coin:
+        # a small coin is invisible to SAM at phone-video resolution: find it by colour in every frame, then keep the frames that show it
+        for f in sharp:
+            m = coindetect.find_gold_coin(np.array(Image.open(f.path).convert("RGB")))
+            if m is not None:
+                coin_color[Path(f.path).stem] = m
+        with_coin = sorted((f for f in sharp if Path(f.path).stem in coin_color), key=lambda f: -int(coin_color[Path(f.path).stem].sum()))[: max(args.keep_frames // 2, 6)]
+        rest = [f for f in sharp if f not in with_coin][: max(args.keep_frames - len(with_coin), 0)]
+        sharp = with_coin + rest
+        rep["frame_selection"] = {"frames_scanned_for_coin": "all", "frames_with_coin_detected_by_colour": len(coin_color), "kept_with_coin": len(with_coin), "kept_sharpest": len(rest)}
     sharp_by_stem = {Path(f.path).stem: f for f in sharp}
     sharp_map = {s: f.sharpness for s, f in sharp_by_stem.items()}
     rgb = {s: np.array(Image.open(f.path).convert("RGB")) for s, f in sharp_by_stem.items()}
@@ -530,9 +602,22 @@ def run(args) -> dict:
             rep["spark_calls"] += 1
             dfile.parent.mkdir(parents=True, exist_ok=True)
             dfile.write_text(json.dumps(found, default=str))
+    excluded = []
+    extra_ex = [x.lower() for x in (getattr(args, "exclude", None) or [])]
+    keep_objs = []
+    for o in found["objects"]:
+        why = "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)" if o.get("shiny") else (
+            "excluded with --exclude" if any(refscale.name_matches(o["name"], x) for x in extra_ex) else None)
+        if why:
+            excluded.append({"name": o["name"], "reason": why})
+        else:
+            keep_objs.append(o)
+    found["objects"] = keep_objs
     names = [o["name"] for o in found["objects"]]
     specs = refscale.specs_from_args(getattr(args, "coin", None), getattr(args, "ref_diameter_cm", None), bool(getattr(args, "card", False)), getattr(args, "ref", None),
                                      getattr(args, "ref_concept", "coin"))
+    if getattr(args, "no_coin_scale", False):
+        specs = [sp for sp in specs if sp.kind != "coin"]  # the coin still picks the frames, but scale must come from the other references
     fresh = bool(getattr(args, "fresh", False))
     cache = out / "cache"
     for sp in specs:
@@ -546,7 +631,7 @@ def run(args) -> dict:
     tracks, track_errors = timed("track", build_tracks, sharp, names, cache=cache / "masks", fresh=fresh, extra={o["name"]: o for o in found["objects"]})
     tracks, dropped = dedup_tracks(tracks)
     rep["tracks"] = {t.name: len(t.masks) for t in tracks}
-    rep["skipped"] = list(dropped)
+    rep["skipped"] = list(dropped) + excluded
     if not tracks:
         raise MapError(f"SAM 3.1 could not track any of {names}")
 
@@ -639,11 +724,13 @@ def run(args) -> dict:
         if spec.kind in ("coin", "card"):
             for st, f in sharp_by_stem.items():
                 m = cached_mask(cache / "masks", f.path, spec.name, fresh=fresh)
-                if m is None or m.sum() < 120:
+                if (m is None or m.sum() < 120) and spec.kind == "coin":
+                    m = coin_color.get(st)  # colour detector fallback (tiny coin)
+                if m is None or m.sum() < (30 if spec.kind == "coin" else 120):
                     continue
                 try:
                     if spec.kind == "coin":
-                        d = scale_cal.fit_disk(m)
+                        d = scale_cal.fit_disk(m, min_area_px=30)
                         ppc, el = d.major_px / spec.size_cm, d.elevation_deg
                     else:
                         ppc, el = refscale.card_observation(m, spec.size_cm, spec.short_cm)
@@ -789,59 +876,41 @@ def run(args) -> dict:
             cam_fit[s] = {"method": "weak-perspective camera fitted to the objects' base-centre pixels", "objects": sorted(targets), "rms_reprojection_cm": round(err_cm, 2)}
         else:
             cam_fit[s] = {"method": "azimuth from the best-pinned object (fewer than 3 objects visible)"}
-    masks = {it.id: {s: track_of[it.id].masks[s] for s in verify_frames if s in track_of[it.id].masks} for it in items}
-    ious0 = object_ious(items, cams, masks, size_of)
-    before_t = {it.id: dict(it.transform) for it in items}
     vdir = out / "verify"
-    vdir.mkdir(exist_ok=True)
-    rounds, ious_cur = [], ious0
-    names_of = {it.id: it.name for it in items}
-    for rnd in range(1, 3):
-        worst = min(verify_frames, key=lambda s: np.nanmean([ious_cur[i].get(s, np.nan) for i in ious_cur]))
-        p1, p2 = vdir / f"round{rnd}_real.png", vdir / f"round{rnd}_render.png"
-        Image.fromarray(rgb[worst]).save(p1)
-        render_overlay(rgb[worst], items, cams[worst], size_of[worst], f"render before round {rnd}").save(p2)
-        if getattr(args, "no_spark_verify", False):
-            break
+    masks = {it.id: {s: track_of[it.id].masks[s] for s in verify_frames if s in track_of[it.id].masks} for it in items}
+    init_t = {it.id: dict(it.transform) for it in items}
+    weak = verify_loop(items, cams, masks, size_of, rgb, verify_frames, vdir, "weak", rep, getattr(args, "no_spark_verify", False))
+    rep["spark_calls"] += weak["spark_calls"]
+    weak_final_t = {it.id: dict(it.transform) for it in items}
+    for it in items:
+        it.transform = dict(init_t[it.id])
+    vggt_res = None
+    if getattr(args, "vggt", False) and scale_known and scale_src.kind == "coin":
         try:
-            text, usage = ask_muse_spark_with_usage([p1, p2], CORRECT_PROMPT.format(objs=", ".join(names_of.values()), ious=json.dumps({names_of[i]: v for i, v in ious_cur.items()})))
-            rep["spark_calls"] += 1
-        except MetaAPIUnavailable as exc:
-            rep["warnings"].append(f"Muse Spark unavailable for verification: {exc}")
-            break
-        corr = parse_corrections(text, names_of)
-        accepted, rejected = [], []
-        for c in corr:
-            it = next(x for x in items if x.id == c["id"])
-            new_t = apply_correction(it.transform, c)
-            trial = object_ious([it], cams, masks, size_of, {it.id: new_t})
-            old = mean_iou({it.id: ious_cur[it.id]})
-            if mean_iou(trial) > old + 0.005:
-                it.transform = new_t
-                accepted.append({**c, "iou_before": round(old, 3), "iou_after": round(mean_iou(trial), 3)})
-                ious_cur = {**ious_cur, it.id: trial[it.id]}
-            else:
-                rejected.append({**c, "reason": "IoU did not improve"})
-        rounds.append({"round": rnd, "worst_view": worst, "spark_corrections": corr, "applied": accepted, "rejected": rejected, "usage": usage})
-        if not accepted:
-            break
-    ious1 = object_ious(items, cams, masks, size_of)
-    for i, s in enumerate(verify_frames):
-        real = Image.fromarray(rgb[s])
-        b0 = np.nanmean([ious0[k].get(s, np.nan) for k in ious0])
-        b1 = np.nanmean([ious1[k].get(s, np.nan) for k in ious1])
-        bimg = render_overlay(rgb[s], items, cams[s], size_of[s], f"BEFORE verify  mean IoU {b0:.2f}", overrides=before_t)
-        aimg = render_overlay(rgb[s], items, cams[s], size_of[s], f"AFTER verify  mean IoU {b1:.2f}")
-        comp = Image.new("RGB", (real.width * 3 + 16, real.height), (255, 255, 255))
-        comp.paste(real, (0, 0))
-        comp.paste(bimg, (real.width + 8, 0))
-        comp.paste(aimg, (2 * real.width + 16, 0))
-        ImageDraw.Draw(comp).text((6, 6), "REAL", fill=(255, 255, 255))
-        comp.save(vdir / f"view{i}_{s}.png")
+            from . import vggt_cams
+
+            vggt_res = vggt_cams.verify_with_vggt(items=items, sharp_by_stem=sharp_by_stem, track_of=track_of, ref=ref, verify_frames=verify_frames, marker_masks=marker_masks,
+                                                  coin_cm=scale_src.size_cm, cache=cache, fresh=fresh, out=out, verify_fn=verify_loop, rep=rep, no_spark=getattr(args, "no_spark_verify", False))
+            rep["spark_calls"] += vggt_res.get("spark_calls", 0)
+        except Exception as exc:  # noqa: BLE001
+            rep["warnings"].append(f"VGGT verification failed: {type(exc).__name__}: {str(exc)[:200]}")
+            vggt_res = {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+    # the scene keeps the corrections of the camera method with the higher mean IoU afterwards (each method starts from the same placement)
+    use = "weak"
+    if vggt_res and "mean_iou_after" in vggt_res and vggt_res["mean_iou_after"] > weak["mean_iou_after"]:
+        use = "vggt"
+        for it in items:
+            it.transform = dict(vggt_res["after_transforms"][it.id])
+    else:
+        for it in items:
+            it.transform = dict(weak_final_t[it.id])
+    vdir_images = weak["images"] + ((vggt_res or {}).get("images") or [])
     T["verify"] = round(time.time() - t0, 1)
-    rep["verify"] = {"frames": verify_frames, "iou_before": ious0, "iou_after": ious1, "mean_iou_before": round(mean_iou(ious0), 3), "mean_iou_after": round(mean_iou(ious1), 3),
-                     "camera_azimuth_from_object": cam_az_from, "camera_fit": cam_fit, "rounds": rounds, "images": sorted(p.relative_to(out).as_posix() for p in vdir.glob("view*.png")),
-                     "note": "IoU compares the rendered silhouette with the SAM 3.1 mask. The reference frame uses the scale reference camera; other frames use a camera fitted to the objects' base-centre pixels, so there IoU tests size, shape and yaw but NOT position (see camera_fit residuals). Weak perspective is approximate."}
+    rep["verify"] = {"frames": verify_frames, "iou_before": weak["iou_before"], "iou_after": weak["iou_after"], "mean_iou_before": weak["mean_iou_before"], "mean_iou_after": weak["mean_iou_after"],
+                     "camera_azimuth_from_object": cam_az_from, "camera_fit": cam_fit, "rounds": weak["rounds"], "images": vdir_images, "camera_method_kept": use,
+                     "weak_perspective": {k: weak[k] for k in ("frames", "iou_before", "iou_after", "mean_iou_before", "mean_iou_after", "rounds")},
+                     "vggt": ({k: v for k, v in vggt_res.items() if k not in ("before_transforms", "after_transforms")} if vggt_res else None),
+                     "note": "IoU compares the rendered silhouette with the SAM 3.1 mask. Weak-perspective method: the reference frame uses the scale reference camera; other frames use a camera fitted to the objects' base-centre pixels (IoU there tests size, shape and yaw, not position). VGGT method: per-frame pinhole cameras from VGGT, scale from the coin."}
 
     # 6. export
     t0 = time.time()
