@@ -226,7 +226,7 @@ def run(args) -> dict:
         verify_frames += [stems[i] for i in ver]
         fit_frames += [stems[i] for i in chosen if i not in ver]
     sam_frames = sorted(fit_frames + verify_frames)
-    rep["frames"] = {"video": Path(args.video).name, "n_frames": len(stems), "fps": args.fps, "reference": args.ref, "reference_detector_frames": sorted(coin_px),
+    rep["frames"] = {"video": Path(args.video).name, "n_frames": len(stems), "fps": args.fps, "video_seconds": round(len(stems) / args.fps), "reference": args.ref, "reference_detector_frames": sorted(coin_px),
                      "fit_frames": fit_frames, "verify_frames": verify_frames, "segments": [[stems[i[0]], stems[i[-1]]] for i in seg],
                      "selection": f"per third of the video: sharp frames with the {args.ref} visible, >= 3 frames apart; fit and verify frames disjoint"}
     jdump(out / "desk_report.json", rep)
@@ -713,7 +713,7 @@ def build_legs(vg, frames_, path_of, cache, n, p0, to_world, k, L, W, r, thick, 
     Hs, Ps = [], []
     for s in stems[::max(1, len(stems) // 40)]:
         i = vg.idx[s]
-        sel = vg.valid & (vg.conf[i] > np.percentile(vg.conf[i][vg.valid], 50))
+        sel = vg.valid & (vg.conf[i] >= np.percentile(vg.conf[i][vg.valid], 50))  # >=: VGGT confidence is often saturated at 1.0
         P = vg.P[i][sel][::23]
         Ps.append(P)
         Hs.append(((P - p0) @ n) * k)
@@ -736,19 +736,64 @@ def build_legs(vg, frames_, path_of, cache, n, p0, to_world, k, L, W, r, thick, 
         cols.append(rgb_frame(s)[m])
         vm = mask_to_vggt(m)
         i = vg.idx[s]
-        sel = vm & (vg.conf[i] > np.percentile(vg.conf[i][vm], 40))
+        sel = vm & (vg.conf[i] >= np.percentile(vg.conf[i][vm], 40))
         pts.append(to_world(vg.P[i][sel]))
     if not pts:
         return {"error": "SAM 3.1 found no table frame", "floor_height_cm": round(H, 1)}, None
     Pw = np.vstack(pts)
-    inside = (Pw[:, 1] > fl - 1.0) & (Pw[:, 1] < -thick - 0.3) & (rr_sdf(Pw[:, 0], Pw[:, 2], L, W, r) < 8.0)
+    # VGGT depth below the table is compressed (the carpet's points stop ~30 cm down), so the floor height comes from the cameras instead:
+    # a plane sweep. The lowest frame pixel in each image column is where the base meets the floor; projected onto a horizontal plane at
+    # the true floor height, these rays from all views agree on one rounded-rectangle footprint (smallest residual).
+    rays_c, rays_d = [], []
+    for s in fs:
+        m = cached_mask(cache / "masks", path_of[s], CONCEPTS["legs"])
+        if m is None or m.sum() < 80:
+            continue
+        vm = mask_to_vggt(m)
+        bottom_valid = np.nonzero(vg.valid.any(1))[0].max()
+        for x in range(0, VGGT_SIZE, 2):
+            ys_ = np.nonzero(vm[:, x])[0]
+            if len(ys_) and ys_.max() < bottom_valid - 2:
+                rays_c.append(vg.center(s)); rays_d.append(vg.rays(s, np.array([[x, ys_.max()]], float))[0])
+    sweep = []
+    if len(rays_d) >= 60:
+        Cr, Dr = np.array(rays_c), np.array(rays_d)
+        for hcm in np.arange(8, 90, 1.0):
+            off = -hcm / k
+            den = Dr @ n
+            t = (off - (Cr - p0) @ n) / np.where(np.abs(den) > 1e-6, den, 1e-6)
+            ok = t > 0
+            Xw = to_world(Cr[ok] + Dr[ok] * t[ok, None])
+            def cst2(pv, X=Xw):
+                L2, W2, r2 = pv
+                if not (5 < W2 <= L2 and 0 < r2 <= W2 / 2 + 0.01):
+                    return 1e9
+                return float(np.median(np.abs(rr_sdf(X[:, 0], X[:, 2], L2, W2, r2))))
+            res = minimize(cst2, [L * 0.9, W * 0.9, W * 0.45], method="Nelder-Mead", options={"maxiter": 300})
+            sweep.append((float(res.fun) / max(float(res.x[1]), 1e-6), hcm, res.x))  # scale-free: residual / footprint width
+        best_sw = min(sweep, key=lambda q: q[0])
+        fl_cam = -best_sw[1]
+        if best_sw[1] <= sweep[0][1] + 5:  # minimum at (or flat near) the lower end of the range: no floor was found, the sweep is not used
+            sweep_note = f"plane sweep inconclusive (residual rises from the lowest height tried, {sweep[0][1]:.0f} cm): the lowest frame pixels sit near the table edge"
+            best_sw, fl_cam = None, None
+        else:
+            sweep_note = None
+    else:
+        best_sw, fl_cam, sweep_note = None, None, "too few frame-bottom rays for a plane sweep"
+    if best_sw is not None:
+        fl, H = fl_cam, -fl_cam
+    inside = (Pw[:, 1] < -thick - 0.3) & (rr_sdf(Pw[:, 0], Pw[:, 2], L, W, r) < 8.0)
     Pw = Pw[inside]
-    yrel = (Pw[:, 1] - fl) / H
+    # height bands from the (compressed) depth points, relative to their own lowest frame points; used only to find post positions
+    dlo = float(np.percentile(Pw[:, 1], 2)) if len(Pw) else fl
+    yrel = (Pw[:, 1] - dlo) / max(-thick - dlo, 1e-6)
     lowb, midb, upb = Pw[yrel < 0.3], Pw[(yrel >= 0.3) & (yrel < 0.85)], Pw[yrel >= 0.85]
     colour = tuple(int(c) for c in np.median(np.vstack(cols), 0))
     info = {"floor_height_cm": round(-fl, 1), "table_height_cm": round(H, 1), "floor_tilt_vs_top_deg": round(tilt, 1), "frame_masks": len(pts),
             "points": {"low": int(len(lowb)), "mid": int(len(midb)), "upper": int(len(upb))}, "colour_rgb": list(colour),
-            "source": "estimated from frames (VGGT points under SAM 3.1 'gold metal table frame' masks)"}
+            "source": "estimated from frames (VGGT points under SAM 3.1 'gold metal table frame' masks)",
+            "height_method": "camera plane sweep" if best_sw is not None else "densest band of VGGT depth points below the top (depth below the top looks compressed: likely an underestimate)",
+            "sweep_note": sweep_note}
     parts = []
     if len(lowb) >= 60:
         def cst(pv):
@@ -760,6 +805,12 @@ def build_legs(vg, frames_, path_of, cache, n, p0, to_world, k, L, W, r, thick, 
         L2, W2, r2 = res.x
         y_lo, y_hi = np.percentile(lowb[:, 1], [15, 85])
         y_lo, y_hi = float(y_lo), float(max(y_hi, y_lo + 2.0))
+        if best_sw is not None:  # the camera plane sweep: footprint and height of the ring at the floor
+            L2, W2, r2 = best_sw[2]
+            y_lo, y_hi = fl, fl + 3.0
+            res = type("R", (), {"fun": best_sw[0]})()
+            info["floor_from"] = "camera plane sweep of the frame's lowest pixels (VGGT depth below the top is compressed)"
+            info["sweep_relative_residual"] = [[round(q[1]), round(q[0], 4)] for q in sweep[::3]]
         parts.append(ring(L2, W2, r2, 2.0, y_lo, y_hi))
         info["lower_ring_cm"] = {"length": round(L2, 1), "width": round(W2, 1), "radius": round(r2, 1), "y": [round(y_lo, 1), round(y_hi, 1)],
                                  "median_fit_residual": round(res.fun, 2), "ring_width": "2.0 (estimated)"}
@@ -922,7 +973,8 @@ def export(out: Path, rep: dict, items: list, L: float, W: float, r: float, args
            "bed_mm": [BED_MM] * 3, "watertight": bool(fused.is_watertight), "objects": [o["id"] for o in objs], "warnings": [] if fused.is_watertight else ["the union is not watertight"]}
     jdump(out / "diorama.json", dio)
     v = rep["verify"]
-    scene = {"worldkit_scene": 1, "mode": "map", "source_video": rep["frames"]["video"], "units": "centimetres on the table plane (Y up, origin at the table centre)",
+    scene = {"worldkit_scene": 1, "mode": "map", "source_video": rep["frames"]["video"], "source_frames": rep["frames"]["n_frames"],
+             "video_seconds": rep["frames"].get("video_seconds"), "units": "centimetres on the table plane (Y up, origin at the table centre)",
              "cm_per_scene_unit": 1.0,
              "scale_source": {"text": "scale source: " + table["scale_source"], "kind": args.ref, "name": args.ref,
                               "size_mm": args.coin_mm if args.ref == "coin" else list(args.card_mm), "object_id": "reference"},

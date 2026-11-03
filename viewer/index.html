@@ -1719,9 +1719,13 @@ function updateVpFoot() {
   // GridHelper(10, 20): one cell is 0.5 scene units; only shown in mm when the scale is known
   updateGrid();
   document.getElementById("vp-grid").textContent = gridCellMm ? `Grid: ${gridCellMm} mm` : "Grid: not to scale";
-  const rep = window.__lastReport, sv = document.getElementById("src-video");
+  // a scene reads its own manifest; the last single-object report would describe a different run
+  const man = sceneObjects.length > 1 ? window.__sceneManifest : null;
+  const rep = man ? man : window.__lastReport, sv = document.getElementById("src-video");
   const vid = rep && (rep.source_video || rep.video || (rep.input && rep.input.video));
-  sv.textContent = vid ? String(vid).split(/[\\/]/).pop() + (rep.video_seconds ? ` · ${rep.video_seconds} s` : "") : (rep && rep.frames_extracted ? `${rep.frames_extracted} frames used; file name not recorded in this run.` : "Not recorded in this run.");
+  const frames = man ? man.source_frames : rep && rep.frames_extracted;
+  sv.textContent = vid ? String(vid).split(/[\\/]/).pop() + (rep.video_seconds ? ` · ${rep.video_seconds} s` : "") + (frames ? ` · ${frames} frames` : "")
+    : (frames ? `${frames} frames used; file name not recorded in this run.` : "Not recorded in this run.");
 }
 function setCrumb(name) {
   const c = document.getElementById("crumb-name");
