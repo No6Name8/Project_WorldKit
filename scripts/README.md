@@ -7,6 +7,8 @@
 | `accuracy_table.py` | Measures print STLs (base plate excluded) and compares them with `pipeline/samples/ground_truth.json`; writes `docs/accuracy.md`. |
 | `check_contrast.mjs` | WCAG contrast of every text/background token pair in both themes (`viewer/assets/tokens.css`); exits 1 below 4.5:1 (3:1 for non-text). |
 | `record_motion.mjs` | Records `docs/ui/motion_home.webm` and `motion_edit.webm` and reports layout shift (CLS) and long frames; `REDUCED=1` measures the same flows with motion off. |
+| `demo_reset.ps1` / `demo_reset.sh` | Resets the live demo: a clean mug copy at v0 in `pipeline/runs/demo_live`, the edit server (5070) and the scene viewer (5050), the browser at `?demo=1`. |
+| `rehearse_edits.mjs` | Sends the demo edits through the AI Edit panel N times with the real models and writes `docs/demo_edits.json`. Spends Wonder and Spark calls. |
 | `make_brand.mjs` | Writes the logo, banner, social preview, favicons and PWA icons from the app tokens. |
 | `scene_survey.py` | What each sample video contains: 24 frames, one Muse Spark contact-sheet call per video, free coin/card detectors. |
 | `card_preflight.py` | Checks whether a bank card is found (SAM 3.1, then the rectangle detector) in the frames a scene run will use; writes a contact sheet. |

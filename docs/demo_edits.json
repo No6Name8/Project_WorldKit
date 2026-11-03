@@ -1,0 +1,259 @@
+[
+ {
+  "id": "a",
+  "instruction": "make the handle 2 mm thicker",
+  "run": 1,
+  "applied": true,
+  "seconds_client": 21,
+  "row": "Thickened handle by 2 mm (SAM found 11 of 12 views). Spark: Close-up shows handle visibly wider while cup and saucer remain unchanged..",
+  "detail": "Request: make the handle 2 mm thicker\nthicken_part {\"part\":\"handle\",\"by_mm\":2}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n19.6 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Checking Spark"
+  ],
+  "version": 1,
+  "server_seconds": 19.6,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "a",
+  "instruction": "make the handle 2 mm thicker",
+  "run": 2,
+  "applied": true,
+  "seconds_client": 19,
+  "row": "Thickened handle by 2 mm (SAM found 11 of 12 views). Spark: Handle looks wider in close-up while cup and saucer are unchanged..",
+  "detail": "Request: make the handle 2 mm thicker\nthicken_part {\"part\":\"handle\",\"by_mm\":2}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n18.4 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 2,
+  "server_seconds": 18.4,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "b",
+  "instruction": "put a 5 mm hole through the handle side",
+  "run": 1,
+  "applied": true,
+  "seconds_client": 20,
+  "row": "Drilled a 5 mm hole all the way through. Spark: Close-up shows a clear through-hole in the handle side with no other visible changes..",
+  "detail": "Request: put a 5 mm hole through the handle side\ndrill_hole {\"diameter_mm\":5,\"position\":[-1.66,53.13,60.62],\"direction\":[-0.9998,-0.0187,0],\"through\":true}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n19 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Checking Spark"
+  ],
+  "version": 3,
+  "server_seconds": 19,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "b",
+  "instruction": "put a 5 mm hole through the handle side",
+  "run": 2,
+  "applied": true,
+  "seconds_client": 16,
+  "row": "Drilled a 5 mm hole all the way through. Spark: Close-up clearly shows a through-hole in the handle side with no other changes visible..",
+  "detail": "Request: put a 5 mm hole through the handle side\ndrill_hole {\"diameter_mm\":5,\"position\":[-1.66,53.13,60.62],\"direction\":[-0.9998,-0.0187,0],\"through\":true}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n15.1 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 4,
+  "server_seconds": 15.1,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "c",
+  "instruction": "make the handle thinner",
+  "run": 1,
+  "applied": true,
+  "seconds_client": 21,
+  "row": "Thinned handle by 2 mm (SAM found 11 of 12 views). Spark: Close-up shows handle narrower while cup and saucer look unchanged..",
+  "detail": "Request: make the handle thinner\nthicken_part {\"part\":\"handle\",\"by_mm\":-2}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n20 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 5,
+  "server_seconds": 20,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "c",
+  "instruction": "make the handle thinner",
+  "run": 2,
+  "applied": true,
+  "seconds_client": 35,
+  "row": "Thinned handle by 2 mm (SAM found 11 of 12 views). Spark: Handle appears slightly narrower in close-up with no other visible changes..",
+  "detail": "Request: make the handle thinner\nthicken_part {\"part\":\"handle\",\"by_mm\":-2}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n33.6 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 6,
+  "server_seconds": 33.6,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "d",
+  "instruction": "make it exactly 12 cm tall",
+  "run": 1,
+  "applied": true,
+  "seconds_client": 19,
+  "row": "Scaled to 120 mm tall. Spark: After Z is 120 mm with proportional scaling and no shape change.. W 95.3 → 157.0 mm, H 72.9 → 120.0 mm, D 118.6 → 195.3 mm",
+  "detail": "Request: make it exactly 12 cm tall\nscale_to {\"height_cm\":12}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n18.1 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Checking Spark"
+  ],
+  "version": 7,
+  "server_seconds": 18.1,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   156.98,
+   195.26,
+   120
+  ]
+ },
+ {
+  "id": "d",
+  "instruction": "make it exactly 12 cm tall",
+  "run": 2,
+  "applied": true,
+  "seconds_client": 18,
+  "row": "Scaled to 120 mm tall. Spark: After Z-height is exactly 120.0 mm with uniform scaling and no shape change visible.. W 95.3 → 157.0 mm, H 72.9 → 120.0 mm, D 118.6 → 195.3 mm",
+  "detail": "Request: make it exactly 12 cm tall\nscale_to {\"height_cm\":12}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n17.2 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 8,
+  "server_seconds": 17.2,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   156.98,
+   195.26,
+   120
+  ]
+ },
+ {
+  "id": "e",
+  "instruction": "add the text WORLDKIT on the base",
+  "run": 1,
+  "applied": true,
+  "seconds_client": 17,
+  "row": "Engraved \"WORLDKIT\" on the base. Spark: AFTER underside clearly shows WORLDKIT with no other visible changes..",
+  "detail": "Request: add the text WORLDKIT on the base\nemboss_text {\"text\":\"WORLDKIT\",\"face\":\"base\"}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n15.7 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 9,
+  "server_seconds": 15.7,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ },
+ {
+  "id": "e",
+  "instruction": "add the text WORLDKIT on the base",
+  "run": 2,
+  "applied": true,
+  "seconds_client": 15,
+  "row": "Engraved \"WORLDKIT\" on the base. Spark: Underside close-up shows WORLDKIT text added with no other visible changes..",
+  "detail": "Request: add the text WORLDKIT on the base\nemboss_text {\"text\":\"WORLDKIT\",\"face\":\"base\"}\nScale: height source: reference_calibrated (estimated from a reference such as a coin; an estimate, not a measurement). Sizes are the model's own units (mm), not a measurement unless calibrated.\n13.9 s, 0 retries",
+  "stages_seen": [
+   "Choosing",
+   "Applying",
+   "Checking Spark"
+  ],
+  "version": 10,
+  "server_seconds": 13.9,
+  "size_before_mm": [
+   95.32,
+   118.57,
+   72.87
+  ],
+  "size_after_mm": [
+   95.32,
+   118.57,
+   72.87
+  ]
+ }
+]

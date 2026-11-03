@@ -5,6 +5,8 @@
 | [accuracy.md](accuracy.md) | The model compared with a ruler: headline Object-mode table, scene runs with a coin and a card, and how the ground truth was measured. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Mermaid diagrams: system, pipeline, AI Edit loop with Muse Spark verification, phone-to-laptop sync. |
 | [SUBMISSION.md](SUBMISSION.md) | Hackathon submission text, ready to paste. |
+| [DEMO_EDITS.md](DEMO_EDITS.md) | The demo edits rehearsed twice with real Muse Wonder and Spark: exact wording, tool, seconds, Spark verdict. |
+| [RECORDING.md](RECORDING.md) | Recording checklist: screen, browser, windows in order, the reset command, takes and durations. |
 | [DEMO_SCRIPT.md](DEMO_SCRIPT.md) | Timed 3-minute demo script, shot list and pre-recording checklist. |
 | [DEPLOY.md](DEPLOY.md) | How the web app deploys to Vercel (push to main), the prebuilt fallback, the live-site check, the Supabase settings. |
 | [TECHNICAL_NOTES.md](TECHNICAL_NOTES.md) | Measurements and diagnosis: geometry, texture fidelity, scale, scenes, bugs found by looking. |
