@@ -669,7 +669,7 @@ def run(args) -> dict:
     vmasks = {it.id: {s: masks[it.id][s] for s in vf if s in masks[it.id]} for it in items}
     size_of = {s: (VGGT_SIZE, VGGT_SIZE) for s in vf}
     vrep = {"warnings": []}
-    res = verify_loop(items, vcams, vmasks, size_of, rgbs, vf, out / "verify", "vggt", vrep, no_spark=args.no_spark)
+    res = verify_loop(items, vcams, vmasks, size_of, rgbs, vf, out / "verify", "vggt", vrep, no_spark=args.no_spark, max_rounds=args.spark_rounds)
     tbl_item = Placed("table", "table top", b"", *table_mesh_vf(L * k, W * k, r * k, args.table_thick_cm), {"position": [0, 0, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}, "")
     tbl_iou = object_ious([tbl_item], vcams, {"table": {s: tmask[s] for s in vf if s in tmask}}, size_of)
     res["table_iou"] = tbl_iou["table"]
@@ -999,10 +999,15 @@ def main(argv=None) -> int:
     ap.add_argument("--objects", nargs="+", default=["mug", "case", "candle"], choices=["mug", "case", "candle", "burner", "bottle"])
     ap.add_argument("--legs", action="store_true", help="also build the table base (floor plane, rings, posts) from SAM masks and VGGT points")
     ap.add_argument("--legs-frames", type=int, default=8)
+    ap.add_argument("--concept", action="append", default=[], metavar="KEY=PHRASE", help="SAM 3.1 phrase for an object, e.g. burner='silver lantern'")
     ap.add_argument("--until", choices=STAGES, default="export")
     ap.add_argument("--no-spark", action="store_true")
+    ap.add_argument("--spark-rounds", type=int, default=2, help="Muse Spark correction rounds in verify (each kept only if IoU improves)")
     ap.add_argument("--no-gpu", action="store_true")
     a = ap.parse_args(argv)
+    for kv in a.concept:
+        key, phrase = kv.split("=", 1)
+        CONCEPTS[key.strip()] = phrase.strip()
     a.table_thick_given = a.table_thick_cm is not None
     if a.table_thick_cm is None:
         a.table_thick_cm = 2.0

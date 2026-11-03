@@ -497,7 +497,7 @@ def _unique_ids(names: list[str]) -> dict[str, str]:
     return ids
 
 
-def verify_loop(items, cams, masks, size_of, rgbs, frames, vdir: Path, tag: str, rep: dict, no_spark: bool = False) -> dict:
+def verify_loop(items, cams, masks, size_of, rgbs, frames, vdir: Path, tag: str, rep: dict, no_spark: bool = False, max_rounds: int = 2) -> dict:
     """IoU of every object's rendered silhouette against its SAM mask in ``frames``, up to 2 Muse Spark correction rounds (a correction is kept only if
     that object's IoU improves), and real|before|after images. Modifies the items' transforms (the caller restores them if it needs the originals).
     ``cams`` can be any camera with ``project(points) -> (xy, depth)`` (weak-perspective ``CameraPose`` or a VGGT pinhole camera)."""
@@ -507,7 +507,7 @@ def verify_loop(items, cams, masks, size_of, rgbs, frames, vdir: Path, tag: str,
     rounds, ious_cur = [], ious0
     names_of = {it.id: it.name for it in items}
     spark_calls = 0
-    for rnd in range(1, 3):
+    for rnd in range(1, max_rounds + 1):
         worst = min(frames, key=lambda s: np.nanmean([ious_cur[i].get(s, np.nan) for i in ious_cur]))
         p1, p2 = vdir / f"{tag}_round{rnd}_real.png", vdir / f"{tag}_round{rnd}_render.png"
         Image.fromarray(rgbs[worst]).save(p1)
