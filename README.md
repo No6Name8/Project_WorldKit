@@ -15,13 +15,18 @@
 - **Map mode.** Film a desk. Each object is found, rebuilt and placed at one scale, and a diorama STL fits a 256 mm print bed.
 - **Phone app.** Upload from the phone; a laptop worker processes the video, and the result opens in the same viewer.
 
-| Object mode | AI Edit |
-|---|---|
-| ![Object mode: the coin-scaled mug with W/H/D in mm](docs/ui/1_object_1440.png) | ![AI Edit: thicken_part on the handle, with version history](docs/ui/3_ai_edit_1440.png) |
-| **Map mode** | **Phone app (live site)** |
-| ![Map mode: desk scene with three objects and the diorama button](docs/ui/2_scene_1440.png) | ![Live web app home with the demo viewer card](docs/web/live_home_1440.png) |
+Calm dark theme by default, and a light theme (sun/moon button in the viewer, account menu in the web app; the first visit follows your system setting).
 
-The AI Edit screenshot uses real geometry edits on the real mug, with scripted Wonder and Spark replies (`viewer/tests/ui_screens.js`). The live runs with real models are listed under Results.
+| Dark | Light |
+|---|---|
+| ![Object mode, dark: the coin-scaled mug with W/H/D in mm](docs/ui/1_object_1440.png) | ![Object mode, light](docs/ui/1_object_1440_light.png) |
+| ![AI Edit, dark: SAM found the handle (teal overlay)](docs/ui/5_parts_overlay_1440.png) | ![AI Edit, light: thicken_part on the handle, with version history](docs/ui/3_ai_edit_1440_light.png) |
+| ![Map mode, dark: desk scene with three objects and the diorama button](docs/ui/2_scene_1440.png) | ![Map mode, light](docs/ui/2_scene_1440_light.png) |
+| ![Web app home, dark, with the live demo card](docs/ui/home_1440.png) | ![Projects, light, with status chips](docs/ui/projects_1440_light.png) |
+
+Phone width: [home](docs/ui/home_390.png), [viewer](docs/ui/1_object_390.png), [AI Edit](docs/ui/3_ai_edit_390_light.png). Motion (8 s clips): [home scroll](docs/ui/motion_home.webm), [tab change and an AI Edit row](docs/ui/motion_edit.webm).
+
+The light AI Edit screenshot uses real geometry edits on the real mug, with scripted Wonder and Spark replies (`viewer/tests/ui_screens.js`). The live runs with real models are listed under Results.
 
 ## How it works
 
@@ -140,6 +145,7 @@ Latest run (2026-11-03):
 | Browser: scene-physics, demo-readiness, AI Edit, map scene, parts | 50/50, 10/10, 14/14, 19/19, 10/10 |
 | Browser: viewer, integration, SAM 3D | 31 checks passed; each stops at its one real Muse Spark call, which was not made (pipeline frozen, no API calls) |
 | Web unit, web e2e (mocked Supabase) | 8/8, 46/46 |
+| Colour contrast (`scripts/check_contrast.mjs`), dark and light | 88/88 token pairs at WCAG AA |
 | Web e2e (real Supabase), live site (`check:live`) | 19/19 (2026-11-03), 16/16 |
 
 The map-scene suite timed out once under heavy machine load and passed 19/19 on two reruns.
