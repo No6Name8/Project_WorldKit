@@ -16,6 +16,8 @@ const { chromium } = require("playwright");
 const tokens = readFileSync(join(root, "viewer", "assets", "tokens.css"), "utf8");
 const token = (n) => new RegExp(n + ": *(#[0-9a-fA-F]{6})").exec(tokens)[1];
 const ACCENT = token("--fg-accent"), TEXT = token("--fg-text"), MUTED = token("--fg-muted"), BG = token("--fg-bg");
+// the primary darkened for light backgrounds (from the light-theme block)
+const LIGHT_ACCENT = /--fg-accent: *(#[0-9a-fA-F]{6})/.exec(tokens.slice(tokens.indexOf(':root[data-theme="light"]')))[1];
 const INK = "#16181c"; // the mark on light backgrounds
 const BANNER_BG = "#0f1115";
 const font = (f) => readFileSync(join(root, "viewer", "assets", "fonts", f)).toString("base64");
@@ -24,17 +26,20 @@ const font = (f) => readFileSync(join(root, "viewer", "assets", "fonts", f)).toS
 const OUTLINE = "M12 2.5 20.5 7v10L12 21.5 3.5 17V7z";
 const TOP = "M3.5 7 12 11.5 20.5 7";
 const EDGE = "M12 11.5v10";
-const markPaths = (accent = ACCENT) =>
+// themed = true: the accent edge takes its colour from the .a rule (light or dark), for standalone SVG files
+const markPaths = (accent = ACCENT, themed = false) =>
   `<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">` +
-  `<path d="${OUTLINE}"/><path d="${TOP}"/><path d="${EDGE}" stroke="${accent}"/></g>`;
-const schemeStyle = `<style>:root{color:${INK}}@media (prefers-color-scheme:dark){:root{color:${TEXT}}}</style>`;
+  `<path d="${OUTLINE}"/><path d="${TOP}"/><path d="${EDGE}" ${themed ? 'class="a"' : `stroke="${accent}"`}/></g>`;
+// light backgrounds: dark ink and the darkened primary; dark backgrounds: light ink and the sky primary
+const schemeCss = `:root{color:${INK}}.a{stroke:${LIGHT_ACCENT}}@media (prefers-color-scheme:dark){:root{color:${TEXT}}.a{stroke:${ACCENT}}}`;
+const schemeStyle = `<style>${schemeCss}</style>`;
 const markSvg = (extra = "") =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><title>WorldKit</title>${extra}${markPaths()}</svg>\n`;
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><title>WorldKit</title>${extra}${markPaths(ACCENT, true)}</svg>\n`;
 
 // favicons: the same cube snapped to a 16 px grid (odd width, half-pixel coordinates, 1 px line) so it stays crisp at 16 px
 const favSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><title>WorldKit</title>${schemeStyle}` +
   `<g fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter">` +
-  `<path d="M7.5 1.5 13.5 4.5v7l-6 3-6-3v-7z"/><path d="M1.5 4.5 7.5 7.5 13.5 4.5"/><path d="M7.5 7.5v7" stroke="${ACCENT}"/></g></svg>
+  `<path d="M7.5 1.5 13.5 4.5v7l-6 3-6-3v-7z"/><path d="M1.5 4.5 7.5 7.5 13.5 4.5"/><path d="M7.5 7.5v7" class="a"/></g></svg>
 `;
 
 const out = (p, s) => { mkdirSync(dirname(join(root, p)), { recursive: true }); writeFileSync(join(root, p), s); console.log("wrote", p); };
@@ -48,11 +53,11 @@ const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 112" w
 <style>
 @font-face{font-family:"WK Inter";font-weight:600;src:url(data:font/woff2;base64,${font("inter-latin-600-normal.woff2")}) format("woff2")}
 @font-face{font-family:"WK Mono";font-weight:400;src:url(data:font/woff2;base64,${font("ibm-plex-mono-latin-400-normal.woff2")}) format("woff2")}
-:root{color:${INK}}@media (prefers-color-scheme:dark){:root{color:${TEXT}}}
+${schemeCss}
 .w{font:600 50px "WK Inter",Inter,"Segoe UI",system-ui,sans-serif;letter-spacing:-1px;fill:currentColor}
 .t{font:400 17px "WK Mono","IBM Plex Mono",Consolas,monospace;fill:currentColor;opacity:.7}
 </style>
-<g transform="translate(8 16) scale(3.333)">${markPaths()}</g>
+<g transform="translate(8 16) scale(3.333)">${markPaths(ACCENT, true)}</g>
 <text class="w" x="104" y="60">WorldKit</text>
 <text class="t" x="106" y="90">Film it. Print it.</text>
 </svg>

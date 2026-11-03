@@ -1,8 +1,11 @@
 import { supabase } from "../supabase.js";
 import { esc, statusInfo, formatDate, applyChange, resultPaths } from "../lib.js";
+import { reveal, reducedMotion } from "../motion.js";
 
 export async function renderProjects(root, ctx) {
   let list = null, error = "", live = false, timer = null, channel = null, filter = "all";
+  let seen = null;           // ids already shown: later arrivals slide in, the first batch is revealed on scroll
+  const lastStatus = {};     // status chips cross-fade when the status changes live
   root.innerHTML = `<div class="page-h"><div><h1>Projects</h1><p class="sub">Personal workspace</p></div><a class="btn primary big" href="#/new">New project</a></div>
     <div class="ptabs"><div class="tabs" role="tablist" aria-label="Filter projects">
       <button type="button" role="tab" data-f="all" aria-selected="true">All projects</button><button type="button" role="tab" data-f="object" aria-selected="false">Object</button><button type="button" role="tab" data-f="map" aria-selected="false">Map</button>
@@ -43,6 +46,17 @@ export async function renderProjects(root, ctx) {
     const shown = list.filter((p) => filter === "all" || p.mode === filter);
     listEl.innerHTML = shown.length ? `<div class="grid">${shown.map(card).join("")}</div>` : `<div class="empty"><p>No ${filter === "map" ? "Map" : "Object"} projects.</p></div>`;
     listEl.querySelectorAll("[data-del]").forEach((b) => { b.onclick = () => del(b.dataset.del); });
+    const first = seen === null;
+    if (first) seen = new Set();
+    const fresh = [];
+    for (const el of listEl.querySelectorAll(".grid > .card")) {
+      const id = el.dataset.id, p = list.find((x) => x.id === id);
+      if (first) fresh.push(el); else if (!seen.has(id)) el.classList.add("arrive");
+      if (p && lastStatus[id] && lastStatus[id] !== p.status) el.querySelector(".chip").classList.add("chg");
+      if (p) lastStatus[id] = p.status;
+      seen.add(id);
+    }
+    if (first) reveal(fresh);
   };
 
   async function load() {
@@ -55,11 +69,14 @@ export async function renderProjects(root, ctx) {
   async function del(id) {
     const p = list.find((x) => x.id === id);
     if (!p || !confirm(`Delete "${p.name}"? The video and results are removed too.`)) return;
+    const el = listEl.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+    if (el) el.classList.add("leaving");  // fades and shrinks while the files are removed
     const files = resultPaths(p);
     if (p.video_path) await supabase.storage.from("videos").remove([p.video_path]);
     if (files.length) await supabase.storage.from("results").remove(files);
     const { error: e } = await supabase.from("projects").delete().eq("id", id);
     if (e) { error = `Could not delete: ${e.message}`; draw(); return; }
+    if (el && !reducedMotion()) await new Promise((r) => setTimeout(r, 220));
     list = list.filter((x) => x.id !== id);
     draw();
   }

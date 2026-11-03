@@ -3,13 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#111214" />
+<meta name="theme-color" content="#0e131a" />
+<script>
+// theme before the first paint: the saved choice ("wk-theme"), else the system preference; dark is the default
+(function () { var t = null; try { t = localStorage.getItem("wk-theme"); } catch (e) { /* storage blocked */ }
+  if (t !== "light" && t !== "dark") t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  document.documentElement.dataset.theme = t; })();
+</script>
 <title>WorldKit</title>
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="assets/tokens.css" />
 <link rel="stylesheet" href="assets/app.css" />
 </head>
 <body data-tab="viewer">
+<script>if (new URLSearchParams(location.search).has("preview")) document.body.classList.add("preview");  // before layout: no shift in the home preview</script>
 <header id="topbar">
   <div id="brand">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7"/><path d="M12 11.5v10" style="stroke:var(--fg-accent)"/></svg>
@@ -20,6 +27,10 @@
     <span class="sep" aria-hidden="true">/</span><b id="crumb-name">No project</b>
   </nav>
   <div id="top-right">
+    <button id="btn-theme" type="button" aria-label="Switch to light theme" title="Switch theme">
+      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></svg>
+    </button>
     <div id="status" role="status"><span id="status-dot"></span><span id="status-text">checking Muse Spark</span></div>
   </div>
 </header>
@@ -260,6 +271,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 wrap.appendChild(renderer.domElement);
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let countOnNextDims = false;  // the W/H/D numbers count up once after a load
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(css("--vp-background"));
 
@@ -303,6 +315,27 @@ function updateGrid() {
   grid.position.y = y;
   scene.add(grid);
 }
+// --- theme: the viewport colours are read from the tokens, so they are re-read when the theme changes ---
+const dur = (name) => parseFloat(css(name)) || 0;  // motion tokens in ms; 0 under prefers-reduced-motion
+function applySceneTheme() {
+  scene.background = new THREE.Color(css("--vp-background"));
+  gridCellMm = undefined;  // force the grid to be rebuilt with the new colours
+  updateGrid();
+  if (typeof partsState !== "undefined" && partsState.on) buildPartOverlay(false);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = css("--theme-color");
+  const light = document.documentElement.dataset.theme === "light";
+  document.getElementById("btn-theme").setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme");
+}
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("wk-theme", t); } catch (e) { /* storage blocked: the choice lasts for this page */ }
+  applySceneTheme();
+}
+document.getElementById("btn-theme").onclick = () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+window.addEventListener("storage", (e) => { if (e.key === "wk-theme" && (e.newValue === "light" || e.newValue === "dark")) { document.documentElement.dataset.theme = e.newValue; applySceneTheme(); } });
+window.__setTheme = setTheme;
+
 const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.4 }));
 shadowFloor.rotation.x = -Math.PI / 2;
 shadowFloor.receiveShadow = true;
@@ -371,9 +404,32 @@ function settleFloorAndShadows(object3d) {
 
 let camTween = null;
 const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-function tweenCameraTo(pos, target, ms = 420) {
-  if (REDUCED_MOTION) { camera.position.copy(pos); orbit.target.copy(target); orbit.update(); camTween = null; return; }
+function tweenCameraTo(pos, target, ms = dur("--dur-4")) {
+  if (REDUCED_MOTION || !ms) { camera.position.copy(pos); orbit.target.copy(target); orbit.update(); camTween = null; return; }
   camTween = { t0: performance.now(), ms, p0: camera.position.clone(), q0: orbit.target.clone(), p1: pos.clone(), q1: target.clone() };
+}
+// numbers count up once (400 ms, ease-out); the final text is exact and tabular figures keep the width steady
+function countUp(node, to, decimals, prefix, suffix = "") {
+  const ms = dur("--dur-4");
+  const fmt = (v) => prefix + v.toFixed(decimals) + suffix;
+  if (!node || !ms || !isFinite(to)) return;
+  const t0 = performance.now();
+  const tick = (now) => { const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3); node.nodeValue = fmt(to * e); if (k < 1) requestAnimationFrame(tick); };
+  node.nodeValue = fmt(0);
+  requestAnimationFrame(tick);
+}
+// material opacity fades (SAM overlay), stepped in the render loop
+const opacityTweens = new Set();
+function fadeMaterial(mat, to, ms, done) {
+  if (!ms) { mat.opacity = to; if (done) done(); return; }
+  opacityTweens.add({ mat, from: mat.opacity, to, t0: performance.now(), ms, done });
+}
+function stepOpacityTweens(now) {
+  for (const tw of opacityTweens) {
+    const k = Math.min(1, (now - tw.t0) / tw.ms), e = 1 - Math.pow(1 - k, 3);
+    tw.mat.opacity = tw.from + (tw.to - tw.from) * e;
+    if (k >= 1) { opacityTweens.delete(tw); if (tw.done) tw.done(); }
+  }
 }
 function stepCameraTween(now) {
   if (!camTween) return;
@@ -1342,6 +1398,11 @@ async function startup() {
   if (urlParams.has("preview")) document.body.classList.add("preview");
   if (urlParams.has("demo")) {
     await loadDemoMug();
+    if (urlParams.has("preview") && !REDUCED_MOTION) {  // the home card turns slowly while idle and stops on the first touch
+      orbit.autoRotate = true; orbit.autoRotateSpeed = 0.5;
+      const stop = () => { orbit.autoRotate = false; };
+      for (const ev of ["pointerdown", "wheel", "touchstart"]) renderer.domElement.addEventListener(ev, stop, { once: true, passive: true });
+    }
     if (window.parent !== window) {
       const o = sceneObjects[0], dm = o && objectDims(o);
       window.parent.postMessage({ type: "wk-preview", name: o && o.name, mm: dm && dm.mm, scale: o ? scaleSourceText(o) : "" }, location.origin);
@@ -1488,6 +1549,8 @@ window.__aiSend = (t) => { document.getElementById("ai-input").value = t; return
 function setLoading(on, text) {
   const el = document.getElementById("loading");
   el.style.display = on ? "flex" : "none";
+  if (on) countOnNextDims = true;
+  else { const w = document.getElementById("canvas-wrap"); w.classList.remove("vp-in"); void w.offsetWidth; w.classList.add("vp-in"); }
   if (text) document.getElementById("loading-text").textContent = text;
 }
 function setLoadingText(t) { document.getElementById("loading-text").textContent = t; }
@@ -1602,6 +1665,7 @@ function setDimCards(mm) {
   if (!mm) { box.hidden = true; box.textContent = ""; return; }
   box.hidden = false;
   box.innerHTML = ["W", "H", "D"].map((l, i) => `<div class="dim-card"><small>${l}</small><b>${mm[i].toFixed(1)}<u>mm</u></b></div>`).join("");
+  if (countOnNextDims) { countOnNextDims = false; box.querySelectorAll(".dim-card b").forEach((b, i) => countUp(b.firstChild, mm[i], 1, "")); }
 }
 function setMeshLine() {
   const el = document.getElementById("obj-mesh");
@@ -1881,6 +1945,10 @@ function renderAccuracy(md) {
   }
   if (inTable) html += "</tbody></table>";
   body.innerHTML = html || '<div class="hint">No accuracy data.</div>';
+  body.querySelectorAll("td.n .chip").forEach((c) => {
+    const m = /^([+-]?)(\d+(?:\.(\d+))?)%$/.exec(c.textContent.trim());
+    if (m) countUp(c.firstChild, parseFloat(m[2]), (m[3] || "").length, m[1], "%");
+  });
   const uniq = [...new Set(notes)].filter((n) => !n.startsWith("Ground truth:"));
   document.getElementById("accuracy-note").innerHTML =
     "<b>How ground truth was measured:</b> the mug was measured by hand with a ruler (height 70 mm, rim outer diameter 85 mm, base diameter 65 mm). These numbers are used only to score results, never to scale or tune a model. No other desk object has been measured, so those are listed as unscored. The coin diameter (21.5 mm) is a looked-up preset, not measured." +
@@ -1902,12 +1970,29 @@ if (IS_EMBED) {
   const back = document.getElementById("btn-back");
   back.onclick = () => window.parent.postMessage({ type: "wk-back" }, location.origin);
 }
+// the active-tab underline is one element that slides (transform only); without JS the border underline is used
+function placeTabIndicator(tabs, animate = true) {
+  let ind = tabs.querySelector(".tab-ind");
+  if (!ind) { ind = document.createElement("span"); ind.className = "tab-ind"; ind.setAttribute("aria-hidden", "true"); tabs.appendChild(ind); animate = false; }
+  const sel = tabs.querySelector('[aria-selected="true"]');
+  if (!sel || !sel.offsetWidth) return;
+  tabs.classList.add("has-ind");
+  if (!animate) ind.style.transition = "none";
+  ind.style.transform = `translateX(${sel.offsetLeft}px) scaleX(${sel.offsetWidth / 100})`;
+  if (!animate) { void ind.offsetWidth; ind.style.transition = ""; }
+}
+function tabBar() { return document.querySelector("#proj-head .tabs"); }
 function setTab(name) {
   for (const [id, n] of [["tab-viewer", "viewer"], ["tab-ai", "ai"], ["btn-accuracy", "accuracy"]]) document.getElementById(id).setAttribute("aria-selected", String(n === name));
   document.body.dataset.tab = name;
+  placeTabIndicator(tabBar());
   updateStatusBar();
 }
+window.addEventListener("resize", () => placeTabIndicator(tabBar(), false));
+if (document.fonts) document.fonts.ready.then(() => placeTabIndicator(tabBar(), false));
+placeTabIndicator(tabBar(), false);
 function showTab(name) {
+  if (document.body.dataset.tab !== name) { const app = document.getElementById("app"); app.classList.remove("tab-in"); void app.offsetWidth; app.classList.add("tab-in"); }
   setTab(name);
   if (name === "accuracy") openAccuracy();
   else requestAnimationFrame(onResize);  // the viewport card changes width between Viewer and AI Edit
@@ -1923,8 +2008,9 @@ window.__accuracyOpen = openAccuracy;
 // --- Parts: "show what SAM found" overlay (accent-coloured faces of the selected part, drawn over the model) ---------------------------
 const partsState = { data: null, on: false, overlays: [] };
 function setPartsSwitch(on) { const b = document.getElementById("btn-parts"); b.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-checked", String(on)); }
-function clearPartOverlay() {
-  for (const o of partsState.overlays) { o.parent && o.parent.remove(o); o.geometry.dispose(); o.material.dispose(); }
+function clearPartOverlay(fade = false) {
+  const gone = (o) => { o.parent && o.parent.remove(o); o.geometry.dispose(); o.material.dispose(); };
+  for (const o of partsState.overlays) { if (fade) fadeMaterial(o.material, 0, dur("--dur-2"), () => gone(o)); else gone(o); }
   partsState.overlays = [];
   document.getElementById("vp-part-legend").style.display = "none";
 }
@@ -1937,8 +2023,8 @@ function partKeys(part) {
   for (let i = 0; i + 2 < a.length; i += 3) keys.add(a[i] + "," + a[i + 1] + "," + a[i + 2]);
   return keys;
 }
-function buildPartOverlay() {
-  clearPartOverlay();
+function buildPartOverlay(fade = true) {
+  clearPartOverlay(fade && !partsState.on);
   if (!partsState.on || !partsState.data) return 0;
   let faces = 0;
   for (const part of partsState.data.parts) {
@@ -1957,12 +2043,14 @@ function buildPartOverlay() {
       if (!out.length) return;
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
-      const mat = new THREE.MeshBasicMaterial({ color: css("--vp-sam"), transparent: true, opacity: parseFloat(css("--sam-alpha")) || 0.55, depthTest: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.FrontSide });
+      const alpha = parseFloat(css("--sam-alpha")) || 0.55;
+      const mat = new THREE.MeshBasicMaterial({ color: css("--vp-sam"), transparent: true, opacity: fade ? 0 : alpha, depthTest: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.FrontSide });
       const ov = new THREE.Mesh(g, mat);
       ov.userData.__partOverlay = true;
       ov.raycast = () => {};
       m.add(ov);
       partsState.overlays.push(ov);
+      if (fade) fadeMaterial(mat, alpha, dur("--dur-2"));
       faces += out.length / 9;
     });
   }
@@ -2033,6 +2121,7 @@ function animate() {
   if (physics && physics.isRunning()) { physics.tick((now - lastT) / 1000); physicsReadout(); }
   lastT = now;
   stepCameraTween(now);
+  stepOpacityTweens(now);
   orbit.update();
   renderer.render(scene, camera);
 }

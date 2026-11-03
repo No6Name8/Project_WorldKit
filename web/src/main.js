@@ -7,6 +7,7 @@ import { renderNew } from "./pages/new.js";
 import { renderProjects } from "./pages/projects.js";
 import { renderProject } from "./pages/project.js";
 import { renderHelp } from "./pages/help.js";
+import { reveal, setTheme, currentTheme, watchScroll, shimmerOnce } from "./motion.js";
 
 const app = document.getElementById("app");
 const ctx = { session: null, user: null, navigate: (h) => { location.hash = h; }, rerender: () => route() };
@@ -27,12 +28,16 @@ function shell(inner, { bare = false, route: routeName = "" } = {}) {
       <nav id="topnav" aria-label="Main">
         ${signedIn ? `<a href="#/projects">Projects</a><span class="sep" aria-hidden="true">/</span>
           <div class="menu"><button id="user-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu"><span class="avatar" aria-hidden="true">${initial}</span><span id="who">${esc(ctx.user.email)}</span></button>
-            <div id="user-pop" role="menu" hidden><div class="hint" id="user-mail">${esc(ctx.user.email)}</div><a role="menuitem" href="#/help">Help</a><button id="logout" type="button" role="menuitem">Log out</button></div></div>`
-                   : `<a href="#/help">Help</a><span class="sep" aria-hidden="true">/</span><a href="#/login">Sign in</a>`}
+            <div id="user-pop" role="menu" hidden><div class="hint" id="user-mail">${esc(ctx.user.email)}</div><a role="menuitem" href="#/help">Help</a><button id="theme-item" type="button" role="menuitem">${currentTheme() === "light" ? "Dark theme" : "Light theme"}</button><button id="logout" type="button" role="menuitem">Log out</button></div></div>`
+                   : `<button id="btn-theme" type="button" class="icon-btn" aria-label="${currentTheme() === "light" ? "Switch to dark theme" : "Switch to light theme"}" title="Switch theme"><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></svg></button><a href="#/help">Help</a><span class="sep" aria-hidden="true">/</span><a href="#/login">Sign in</a>`}
       </nav>
     </header>`}
     <main id="page" class="page-${routeName}">${inner}</main>
     ${bare ? "" : `<footer id="statusbar"><span>WorldKit</span><span class="mono">STL <i aria-hidden="true">/</i> mm</span></footer>`}`;
+  const flip = () => { setTheme(currentTheme() === "light" ? "dark" : "light"); const ti = document.getElementById("theme-item"), tb = document.getElementById("btn-theme");
+    if (ti) ti.textContent = currentTheme() === "light" ? "Dark theme" : "Light theme";
+    if (tb) tb.setAttribute("aria-label", currentTheme() === "light" ? "Switch to dark theme" : "Switch to light theme"); };
+  for (const id of ["theme-item", "btn-theme"]) { const b = document.getElementById(id); if (b) b.onclick = flip; }
   const lo = document.getElementById("logout");
   if (lo) lo.onclick = async () => { await supabase.auth.signOut(); ctx.navigate("#/"); };
   const ub = document.getElementById("user-btn"), pop = document.getElementById("user-pop");
@@ -65,7 +70,13 @@ async function route() {
   if (!configured && r.name !== "home") { page.innerHTML = notConfigured(); return; }
   const map = { home: renderHome, login: renderLogin, new: renderNew, projects: renderProjects, help: renderHelp };
   cleanup = await map[r.name](page, ctx);
+  onScroll();
+  // scroll reveal (Home, Help, Projects): fade in and rise 8 px as they enter, 40 ms apart, once
+  const REVEAL = { home: ".home-l > *, .demo, .steps > .panel", help: ".page-h, .cards > *", projects: ".page-h, .ptabs" };
+  if (REVEAL[r.name]) reveal(page.querySelectorAll(REVEAL[r.name]));
+  if (r.name === "home") shimmerOnce(page);
 }
+const onScroll = watchScroll();
 
 async function boot() {
   app.innerHTML = '<div class="boot">Loading</div>';

@@ -16,6 +16,7 @@ const MOCK = "https://mock.supabase.test";
 const UID = "00000000-0000-4000-8000-000000000001";
 const demo = join(root, "viewer", "assets", "demo", "run_mug");
 const SHOTS = process.env.SHOTS_DIR || null;
+const THEME = process.env.WK_THEME === "light" ? "light" : null;  // WK_THEME=light: light-theme screenshots, named *_light
 const results = [];
 const check = (name, cond, detail) => { results.push({ name, pass: !!cond }); console.log((cond ? "PASS" : "FAIL") + " - " + name + (detail ? " :: " + detail : "")); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -82,12 +83,13 @@ async function mockSupabase(page, state) {
   try {
     for (const [tag, vp] of [["390", { width: 390, height: 844 }], ["1440", { width: 1440, height: 900 }]]) {
       const ctx = await browser.newContext({ viewport: vp, acceptDownloads: true });
+      if (THEME) await ctx.addInitScript((t) => { try { localStorage.setItem("wk-theme", t); } catch (e) { /* ignore */ } }, THEME);
       const page = await ctx.newPage();
       page.on("pageerror", (e) => errors.push(`${tag}: ${e}`));
       page.on("console", (m) => { if (m.type() === "error" && !/WebSocket|realtime|net::ERR|Failed to load resource/i.test(m.text())) errors.push(`${tag}: ${m.text()}`); });
       const state = { projects: JSON.parse(JSON.stringify(projects)) };
       await mockSupabase(page, state);
-      const shot = async (name) => { if (SHOTS) { mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: join(SHOTS, `${name}_${tag}.png`) }); } };
+      const shot = async (name) => { if (SHOTS) { mkdirSync(SHOTS, { recursive: true }); await sleep(450); await page.screenshot({ path: join(SHOTS, `${name}_${tag}${THEME ? "_" + THEME : ""}.png`) }); } };  // 450 ms: entry and reveal motion settles
 
       // home
       await page.goto(BASE + "/", { waitUntil: "networkidle" });

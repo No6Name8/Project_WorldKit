@@ -68,7 +68,7 @@ export async function renderNew(root, ctx) {
       const { data } = await supabase.auth.getSession();
       await uploadWithProgress("videos", path, state.file, data.session.access_token, (p) => {
         const pct = Math.round(p * 100);
-        $("#bar > div").style.width = `${pct}%`;
+        $("#bar > div").style.transform = `scaleX(${pct / 100})`;  // eased by CSS (transform only)
         $("#bar").setAttribute("aria-valuenow", String(pct));
         $("#status").innerHTML = `<div class="msg" role="status">Uploading <span class="mono">${pct}%</span></div>`;
       });

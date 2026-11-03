@@ -2,6 +2,7 @@
 // the coin-scaled mug (assets/demo/run_mug, real SAM handle part) for Object and the coin-scaled desk scene (assets/demo/run_desk) for Map.
 //   node viewer/tests/ui_screens.js        (needs pipeline\.venv; uses ports 5091-5092)
 // 1_object, 2_scene, 3_ai_edit, 4_accuracy at 1440 and 390 px; 1_object and 3_ai_edit also at 1920x1080 and 1280x720; 5_parts_overlay at 1440 and 390.
+// Dark theme (default) names are unchanged; the light theme repeats the 1440 and 390 screens as *_light.png.
 // The AI Edit screen uses serve_fake_real.py: real geometry edits on the real mug, with a SCRIPTED Wonder and Spark (no tokens spent).
 const { chromium } = require("playwright");
 const { spawn } = require("child_process");
@@ -15,6 +16,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SIZES = [
   { w: 1440, h: 900, tag: "1440", all: true }, { w: 390, h: 844, tag: "390", all: true },
   { w: 1920, h: 1080, tag: "1080p", all: false }, { w: 1280, h: 720, tag: "720p", all: false },
+  { w: 1440, h: 900, tag: "1440_light", all: true, light: true }, { w: 390, h: 844, tag: "390_light", all: true, light: true },
 ];
 const errors = [];
 
@@ -28,9 +30,10 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
   await start([path.join("viewer", "tests", "serve_fake_real.py"), "5092"], 5092);
   const browser = await chromium.launch();
   try {
-    for (const { w, h, tag, all } of SIZES) {
+    for (const { w, h, tag, all, light } of SIZES) {
       console.log("size", tag);
       const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+      await ctx.addInitScript((t) => { try { localStorage.setItem("wk-theme", t); } catch (e) { /* ignore */ } }, light ? "light" : "dark");
       const page = await ctx.newPage();
       page.on("pageerror", (e) => errors.push(`${tag}: ${e}`));
       page.on("console", (m) => { if (m.type() === "error") errors.push(`${tag}: ${m.text()}`); });
@@ -75,7 +78,7 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
       await page.reload({ waitUntil: "domcontentloaded" });
       await ready();
       await page.waitForFunction(() => window.__aiState && window.__aiState() && window.__partsUi && window.__partsUi().enabled, { timeout: 15000 });
-      if (all) {  // AI Edit states: empty (v0, no edits yet), skeleton (edit state still loading), error (a refused edit), disabled (no edit server)
+      if (all && !light) {  // AI Edit states: empty (v0, no edits yet), skeleton (edit state still loading), error (a refused edit), disabled (no edit server)
         const toAi = () => page.click("#tab-ai");
         await toAi(); await sleep(300);
         await page.screenshot({ path: path.join(OUT, `3a_ai_empty_${tag}.png`) });
@@ -118,7 +121,7 @@ async function waitUp(port) { for (let i = 0; i < 80; i++) { try { if ((await fe
         // 4. accuracy view
         await page.click("#btn-accuracy");
         await page.waitForSelector("table.acc", { timeout: 10000 });
-        await sleep(300);
+        await sleep(700);  // the % values count up over 400 ms
         await page.screenshot({ path: path.join(OUT, `4_accuracy_${tag}.png`) });
       }
       await ctx.close();
