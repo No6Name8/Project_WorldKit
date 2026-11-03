@@ -1,47 +1,82 @@
 # Deploy the web app (Vercel)
 
-The web app is a static Vite build (`web/`) that also serves the viewer at `/viewer/`. It needs the whole repository at build time (it copies `viewer/` into the build), so deploy from the repository root. `vercel.json` already sets the commands.
+The web app is a static Vite build (`web/`) that also serves the viewer at `/viewer/`. The build copies `viewer/` into the app, so Vercel builds from the repository root. `vercel.json` sets the commands, headers and the fallback rewrite.
 
-## Shortest manual steps
+Live: https://web-flame-psi-45.vercel.app (Vercel team `no6-name8`, project `web`).
 
-1. Vercel dashboard > Add New > Project > import the GitHub repository `No6Name8/Project_WorldKit`.
-2. Leave **Root Directory** empty (the repository root). Framework preset: Other. The build settings come from `vercel.json`:
-   - Install: `npm --prefix web ci`
-   - Build: `npm --prefix web run build`
-   - Output directory: `web/dist`
-3. Environment Variables (Production and Preview):
-   - `VITE_SUPABASE_URL` = the project URL
-   - `VITE_SUPABASE_PUBLISHABLE_KEY` = the publishable key (Supabase > Project Settings > API Keys). Never the secret key.
-4. Deploy. Open the URL, sign up, and check the projects page loads.
-5. Supabase > Authentication > URL Configuration: add the Vercel URL to Site URL and Redirect URLs (needed only for email confirmation links).
+## Normal route: push to main (automatic)
 
-## CLI
+The Vercel project is linked to GitHub `No6Name8/Project_WorldKit`, production branch `main`. Every push to `main` builds and deploys to production; nothing else is needed.
 
 ```powershell
-npm i -g vercel
-vercel login
-vercel link          # from the repository root
-vercel env add VITE_SUPABASE_URL production
-vercel env add VITE_SUPABASE_PUBLISHABLE_KEY production
-vercel --prod
+git push origin main
+npm --prefix web run check:live      # after the deploy shows Ready (about 1 minute)
 ```
 
-## Prebuilt deploy (what worked from Windows)
+Build settings (from `vercel.json`): install `npm --prefix web ci`, build `npm --prefix web run build`, output `web/dist`. Production environment variables on Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (the publishable key, never the secret key).
 
-`vercel --prod` uploads every source file and timed out here, and `vercel build` fails when `npm ci` hits locked files. This works: build locally, then deploy the output.
+**Why Git deploys failed from 48632e0 to 59c3e8c:** `.vercelignore` listed `scripts`, and an unanchored pattern also matches `web/scripts/`, so `web/scripts/copy-viewer.mjs` was never uploaded and the build stopped with `MODULE_NOT_FOUND`. The patterns are now anchored (`/scripts`). Keep every new entry in `.vercelignore` anchored with a leading `/`.
+
+To see why a deploy failed: Vercel dashboard > project `web` > Deployments > the failed one > Build Logs.
+
+## Fallback: prebuilt deploy from Windows
+
+Use this only if a Git deploy fails and you need the site up now. `vercel --prod` (source upload) timed out from this laptop once, and `vercel build` fails on Windows because `npm ci` hits locked files.
 
 ```powershell
+# 1. Windows npm-lock workaround: stop anything holding files in web/node_modules
+#    (vite dev / vite preview / a node process), or npm ci fails with EPERM / EBUSY.
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'vite' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+# 2. build with web/.env.local present (the Supabase URL and publishable key are baked into the bundle)
+npm --prefix web ci
 npm --prefix web run build
-# copy web/dist to .vercel/output/static and write .vercel/output/config.json:
-#   {"version":3,"routes":[{"src":"/sw.js","headers":{"cache-control":"no-cache"},"continue":true},
-#     {"src":"/manifest.webmanifest","headers":{"content-type":"application/manifest+json"},"continue":true},{"handle":"filesystem"}]}
-vercel deploy --prebuilt --prod --token $env:VERCEL_TOKEN
+
+# 3. Build Output API folder
+Remove-Item -Recurse -Force .vercel\output -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force .vercel\output\static | Out-Null
+Copy-Item -Recurse web\dist\* .vercel\output\static\
+Set-Content -Encoding utf8 .vercel\output\config.json '{"version":3,"routes":[{"src":"/sw.js","headers":{"cache-control":"no-cache"},"continue":true},{"src":"/manifest.webmanifest","headers":{"content-type":"application/manifest+json"},"continue":true},{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}'
+
+# 4. deploy (the token is read from the environment; never paste it into a file in the repo)
+$env:VERCEL_TOKEN = (Select-String -Path pipeline\.env -Pattern '^VERCEL_TOKEN=(.*)$').Matches[0].Groups[1].Value
+vercel deploy --prebuilt --prod --token $env:VERCEL_TOKEN --scope no6-name8
+Remove-Item Env:VERCEL_TOKEN
 ```
 
-The build must run with `web/.env.local` present (the Supabase values are baked into the bundle). Stop any running `vite preview` first, or `npm ci` fails on locked files.
+`.vercel/` is gitignored.
+
+## Check the live site
+
+```powershell
+cd viewer\tests; npm install; cd ..\..        # once: Playwright
+npm --prefix web run check:live               # or: node scripts/check_live.mjs https://other-url
+```
+
+It runs at 390 and 1440 px and checks:
+
+- the home page, with the demo viewer card and its size in mm;
+- "Open demo viewer";
+- the Help page;
+- sign-in reaching the projects list (with `WORKER_EMAIL` / `WORKER_PASSWORD` from the environment or `pipeline/.env`);
+- the PWA manifest and its icons;
+- the service worker;
+- the fallback for an unknown path;
+- no console errors and no failed requests.
+
+Screenshots go to `docs/web/live_*.png`.
+
+## Supabase settings to confirm by hand
+
+Supabase dashboard > Authentication > URL Configuration:
+
+- **Site URL:** `https://web-flame-psi-45.vercel.app`
+- **Redirect URLs:** add `https://web-flame-psi-45.vercel.app/**`
+
+Email-confirmation links point to the Site URL, so new sign-ups land on localhost until it is set.
 
 ## Notes
 
-- Hash routing (`#/projects`), so no rewrite rules are needed.
+- The app uses hash routes (`#/projects`). The `/(.*) -> /index.html` rewrite only serves the app for unknown paths; real files win because Vercel checks the filesystem first.
 - The service worker caches the app shell only. After a deploy, one reload picks up the new version.
-- The worker is not deployed: it runs on your laptop (`python -m worldkit.worker`).
+- The worker is not deployed: it runs on the laptop (`python -m worldkit.worker`).
