@@ -1,12 +1,11 @@
 # The build needs only web/ and viewer/ (it copies the viewer into the app). Keep the upload small.
-pipeline
-docs
-supabase
-scripts
+# Patterns are anchored with a leading slash: an unanchored "scripts" also drops web/scripts/ and breaks the build.
+/pipeline
+/docs
+/supabase
+/scripts
 node_modules
-web/node_modules
-web/dist
-web/dist-mock
-web/public/viewer
-viewer/tests/node_modules
-.git
+/web/dist
+/web/dist-mock
+/web/public/viewer
+/.git
