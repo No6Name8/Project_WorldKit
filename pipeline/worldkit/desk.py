@@ -31,15 +31,16 @@ import numpy as np
 import trimesh
 from PIL import Image
 
-from . import appearance, coindetect, printprep
+from . import appearance, carddetect, coindetect, printprep, refscale
 from . import scene as sc
 from .frames import _laplacian_sharpness, extract_all_frames
 from .mapmode import Placed, cached_mask, crop_rgba, mean_iou, modal_metered, object_ious, object_qc, render_overlay, to_print_space, verify_loop
 from .vggt_cams import VGGT_SIZE, PinholeCam, mask_to_vggt, ransac_plane, run_vggt, to_vggt_px
 
 STAGES = ["frames", "vggt", "table", "objects", "place", "verify", "export"]
-CONCEPTS = {"table": "white marble table top", "mug": "striped mug", "case": "black case", "holder": "red candle holder", "candle": "white candle"}
-NAMES = {"mug": "striped mug", "case": "black case", "candle": "candle in red holder"}
+CONCEPTS = {"table": "white marble table top", "mug": "striped mug", "case": "black case", "holder": "red candle holder", "candle": "white candle",
+            "burner": "incense burner", "bottle": "water bottle", "legs": "gold metal table frame"}
+NAMES = {"mug": "striped mug", "case": "black case", "candle": "candle in red holder", "burner": "incense burner (bokhoor stand)", "bottle": "water bottle"}
 BED_MM = 256.0
 
 
@@ -198,15 +199,16 @@ def run(args) -> dict:
     T0 = time.time()
 
     # -- frames
-    frames = extract_all_frames(Path(args.video), out / "frames", fps=2.0)
+    frames = extract_all_frames(Path(args.video), out / "frames", fps=args.fps)
     stems = [p.stem for p in frames]
     path_of = {p.stem: p for p in frames}
     rgb_frame = lambda s: np.array(Image.open(path_of[s]).convert("RGB"))  # noqa: E731
     w, h = Image.open(frames[0]).size
     sharp = {p.stem: float(_laplacian_sharpness(p)) for p in frames}
-    coin_px = {}
+    coin_px = {}  # reference detections: the gold coin by colour, or the card by its rectangle (worldkit.carddetect)
     for p in frames:
-        m = coindetect.find_gold_coin(np.array(Image.open(p).convert("RGB")))
+        rgb_ = np.array(Image.open(p).convert("RGB"))
+        m = coindetect.find_gold_coin(rgb_) if args.ref == "coin" else carddetect.find_card(rgb_)
         if m is not None:
             coin_px[p.stem] = m
     seg = np.array_split(np.arange(len(stems)), 3)
@@ -224,9 +226,9 @@ def run(args) -> dict:
         verify_frames += [stems[i] for i in ver]
         fit_frames += [stems[i] for i in chosen if i not in ver]
     sam_frames = sorted(fit_frames + verify_frames)
-    rep["frames"] = {"video": Path(args.video).name, "n_frames": len(stems), "fps": 2.0, "coin_detector_frames": sorted(coin_px),
+    rep["frames"] = {"video": Path(args.video).name, "n_frames": len(stems), "fps": args.fps, "reference": args.ref, "reference_detector_frames": sorted(coin_px),
                      "fit_frames": fit_frames, "verify_frames": verify_frames, "segments": [[stems[i[0]], stems[i[-1]]] for i in seg],
-                     "selection": "per third of the video: sharp frames with the coin visible, >= 3 frames apart; fit and verify frames disjoint"}
+                     "selection": f"per third of the video: sharp frames with the {args.ref} visible, >= 3 frames apart; fit and verify frames disjoint"}
     jdump(out / "desk_report.json", rep)
     if until == 0:
         return rep
@@ -331,45 +333,96 @@ def run(args) -> dict:
     r = min(r, W / 2)
     stadium_iou = 1 - best.fun
 
+    if args.ref == "coin":
     # coin diameter on the plane (contour of the colour-detected coin, projected): only coins on the table, clustered
-    coin_obs = []
-    for s, m in coin_px.items():
-        m = refine_coin(rgb_frame(s), m)
-        cs, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        cpts = max(cs, key=cv2.contourArea)[:, 0, :].astype(float) + 0.5
-        vx, _ = to_vggt_px(cpts, (w, h))
-        Pp, ok = plane_hits(vg, s, vx, n, p0)
-        if ok.sum() < 6:
-            continue
-        q = uv(Pp[ok])
-        d_plane = 2 * np.sqrt(abs(cv2.contourArea(q.astype(np.float32))) / np.pi)
-        cen = q.mean(0)
-        # second method: ellipse major axis (px) x depth / focal length
-        (ex_, ey_), (ma, mi), _ = cv2.fitEllipse(cpts.astype(np.float32)) if len(cpts) >= 5 else ((0, 0), (0, 0), 0)
-        _, scl = to_vggt_px(np.zeros((1, 2)), (w, h))
-        Pc = p0 + cen[0] * e1 + cen[1] * e2
-        d_depth = max(ma, mi) * scl * vg.depth_of(s, Pc) / vg.K[vg.idx[s]][0, 0]
-        qc = loc(cen[None], cx, cy, ang)[0]
-        coin_obs.append({"frame": s, "d_plane": float(d_plane), "d_depth": float(d_depth), "uv": cen.tolist(), "on_table": bool(in_rounded_rect(qc[0], qc[1], L, W, r)), "px": float(max(ma, mi))})
-    good = [o for o in coin_obs if o["on_table"]]
-    if good:
-        med = np.median([o["uv"] for o in good], 0)
-        dist = np.array([np.linalg.norm(np.array(o["uv"]) - med) for o in good])
-        good = [o for o, d in zip(good, dist) if d < max(3 * np.median(dist), 0.02 * L)]
-    if len(good) < 2:
-        raise SystemExit(f"the coin was measured in only {len(good)} frames on the table")
-    coin_cm = args.coin_mm / 10.0
-    d_units = float(np.median([o["d_plane"] for o in good]))
-    k_coin = coin_cm / d_units
-    k_depth = coin_cm / float(np.median([o["d_depth"] for o in good]))
-    spread_coin = float(np.median([abs(o["d_plane"] - d_units) for o in good]) / d_units)
+        coin_obs = []
+        for s, m in coin_px.items():
+            m = refine_coin(rgb_frame(s), m)
+            cs, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            cpts = max(cs, key=cv2.contourArea)[:, 0, :].astype(float) + 0.5
+            vx, _ = to_vggt_px(cpts, (w, h))
+            Pp, ok = plane_hits(vg, s, vx, n, p0)
+            if ok.sum() < 6:
+                continue
+            q = uv(Pp[ok])
+            d_plane = 2 * np.sqrt(abs(cv2.contourArea(q.astype(np.float32))) / np.pi)
+            cen = q.mean(0)
+            # second method: ellipse major axis (px) x depth / focal length
+            (ex_, ey_), (ma, mi), _ = cv2.fitEllipse(cpts.astype(np.float32)) if len(cpts) >= 5 else ((0, 0), (0, 0), 0)
+            _, scl = to_vggt_px(np.zeros((1, 2)), (w, h))
+            Pc = p0 + cen[0] * e1 + cen[1] * e2
+            d_depth = max(ma, mi) * scl * vg.depth_of(s, Pc) / vg.K[vg.idx[s]][0, 0]
+            qc = loc(cen[None], cx, cy, ang)[0]
+            coin_obs.append({"frame": s, "d_plane": float(d_plane), "d_depth": float(d_depth), "uv": cen.tolist(), "on_table": bool(in_rounded_rect(qc[0], qc[1], L, W, r)), "px": float(max(ma, mi))})
+        good = [o for o in coin_obs if o["on_table"]]
+        if good:
+            med = np.median([o["uv"] for o in good], 0)
+            dist = np.array([np.linalg.norm(np.array(o["uv"]) - med) for o in good])
+            good = [o for o, d in zip(good, dist) if d < max(3 * np.median(dist), 0.02 * L)]
+        if len(good) < 2:
+            raise SystemExit(f"the coin was measured in only {len(good)} frames on the table")
+        coin_cm = args.coin_mm / 10.0
+        d_units = float(np.median([o["d_plane"] for o in good]))
+        k_coin = coin_cm / d_units
+        k_depth = coin_cm / float(np.median([o["d_depth"] for o in good]))
+        spread_coin = float(np.median([abs(o["d_plane"] - d_units) for o in good]) / d_units)
+        coin_uv = np.median([o["uv"] for o in good], 0)
+    
+        ref_uv, ref_yaw_vec, k_ref = coin_uv, None, k_coin
+        ref_info = {"kind": "coin", "frames": len(good), "frames_detected": len(coin_obs), "cm_per_unit_plane": k_coin, "cm_per_unit_depth": k_depth,
+                    "plane_vs_depth_disagreement_pct": round(100 * (k_depth - k_coin) / k_coin, 1), "relative_spread": round(spread_coin, 3),
+                    "median_px": round(float(np.median([o["px"] for o in good])), 1)}
+    else:
+        # the card: its 4 corners (refscale.card_quad on the rectangle detection) projected onto the table plane with the VGGT camera;
+        # a detection counts only if it lies on the table, is a rectangle there (opposite sides within 6%, corners within 6 deg of 90)
+        # and has the ID-1 aspect (85.6/54 = 1.585, within 6%): an occluded or wrong rectangle fails these tests
+        card_obs = []
+        for s_, m in coin_px.items():
+            q = refscale.card_quad(m)
+            if q is None:
+                continue
+            vx, _ = to_vggt_px(q + 0.5, (w, h))
+            Pp, ok = plane_hits(vg, s_, vx, n, p0)
+            if not ok.all():
+                continue
+            Q = uv(Pp)
+            sides = [float(np.linalg.norm(Q[i] - Q[(i + 1) % 4])) for i in range(4)]
+            a1, a2 = (sides[0] + sides[2]) / 2, (sides[1] + sides[3]) / 2
+            opp = max(abs(sides[0] - sides[2]) / a1, abs(sides[1] - sides[3]) / a2)
+            angs = []
+            for i in range(4):
+                u1, u2 = Q[(i + 1) % 4] - Q[i], Q[i - 1] - Q[i]
+                angs.append(abs(90 - np.degrees(np.arccos(np.clip(u1 @ u2 / np.linalg.norm(u1) / np.linalg.norm(u2), -1, 1)))))
+            Lu, Su = max(a1, a2), min(a1, a2)
+            long_vec = (Q[1] - Q[0]) if a1 >= a2 else (Q[2] - Q[1])
+            cen = Q.mean(0)
+            qc = loc(cen[None], cx, cy, ang)[0]
+            card_obs.append({"frame": s_, "long_u": Lu, "short_u": Su, "aspect": Lu / Su, "opp_side_diff": opp, "max_corner_dev_deg": float(max(angs)),
+                             "uv": cen.tolist(), "long_vec": (long_vec / np.linalg.norm(long_vec)).tolist(), "on_table": bool(in_rounded_rect(qc[0], qc[1], L, W, r))})
+        card_l, card_s = args.card_mm[0] / 10, args.card_mm[1] / 10
+        good = [o for o in card_obs if o["on_table"] and abs(o["aspect"] / (card_l / card_s) - 1) < 0.06 and o["opp_side_diff"] < 0.06 and o["max_corner_dev_deg"] < 6]
+        if good:
+            med = np.median([o["uv"] for o in good], 0)
+            dist = np.array([np.linalg.norm(np.array(o["uv"]) - med) for o in good])
+            good = [o for o, d in zip(good, dist) if d < max(3 * np.median(dist), 0.02 * L)]
+        if len(good) < 3:
+            raise SystemExit(f"the card passed the rectangle checks in only {len(good)} frames (need 3); detections: {len(card_obs)}")
+        per = [(card_l / o["long_u"] + card_s / o["short_u"]) / 2 for o in good]
+        k_card = float(np.median(per))
+        spread_card = float(np.median(np.abs(np.array(per) - k_card)) / k_card)
+        lv = np.array([o["long_vec"] for o in good])
+        lv = lv * np.sign(lv @ lv[0])[:, None]
+        ref_uv, ref_yaw_vec, k_ref = np.median([o["uv"] for o in good], 0), lv.mean(0), k_card
+        ref_info = {"kind": "card", "frames": len(good), "frames_detected": len(coin_px), "frames_quad": len(card_obs), "cm_per_unit_plane": k_card,
+                    "relative_spread": round(spread_card, 3), "aspect_median": round(float(np.median([o["aspect"] for o in good])), 3),
+                    "rejected": [{k2: (round(v2, 3) if isinstance(v2, float) else v2) for k2, v2 in o.items() if k2 in ("frame", "aspect", "opp_side_diff", "max_corner_dev_deg", "on_table")} for o in card_obs if o not in good][:20]}
     if args.table_cm:
         k = args.table_cm[0] / L
         scale_src = f"table length {args.table_cm[0]} cm (user-measured)"
     else:
-        k = k_coin
-        scale_src = f"coin {args.coin_mm} mm, measured on the table plane in {len(good)} frames (VGGT cameras)"
-    coin_uv = np.median([o["uv"] for o in good], 0)
+        k = k_ref
+        scale_src = (f"coin {args.coin_mm} mm, measured on the table plane in {ref_info['frames']} frames (VGGT cameras)" if args.ref == "coin" else
+                     f"card {args.card_mm[0]} x {args.card_mm[1]} mm, 4 corners measured on the table plane in {ref_info['frames']} frames (VGGT cameras)")
 
     # world frame: origin = table centre, X = table long axis, Y = up (plane normal), Z = X x Y; centimetres
     o_w = p0 + cx * e1 + cy * e2
@@ -378,18 +431,27 @@ def run(args) -> dict:
     B = np.c_[ex, n, ez]
     to_world = lambda P: ((np.atleast_2d(P) - o_w) @ B) * k  # noqa: E731
     cams = {s: PinholeCam(vg.R(s) @ B / k, vg.R(s) @ o_w + vg.t(s), *vg.K[vg.idx[s]][[0, 1, 0, 1], [0, 1, 2, 2]]) for s in stems}
-    coin_w = to_world(p0 + coin_uv[0] * e1 + coin_uv[1] * e2)[0]
+    ref_w = to_world(p0 + ref_uv[0] * e1 + ref_uv[1] * e2)[0]
+    ref_yaw = 0.0
+    if ref_yaw_vec is not None:  # card long side in the world: yaw for the known-geometry card (x axis = long side)
+        d3 = ref_yaw_vec[0] * e1 + ref_yaw_vec[1] * e2
+        dw = d3 @ B
+        ref_yaw = float(np.degrees(np.arctan2(-dw[2], dw[0])))  # yaw_matrix turns +x toward -z for positive angles
+    ref_info["position_cm"] = [round(float(v), 2) for v in ref_w]
+    ref_info["yaw_deg"] = round(ref_yaw, 1)
     tcol = np.median(np.vstack([rgb_frame(s)[cached_mask(cache / "masks", path_of[s], CONCEPTS["table"])] for s in list(tmask)[:6]]), 0)  # median colour of the table masks
     table = {"plane_inlier_share": round(inl, 3), "masks": len(tmask), "fused_cells": int(filled.sum()), "stadium_fit_iou": round(stadium_iou, 3),
              "length_cm": round(L * k, 1), "width_cm": round(W * k, 1), "corner_radius_cm": round(r * k, 1), "is_full_stadium": bool(r > 0.95 * W / 2),
              "thickness_cm": args.table_thick_cm, "thickness_source": "user-measured" if args.table_thick_given else "estimated (not measured)",
              "colour_rgb": [int(c) for c in tcol], "scale_source": scale_src,
-             "coin": {"frames": len(good), "frames_detected": len(coin_obs), "cm_per_unit_plane": k_coin, "cm_per_unit_depth": k_depth,
-                      "plane_vs_depth_disagreement_pct": round(100 * (k_depth - k_coin) / k_coin, 1), "relative_spread": round(spread_coin, 3),
-                      "median_px": round(float(np.median([o["px"] for o in good])), 1), "position_cm": [round(float(v), 2) for v in coin_w]},
-             "length_coin_cm": round(L * k_coin, 1), "width_coin_cm": round(W * k_coin, 1)}
+             "reference": ref_info, "length_ref_cm": round(L * k_ref, 1), "width_ref_cm": round(W * k_ref, 1)}
+    if args.ref == "coin":
+        table["coin"] = ref_info  # older key, kept for the first desk run's report
     if args.table_cm:
-        table["coin_vs_table_disagreement_pct"] = round(100 * (k_coin - k) / k, 1)
+        table["reference_vs_table_disagreement_pct"] = round(100 * (k_ref - k) / k, 1)
+    legs_mesh = None
+    if args.legs:
+        table["legs"], legs_mesh = build_legs(vg, sam_frames, path_of, cache, n, p0, to_world, k, L * k, W * k, r * k, args.table_thick_cm, rgb_frame, args.legs_frames)
     rep["table"] = table
     jdump(out / "desk_report.json", rep)
     np.save(out / "table_fused.npy", filled)
@@ -398,13 +460,16 @@ def run(args) -> dict:
         return rep
 
     # -- objects: masks, SAM 3D builds, QC, parametric candle fallback
-    masks = {o: {} for o in ("mug", "case", "candle")}
-    masks_o = {o: {} for o in ("mug", "case", "candle")}
+    OBJS = list(args.objects)
+    masks = {o: {} for o in OBJS}
+    masks_o = {o: {} for o in OBJS}
     for s in sam_frames:
-        for o in ("mug", "case"):
+        for o in [x for x in OBJS if x != "candle"]:
             m = cached_mask(cache / "masks", path_of[s], CONCEPTS[o])
             if m is not None and m.sum() >= 60:
                 masks_o[o][s] = m
+        if "candle" not in OBJS:
+            continue
         hm = cached_mask(cache / "masks", path_of[s], CONCEPTS["holder"])
         cm_ = cached_mask(cache / "masks", path_of[s], CONCEPTS["candle"])
         parts = [x for x in (hm, cm_) if x is not None and x.sum() >= 30]
@@ -490,7 +555,7 @@ def run(args) -> dict:
 
     items, place = [], {}
     fitset = lambda o: [s for s in fit_frames if s in masks[o]]  # noqa: E731
-    for o in ("mug", "case", "candle"):
+    for o in OBJS:
         P, n_used = tri_point(o, fitset(o))
         if P is None:
             P, n_used = tri_point(o, sorted(masks[o]))
@@ -505,6 +570,18 @@ def run(args) -> dict:
             glb = built[o]["glb"]
             v, f = sc._load_mesh(glb)
             how = "SAM 3D Objects (generated mesh)"
+        elif o == "burner":
+            glb, prof = revolved_object(vg, masks[o], masks_o[o], sorted(masks[o]), P, n, p0, k, rgb_frame, w, h)
+            if glb is None:
+                rep["warnings"].append(f"burner: revolved profile failed ({prof})")
+                continue
+            v, f = sc._load_mesh(glb)
+            how = "revolved profile, estimated (radius vs height from the SAM silhouettes in several views, VGGT scale)"
+            info["profile"] = prof
+            built.setdefault(o, {})["glb"] = glb
+        elif o != "candle":
+            rep["warnings"].append(f"{o}: no usable mesh (SAM 3D failed or mesh QC failed: {built.get(o, {}).get('qc')}); skipped")
+            continue
         else:
             # parametric holder + candle: diameters from mask widths at the triangulated depth, heights from triangulated top points
             hm, wm = masks_o.get("_holder", {}), masks_o.get("_wick", {})
@@ -533,15 +610,16 @@ def run(args) -> dict:
         fs = fitset(o) or sorted(masks[o])
         horiz = float(np.mean([np.ptp(v[:, 0]), np.ptp(v[:, 2])]))
         s0 = float(np.median([width_cm(masks[o][s], s, P) for s in fs])) / max(horiz, 1e-9)
-        if how.startswith("parametric"):
+        if how.startswith(("parametric", "revolved")):
             s0 = 1.0  # already in cm
         def score(sc_, yaw):
             t = {"position": pos, "rotation_deg": [0, yaw, 0], "scale": [sc_] * 3}
             wv = sc.transform_vertices(v, t)
             return float(np.mean([iou(fast_sil(wv, f, cams[s]), masks[o][s]) for s in fs]))
-        yaws = [0.0] if how.startswith("parametric") else list(range(0, 360, 15))
-        scales = [1.0] if how.startswith("parametric") else list(s0 * np.linspace(0.6, 1.5, 19))
-        if o == "case" and not how.startswith("parametric"):  # yaw from the principal axis of the case's footprint on the plane
+        fixed = how.startswith(("parametric", "revolved"))
+        yaws = [0.0] if fixed else list(range(0, 360, 15))
+        scales = [1.0] if fixed else list(s0 * np.linspace(0.6, 1.5, 19))
+        if o == "case" and not fixed:  # yaw from the principal axis of the case's footprint on the plane
             Q = []
             for s in fs:
                 ys, xs = np.nonzero(masks[o][s][::2, ::2])
@@ -556,10 +634,20 @@ def run(args) -> dict:
             yaws = sorted({round((base_yaw + d + f2) % 360, 1) for d in (-10, -5, 0, 5, 10) for f2 in (0, 180)})
             info["principal_axis_deg"] = round(float(a_plane), 1)
         best_sc = max(((score(a, b), a, b) for a in scales for b in yaws), key=lambda x: x[0])
-        if not how.startswith("parametric"):
+        if not fixed:
             a, b = best_sc[1], best_sc[2]
             best_sc = max(((score(a * f1, (b + d) % 360), a * f1, (b + d) % 360) for f1 in np.linspace(0.95, 1.05, 5) for d in (-6, -3, 0, 3, 6)), key=lambda x: x[0])
         fit_iou, scl, yaw = best_sc
+        if o == "burner" and how.startswith("SAM") and fit_iou < 0.5:  # a generated burner that does not match its silhouettes: revolve instead
+            rep["warnings"].append(f"burner: SAM 3D mesh fit IoU {fit_iou:.2f} < 0.5 on the fit frames; replaced by the revolved profile")
+            glb, prof = revolved_object(vg, masks[o], masks_o[o], sorted(masks[o]), P, n, p0, k, rgb_frame, w, h)
+            if glb is not None:
+                v, f = sc._load_mesh(glb)
+                how = "revolved profile, estimated (radius vs height from the SAM silhouettes in several views, VGGT scale)"
+                info["profile"] = prof
+                built[o]["glb"] = glb
+                fit_iou = float(np.mean([iou(fast_sil(sc.transform_vertices(v, {"position": pos, "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}), f, cams[s_]), masks[o][s_]) for s_ in fs]))
+                scl, yaw = 1.0, 0.0
         t = {"position": pos, "rotation_deg": [0.0, float(yaw), 0.0], "scale": [float(scl)] * 3}
         it = Placed(o, NAMES[o], built[o]["glb"], v, f, t, views.get(o) or "")
         ext = it.world().max(0) - it.world().min(0)
@@ -594,10 +682,173 @@ def run(args) -> dict:
         return rep
 
     # -- export
-    export(out, rep, items, L * k, W * k, r * k, args, table, coin_w)
+    export(out, rep, items, L * k, W * k, r * k, args, table, ref_w, ref_yaw, legs_mesh)
     rep["total_wall_s"] = round(time.time() - T0, 1)
     jdump(out / "desk_report.json", rep)
     return rep
+
+
+# ---------------------------------------------------------------- table base and revolved objects
+def rr_sdf(x, z, L, W, r):
+    """Signed distance to a centred rounded rectangle (negative inside)."""
+    r = min(r, W / 2, L / 2)
+    qx, qz = np.abs(x) - (L / 2 - r), np.abs(z) - (W / 2 - r)
+    return np.hypot(np.maximum(qx, 0), np.maximum(qz, 0)) + np.minimum(np.maximum(qx, qz), 0) - r
+
+
+def ring(L, W, r, width, y0, y1) -> trimesh.Trimesh:
+    outer = extrude(stadium_outline(L, W, r), y0, y1)
+    inner = extrude(stadium_outline(L - 2 * width, W - 2 * width, max(r - width, 0.5)), y0 - 0.1, y1 + 0.1)
+    return trimesh.boolean.difference([outer, inner], engine="manifold")
+
+
+def build_legs(vg, frames_, path_of, cache, n, p0, to_world, k, L, W, r, thick, rgb_frame, n_frames):
+    """The gold table base, from the frames: floor plane = the densest height band of VGGT points well below the top; SAM 3.1 masks of the
+    frame give 3D points (VGGT) in the world; a lower ring is fitted to the points near the floor (rounded rectangle, concentric with the
+    top), posts are placed at clusters of points between the rings, and a rim band under the top if points are there. Ring and post
+    thicknesses are estimates. Returns (info, mesh in world cm, Y up) or (info with an error, None)."""
+    from scipy.optimize import minimize
+
+    stems = list(vg.idx)
+    Hs, Ps = [], []
+    for s in stems[::max(1, len(stems) // 40)]:
+        i = vg.idx[s]
+        sel = vg.valid & (vg.conf[i] > np.percentile(vg.conf[i][vg.valid], 50))
+        P = vg.P[i][sel][::23]
+        Ps.append(P)
+        Hs.append(((P - p0) @ n) * k)
+    hh, PP = np.concatenate(Hs), np.vstack(Ps)
+    low = hh < -10
+    if low.sum() < 500:
+        return {"error": f"only {int(low.sum())} confident points below the top: no floor"}, None
+    hist, edges = np.histogram(hh[low], bins=np.arange(np.percentile(hh[low], 1), -10, 0.5))
+    fl = float(edges[np.argmax(hist)] + 0.25)
+    F = to_world(PP[np.abs(hh - fl) < 2.0])
+    nf = np.linalg.svd(F - F.mean(0), full_matrices=False)[2][2]
+    tilt = float(np.degrees(np.arccos(min(1.0, abs(nf[1])))))
+    H = -fl
+    fs = frames_[:: max(1, len(frames_) // n_frames)][:n_frames]
+    pts, cols = [], []
+    for s in fs:
+        m = cached_mask(cache / "masks", path_of[s], CONCEPTS["legs"])
+        if m is None or m.sum() < 80:
+            continue
+        cols.append(rgb_frame(s)[m])
+        vm = mask_to_vggt(m)
+        i = vg.idx[s]
+        sel = vm & (vg.conf[i] > np.percentile(vg.conf[i][vm], 40))
+        pts.append(to_world(vg.P[i][sel]))
+    if not pts:
+        return {"error": "SAM 3.1 found no table frame", "floor_height_cm": round(H, 1)}, None
+    Pw = np.vstack(pts)
+    inside = (Pw[:, 1] > fl - 1.0) & (Pw[:, 1] < -thick - 0.3) & (rr_sdf(Pw[:, 0], Pw[:, 2], L, W, r) < 8.0)
+    Pw = Pw[inside]
+    yrel = (Pw[:, 1] - fl) / H
+    lowb, midb, upb = Pw[yrel < 0.3], Pw[(yrel >= 0.3) & (yrel < 0.85)], Pw[yrel >= 0.85]
+    colour = tuple(int(c) for c in np.median(np.vstack(cols), 0))
+    info = {"floor_height_cm": round(-fl, 1), "table_height_cm": round(H, 1), "floor_tilt_vs_top_deg": round(tilt, 1), "frame_masks": len(pts),
+            "points": {"low": int(len(lowb)), "mid": int(len(midb)), "upper": int(len(upb))}, "colour_rgb": list(colour),
+            "source": "estimated from frames (VGGT points under SAM 3.1 'gold metal table frame' masks)"}
+    parts = []
+    if len(lowb) >= 60:
+        def cst(pv):
+            L2, W2, r2 = pv
+            if not (5 < W2 <= L2 and 0 < r2 <= W2 / 2 + 0.01):
+                return 1e9
+            return float(np.median(np.abs(rr_sdf(lowb[:, 0], lowb[:, 2], L2, W2, r2))))
+        res = min((minimize(cst, [L * f, W * f, W * f / 2], method="Nelder-Mead", options={"maxiter": 800}) for f in (0.8, 0.9)), key=lambda q: q.fun)
+        L2, W2, r2 = res.x
+        y_lo, y_hi = np.percentile(lowb[:, 1], [15, 85])
+        y_lo, y_hi = float(y_lo), float(max(y_hi, y_lo + 2.0))
+        parts.append(ring(L2, W2, r2, 2.0, y_lo, y_hi))
+        info["lower_ring_cm"] = {"length": round(L2, 1), "width": round(W2, 1), "radius": round(r2, 1), "y": [round(y_lo, 1), round(y_hi, 1)],
+                                 "median_fit_residual": round(res.fun, 2), "ring_width": "2.0 (estimated)"}
+        # posts: clusters of mid-height points near the ring line
+        if len(midb) >= 40:
+            near = midb[np.abs(rr_sdf(midb[:, 0], midb[:, 2], L2, W2, r2)) < 8.0]
+            cell = 3.0
+            if len(near):
+                gx = np.floor((near[:, 0] - near[:, 0].min()) / cell).astype(int)
+                gz = np.floor((near[:, 2] - near[:, 2].min()) / cell).astype(int)
+                occ = np.zeros((gz.max() + 1, gx.max() + 1), np.int32)
+                np.add.at(occ, (gz, gx), 1)
+                nlab, lab, st, cen = cv2.connectedComponentsWithStats((occ >= 2).astype(np.uint8), 8)
+                posts = []
+                for j in range(1, nlab):
+                    sel = lab[gz, gx] == j
+                    if sel.sum() >= max(15, 0.03 * len(near)):
+                        posts.append(near[sel][:, [0, 2]].mean(0))
+                for (px_, pz_) in posts:
+                    c = trimesh.creation.cylinder(radius=1.2, height=max(-thick - y_hi, 2.0) + 0.6, sections=24)
+                    c.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0]))
+                    c.apply_translation([px_, (y_hi - 0.3 + (-thick + 0.3)) / 2, pz_])
+                    parts.append(c)
+                info["posts"] = [[round(float(a), 1), round(float(b), 1)] for a, b in posts]
+                info["post_radius"] = "1.2 cm (estimated)"
+    if len(upb) >= 40:
+        parts.append(ring(L - 1.0, W - 1.0, max(r - 0.5, 0.5), 1.5, -thick - 2.5, -thick + 0.2))
+        info["upper_rim"] = "band 2.5 cm under the top, 1.5 cm wide (estimated)"
+    if not parts:
+        return {**info, "error": "too few frame points to place a ring or posts"}, None
+    mesh = trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
+    info["watertight"] = bool(mesh.is_watertight)
+    return info, (mesh, colour)
+
+
+def revolved_object(vg, vmasks, omasks, frames_, P, n, p0, k, rgb_frame, w, h):
+    """Surface of revolution from silhouettes: for each view, every mask row's width at the depth of the object's vertical axis gives a
+    radius, and the ray through the row's centre meets the axis at a height; the median radius per 0.5 cm of height over the views is
+    revolved. Estimated, not measured."""
+    base = P - ((P - p0) @ n) * n
+    prof, used = [], 0
+    for s in frames_:
+        m = vmasks.get(s)
+        if m is None:
+            continue
+        i = vg.idx[s]
+        K = vg.K[i]
+        C = vg.center(s)
+        ys = np.nonzero(m.any(1))[0]
+        if len(ys) < 20:
+            continue
+        rows = []
+        for y in ys[::2]:
+            xs = np.nonzero(m[y])[0]
+            if len(xs) < 2:
+                continue
+            xc, wpx = (xs.min() + xs.max()) / 2, xs.max() - xs.min() + 1
+            d = vg.rays(s, np.array([[xc, y]], float))[0]
+            w0 = C - base
+            a_, b_, dd, e = d @ d, d @ n, d @ w0, n @ w0
+            den = a_ - b_ * b_
+            if abs(den) < 1e-9:
+                continue
+            t = (a_ * e - b_ * dd) / den
+            z = vg.depth_of(s, base + t * n)
+            rows.append((t * k, wpx / 2 * z / K[0, 0] * k))
+        if len(rows) > 10:
+            prof.append(np.array(rows))
+            used += 1
+    if used < 3:
+        return None, f"only {used} usable views"
+    allp = np.vstack(prof)
+    allp = allp[allp[:, 0] > -1]
+    hmax = float(np.percentile(allp[:, 0], 98))
+    bins = np.arange(0, hmax, 0.5)
+    rad = np.array([np.median(allp[(allp[:, 0] >= b) & (allp[:, 0] < b + 0.5), 1]) if ((allp[:, 0] >= b) & (allp[:, 0] < b + 0.5)).sum() >= 3 else np.nan for b in bins])
+    ok = ~np.isnan(rad)
+    if ok.sum() < 5:
+        return None, "profile too sparse"
+    rad = np.interp(bins, bins[ok], rad[ok])
+    rad = np.convolve(np.pad(rad, 1, mode="edge"), np.ones(3) / 3, mode="valid")
+    line = np.r_[[[0.0, 0.0]], np.c_[rad, bins + 0.25], [[0.0, hmax]]]
+    mesh = trimesh.creation.revolve(line, sections=48)
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0]))
+    if mesh.volume < 0:
+        mesh.invert()
+    col = np.median(np.vstack([rgb_frame(s_)[omasks[s_]] for s_ in frames_[:4] if s_ in omasks]), 0)
+    return colored_glb([(mesh, tuple(col))]), {"views": used, "height_cm": round(hmax, 1), "max_diameter_cm": round(float(2 * rad.max()), 1),
+                                                "watertight": bool(mesh.is_watertight)}
 
 
 def table_mesh_vf(L, W, r, thick):
@@ -605,27 +856,41 @@ def table_mesh_vf(L, W, r, thick):
     return np.asarray(m.vertices), np.asarray(m.faces)
 
 
-def export(out: Path, rep: dict, items: list, L: float, W: float, r: float, args, table: dict, coin_w) -> None:
+def export(out: Path, rep: dict, items: list, L: float, W: float, r: float, args, table: dict, ref_w, ref_yaw: float = 0.0, legs=None) -> None:
     od = out / "objects"
     od.mkdir(exist_ok=True)
     tmesh = extrude(stadium_outline(L, W, r), -args.table_thick_cm, 0.0)
     (od / "table").mkdir(exist_ok=True)
-    (od / "table" / "model.glb").write_bytes(colored_glb([(tmesh, table["colour_rgb"])]))
-    coin_r, coin_t = args.coin_mm / 20.0, 0.15
-    coin = trimesh.creation.cylinder(radius=coin_r, height=coin_t, sections=48)
-    coin.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0]))
-    coin.apply_translation([0, coin_t / 2, 0])
-    (od / "coin").mkdir(exist_ok=True)
-    (od / "coin" / "model.glb").write_bytes(colored_glb([(coin, (196, 160, 70))]))
+    tparts = [(tmesh, table["colour_rgb"])] + ([legs] if legs is not None else [])
+    (od / "table" / "model.glb").write_bytes(colored_glb(tparts))
+    if args.ref == "coin":
+        ref_t = 0.15
+        coin = trimesh.creation.cylinder(radius=args.coin_mm / 20.0, height=ref_t, sections=48)
+        coin.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0]))
+        ref_col, ref_name, ref_size, ref_note = (196, 160, 70), f"reference: coin {args.coin_mm} mm", [args.coin_mm / 10, ref_t, args.coin_mm / 10], "thickness 1.5 mm assumed"
+    else:
+        ref_t = 0.076
+        coin = trimesh.creation.box(extents=[args.card_mm[0] / 10, ref_t, args.card_mm[1] / 10])
+        ref_col, ref_name = (40, 120, 140), f"reference: card {args.card_mm[0]:g} x {args.card_mm[1]:g} mm"
+        ref_size, ref_note = [args.card_mm[0] / 10, ref_t, args.card_mm[1] / 10], "ID-1 card, 0.76 mm thick (standard)"
+    coin.apply_translation([0, ref_t / 2, 0])
+    (od / "reference").mkdir(exist_ok=True)
+    (od / "reference" / "model.glb").write_bytes(colored_glb([(coin, ref_col)]))
     objs = [{"id": "table", "name": "table top", "mesh": "objects/table/model.glb", "role": "parent", "printable": False,
              "reconstruction_model": {"name": "stadium fitted to fused SAM 3.1 table masks on the VGGT plane", "vendor": "WorldKit", "is_meta_model": False},
-             "transform": {"position": [0, 0, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}, "size_cm": [round(L, 1), args.table_thick_cm, round(W, 1)],
-             "note": f"tabletop only (no legs); thickness {args.table_thick_cm} cm {table['thickness_source']}; colour = median of the table masks"},
-            {"id": "coin", "name": f"reference: coin {args.coin_mm} mm", "mesh": "objects/coin/model.glb", "role": "child", "printable": False, "is_scale_reference": True,
+             "transform": {"position": [0, 0, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]},
+             "size_cm": [round(L, 1), round(table["legs"]["table_height_cm"], 1) if legs is not None else args.table_thick_cm, round(W, 1)],
+             "note": (f"top: stadium from the fused masks, thickness {args.table_thick_cm} cm {table['thickness_source']}; "
+                      + ("base (rings, posts) estimated from frames" if legs is not None else "tabletop only (no legs)") + "; colours = median of the masks")},
+            {"id": "reference", "name": ref_name, "mesh": "objects/reference/model.glb", "role": "child", "printable": False, "is_scale_reference": True,
              "reconstruction_model": {"name": "known geometry (not reconstructed)", "vendor": "WorldKit", "is_meta_model": False},
-             "transform": {"position": [float(coin_w[0]), 0.0, float(coin_w[2])], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]},
-             "size_cm": [args.coin_mm / 10, coin_t, args.coin_mm / 10], "note": "thickness 1.5 mm assumed"}]
+             "transform": {"position": [float(ref_w[0]), 0.0, float(ref_w[2])], "rotation_deg": [0, float(ref_yaw), 0], "scale": [1, 1, 1]},
+             "size_cm": ref_size, "note": ref_note}]
+    if legs is not None:
+        objs[0]["name"] = "table (top and base)"
     parts = [trimesh.Trimesh(to_print_space(np.asarray(tmesh.vertices)), tmesh.faces), trimesh.Trimesh(to_print_space(sc.transform_vertices(np.asarray(coin.vertices), objs[1]["transform"])), coin.faces)]
+    if legs is not None:
+        parts.append(trimesh.Trimesh(to_print_space(np.asarray(legs[0].vertices)), legs[0].faces))
     for it in items:
         d = od / it.id
         d.mkdir(exist_ok=True)
@@ -650,7 +915,7 @@ def export(out: Path, rep: dict, items: list, L: float, W: float, r: float, args
         rep["warnings"].append(f"diorama union failed ({exc}); parts concatenated")
         fused = trimesh.util.concatenate(parts)
     fused.apply_translation([0, 0, -fused.bounds[0][2]])
-    ratio = min(1.0, BED_MM * 0.98 / float(max(fused.extents[:2])))
+    ratio = min(1.0, BED_MM * 0.98 / float(max(fused.extents)))
     fused.apply_scale(ratio)
     fused.export(out / "diorama.stl")
     dio = {"stl": "diorama.stl", "scale_ratio": round(ratio, 4), "scale_text": f"1:{1 / ratio:.1f}", "size_mm": [round(float(x), 1) for x in fused.extents],
@@ -659,10 +924,12 @@ def export(out: Path, rep: dict, items: list, L: float, W: float, r: float, args
     v = rep["verify"]
     scene = {"worldkit_scene": 1, "mode": "map", "source_video": rep["frames"]["video"], "units": "centimetres on the table plane (Y up, origin at the table centre)",
              "cm_per_scene_unit": 1.0,
-             "scale_source": {"text": "scale source: " + table["scale_source"], "kind": "coin", "name": "coin", "size_mm": args.coin_mm, "object_id": "coin"},
+             "scale_source": {"text": "scale source: " + table["scale_source"], "kind": args.ref, "name": args.ref,
+                              "size_mm": args.coin_mm if args.ref == "coin" else list(args.card_mm), "object_id": "reference"},
              "layout_method": rep["placement"]["method"], "objects": objs,
              "verify": {"mean_iou_before": v["mean_iou_before"], "mean_iou_after": v["mean_iou_after"], "images": v["images"], "cameras": "VGGT, held-out frames"},
-             "diorama": dio, "skipped": [{"name": "silver incense burner", "reason": "not part of this scene build (shiny metal and mirror panels)"}]}
+             "diorama": dio, "skipped": ([] if "burner" in args.objects else [{"name": "silver incense burner", "reason": "not part of this scene build"}])
+                                        + [{"name": w_.split(":")[0], "reason": w_.split(":", 1)[1].strip()} for w_ in rep["warnings"] if w_.endswith("skipped")]}
     jdump(out / "scene.json", scene)
 
 
@@ -674,6 +941,12 @@ def main(argv=None) -> int:
     ap.add_argument("--table-cm", type=float, nargs=2, metavar=("LENGTH", "WIDTH"), help="measured table top size; scales the scene instead of the coin")
     ap.add_argument("--table-thick-cm", type=float, default=None)
     ap.add_argument("--per-segment", type=int, default=5, help="SAM frames per third of the video")
+    ap.add_argument("--fps", type=float, default=2.0, help="frame rate for extraction and VGGT (1.0 keeps a 2-minute video under ~120 frames)")
+    ap.add_argument("--ref", choices=["coin", "card"], default="coin", help="scale reference on the table")
+    ap.add_argument("--card-mm", type=float, nargs=2, default=[85.6, 54.0], metavar=("LONG", "SHORT"))
+    ap.add_argument("--objects", nargs="+", default=["mug", "case", "candle"], choices=["mug", "case", "candle", "burner", "bottle"])
+    ap.add_argument("--legs", action="store_true", help="also build the table base (floor plane, rings, posts) from SAM masks and VGGT points")
+    ap.add_argument("--legs-frames", type=int, default=8)
     ap.add_argument("--until", choices=STAGES, default="export")
     ap.add_argument("--no-spark", action="store_true")
     ap.add_argument("--no-gpu", action="store_true")
