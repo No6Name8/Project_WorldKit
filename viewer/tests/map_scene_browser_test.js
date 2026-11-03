@@ -90,7 +90,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.click("#tab-viewer");
     await page.click("#btn-reset-cam");
     check("Reset camera does not break the scene", await page.evaluate(() => window.__sceneReady === true));
-    await page.screenshot({ path: path.join(ROOT, "docs", "map_viewer_ui.png") });
+    await page.screenshot({ path: path.join(ROOT, "docs", "images", "map_viewer_ui.png") });
     check("no page or console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
   } catch (e) {
     check("test ran to the end", false, String(e).slice(0, 300));

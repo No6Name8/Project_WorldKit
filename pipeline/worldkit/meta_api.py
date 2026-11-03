@@ -72,8 +72,8 @@ def load_api_key() -> str:
     key = os.environ.get("MODEL_API_KEY")
     if not key:
         raise MetaAPIUnavailable(
-            "MODEL_API_KEY is not set. Copy pipeline/.env.example to pipeline/.env "
-            "and fill in your Meta Model API key, or export MODEL_API_KEY in your shell."
+            "MODEL_API_KEY is not set. Create pipeline/.env with a line MODEL_API_KEY=<your Meta Model API key> "
+            "(see README, Configuration), or export MODEL_API_KEY in your shell."
         )
     return key
 

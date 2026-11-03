@@ -6,7 +6,7 @@ they were produced; where a later section corrects an earlier one, it says so (s
 
 ## Reconstruction quality
 
-![Before / TRELLIS as generated / after real-pixel projection](reconstruction_quality.jpg)
+![Before / TRELLIS as generated / after real-pixel projection](images/reconstruction_quality.jpg)
 
 Same source video, same SAM 3.1 masks. Measured on **held-out frames** (frames none of the compared textures were built from; each texture gets the identical per-frame alignment, so this scores texture quality, not pose estimation):
 
@@ -19,7 +19,7 @@ Same source video, same SAM 3.1 masks. Measured on **held-out frames** (frames n
 
 ## SAM 3D Objects result
 
-![SAM 3D Objects (top) vs TRELLIS (bottom), same input crop, 6 azimuths](sam3d_vs_trellis.png)
+![SAM 3D Objects (top) vs TRELLIS (bottom), same input crop, 6 azimuths](images/sam3d_vs_trellis.png)
 
 `modal run modal_app/sam3d.py::main` (A100, 13 GB checkpoints cached on a Modal Volume) completes real inference. Measured on the same mug crop (`sharp_02`); geometry compared by eye and by mesh checks, not against ground truth:
 
@@ -94,7 +94,7 @@ Engine self-tests (own throw-away worlds): free fall within 1% of 1/2 g t^2; sam
 
 ## Reconstruction fidelity (latest round)
 
-![Real frames (left), generated SAM 3D texture (middle), improved (right), at three held-out viewpoints](fidelity_heldout_real_vs_baseline_vs_improved.png)
+![Real frames (left), generated SAM 3D texture (middle), improved (right), at three held-out viewpoints](images/fidelity_heldout_real_vs_baseline_vs_improved.png)
 
 **Correction first.** Earlier SAM 3D texture numbers in this README's history (0.427 / 0.423 / 0.517 / 0.551 stripe correlation, "projection gives ghosting and no gain on SAM 3D") were **wrong**: the evaluation helper `eval_projection.get_views` keys its pose cache by `sys.argv`, so every SAM 3D evaluation silently reused the TRELLIS mesh's camera poses. Re-measured with poses fitted to the SAM 3D mesh itself, the generated texture scores much higher and real-pixel projection does work on SAM 3D. Do not rely on the old SAM 3D texture figures.
 
@@ -119,7 +119,7 @@ The stripe model wins on stripe shape and is stable across folds; UV projection 
 - `worldkit/pattern_model.py`: measures the stripe lattice, count, canonical waveform and extent from many stripes at once; **refuses** (and the plain fused observations or the original are kept) when spacing is irregular, no whole stripe count fits, or too few complete stripes were seen.
 - `worldkit/qc.py` + `worldkit/fidelity.py`: the quality-control loop. A candidate built from a subset of frames must beat the generated texture on the frames held out of its construction by explicit margins (>= +0.03 stripe correlation and >= +0.03 stripe IoU, and no single frame losing more than 0.10), otherwise the original is returned unchanged. On the real mug: held-out correlation 0.719 -> 0.846, stripe IoU 0.569 -> 0.762, accepted, then rebuilt from all frames. The report (`report.json` -> `fidelity`) records every decision, the per-frame numbers, the registration shifts and the observed / inferred / generated split.
 
-**Result on the mug** (`pipeline/runs/sam3d_run7_fidelity/`, full CLI with `--fidelity auto --mesh-backend import` of the SAM 3D mesh; geometry unchanged): 37% of the surface is body texels at angles the video saw (their pattern parameters measured from real frames), 3% is filled from the measured stripe lattice at unseen angles (marked inferred), 61% (interior, rim, handle, base, unseen sides) keeps SAM 3D's generated texture. The viewer's provenance panel shows the decision and the held-out numbers. Side-by-side views: `docs/fidelity_views_baseline_vs_improved.png`.
+**Result on the mug** (`pipeline/runs/sam3d_run7_fidelity/`, full CLI with `--fidelity auto --mesh-backend import` of the SAM 3D mesh; geometry unchanged): 37% of the surface is body texels at angles the video saw (their pattern parameters measured from real frames), 3% is filled from the measured stripe lattice at unseen angles (marked inferred), 61% (interior, rim, handle, base, unseen sides) keeps SAM 3D's generated texture. The viewer's provenance panel shows the decision and the held-out numbers. Side-by-side views: `docs/images/fidelity_views_baseline_vs_improved.png`.
 
 **Remaining limits.** Only vertical periodic stripes on bodies of revolution are modelled, on one object from one video; per-stripe irregularities of the real print are not reproduced (stripes are the measured canonical shape, ends slightly rounded); the albedo is flat two-colour (no gloss, no print texture); the stripe count (14) comes from a measurement over about 9 observed stripes and has not been checked by physically counting; the angular gauge between viewpoint clusters comes from silhouette poses only; handle, interior, base and unseen angles are still generated. All geometry is still generated.
 

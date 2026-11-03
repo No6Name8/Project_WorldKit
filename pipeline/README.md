@@ -8,7 +8,7 @@ Python package `worldkit` (command line): video in, textured 3D model(s) + `repo
 cd pipeline
 py -3.10 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
-copy .env.example .env        # put your Meta Model API key in MODEL_API_KEY
+Set-Content .env "MODEL_API_KEY=<your key>"   # pipeline/.env is gitignored; other variables: README, Configuration
 ```
 
 Use Python 3.10. Frame extraction uses a bundled ffmpeg (`imageio-ffmpeg`); no system install. Without a key the pipeline still runs

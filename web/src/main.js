@@ -48,7 +48,7 @@ function shell(inner, { bare = false, route: routeName = "" } = {}) {
 
 function notConfigured() {
   return `<div class="msg warn" role="alert"><b>This site is not connected to Supabase yet.</b>
-    <p class="hint" style="margin-top:var(--space-1)">Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (see web/.env.example), then rebuild. The demo viewer works without them.</p></div>`;
+    <p class="hint" style="margin-top:var(--space-1)">Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in web/.env.local (see README, Configuration), then rebuild. The demo viewer works without them.</p></div>`;
 }
 
 async function route() {
