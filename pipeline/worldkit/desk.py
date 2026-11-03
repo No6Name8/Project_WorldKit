@@ -83,6 +83,29 @@ def plane_hits(vg: VG, s: str, px: np.ndarray, n, p0):
     return C + D * tt[:, None], ok
 
 
+def refine_coin(rgb: np.ndarray, m: np.ndarray) -> np.ndarray:
+    """The colour detector keeps only the coin's bright core (its dark rim is lost, ~15-20% of the diameter at ~22 px). Re-segment at
+    half intensity between the coin's centre and the table around it (the unbiased edge position), keep the piece under the centre,
+    and open it with a 3x3 kernel so thin marble veins touching the coin are dropped."""
+    ys, xs = np.nonzero(m)
+    cy, cx = int(ys.mean()), int(xs.mean())
+    r = int(max(np.ptp(xs), np.ptp(ys), 4))
+    y0, y1, x0, x1 = max(cy - 2 * r, 0), min(cy + 2 * r + 1, rgb.shape[0]), max(cx - 2 * r, 0), min(cx + 2 * r + 1, rgb.shape[1])
+    g = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY).astype(float)[y0:y1, x0:x1]
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    rr = np.hypot(yy - cy, xx - cx)
+    inner, bg = np.median(g[rr < 0.3 * r]), np.median(g[(rr > 1.3 * r) & (rr < 2 * r)])
+    half = ((g < (inner + bg) / 2) if inner < bg else (g > (inner + bg) / 2)).astype(np.uint8)
+    half = cv2.morphologyEx(half, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    _, lab = cv2.connectedComponents(half)
+    c = lab[cy - y0, cx - x0]
+    out = np.zeros_like(m, bool)
+    if c == 0 or abs(inner - bg) < 25:
+        return m
+    out[y0:y1, x0:x1] = lab == c
+    return out
+
+
 def triangulate(Cs, Ds) -> np.ndarray:
     A, b = np.zeros((3, 3)), np.zeros(3)
     for c, d in zip(Cs, Ds):
@@ -178,6 +201,7 @@ def run(args) -> dict:
     frames = extract_all_frames(Path(args.video), out / "frames", fps=2.0)
     stems = [p.stem for p in frames]
     path_of = {p.stem: p for p in frames}
+    rgb_frame = lambda s: np.array(Image.open(path_of[s]).convert("RGB"))  # noqa: E731
     w, h = Image.open(frames[0]).size
     sharp = {p.stem: float(_laplacian_sharpness(p)) for p in frames}
     coin_px = {}
@@ -310,6 +334,7 @@ def run(args) -> dict:
     # coin diameter on the plane (contour of the colour-detected coin, projected): only coins on the table, clustered
     coin_obs = []
     for s, m in coin_px.items():
+        m = refine_coin(rgb_frame(s), m)
         cs, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         cpts = max(cs, key=cv2.contourArea)[:, 0, :].astype(float) + 0.5
         vx, _ = to_vggt_px(cpts, (w, h))
@@ -354,7 +379,6 @@ def run(args) -> dict:
     to_world = lambda P: ((np.atleast_2d(P) - o_w) @ B) * k  # noqa: E731
     cams = {s: PinholeCam(vg.R(s) @ B / k, vg.R(s) @ o_w + vg.t(s), *vg.K[vg.idx[s]][[0, 1, 0, 1], [0, 1, 2, 2]]) for s in stems}
     coin_w = to_world(p0 + coin_uv[0] * e1 + coin_uv[1] * e2)[0]
-    rgb_frame = lambda s: np.array(Image.open(path_of[s]).convert("RGB"))  # noqa: E731
     tcol = np.median(np.vstack([rgb_frame(s)[cached_mask(cache / "masks", path_of[s], CONCEPTS["table"])] for s in list(tmask)[:6]]), 0)  # median colour of the table masks
     table = {"plane_inlier_share": round(inl, 3), "masks": len(tmask), "fused_cells": int(filled.sum()), "stadium_fit_iou": round(stadium_iou, 3),
              "length_cm": round(L * k, 1), "width_cm": round(W * k, 1), "corner_radius_cm": round(r * k, 1), "is_full_stadium": bool(r > 0.95 * W / 2),
