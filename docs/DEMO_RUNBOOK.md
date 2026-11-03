@@ -1,4 +1,6 @@
-# WorldKit demo runbook (3 minutes)
+# WorldKit demo runbook (older)
+
+**Superseded by [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) (2026-11-03).** The script below predates scale validation, AI Edit and scene mode; the test-suite table is still useful but incomplete (it lacks the AI Edit, Map and parts suites).
 
 Everything in the script below runs from a fresh clone with no GPU and no Modal account; only the natural-language edit needs a Meta API key and internet. Rehearse once with the exact commands.
 
@@ -37,7 +39,7 @@ Not covered by an automated test: the live Modal GPU path (verified by real runs
 
 ## Do not claim
 
-Accurate real-world scale (unverified: the coin and mug were never measured); measured geometry (it is generated); generalisation beyond the mug; engineering-grade physics; use of Muse Wonder, Muse Image or VGGT; print readiness (`print_ready` is false without a measured height).
+Scale accuracy beyond the one mug measured with a ruler (`docs/accuracy.md`); measured geometry (it is generated); generalisation beyond the mug; engineering-grade physics; use of Muse Image; print readiness (`print_ready` is false without a measured height).
 
 ## If something fails live
 

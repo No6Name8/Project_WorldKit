@@ -1,46 +1,71 @@
-# WorldKit — submission text
+# WorldKit: submission text (ready to paste)
 
-(Draft for the hackathon form. Items marked TODO need you: demo video link, final repository state.)
+Every number here is measured and traceable to `docs/accuracy.md`, `docs/TECHNICAL_NOTES.md` or a run in `pipeline/runs/`.
 
-**Tagline:** Film it. Build it. A phone video becomes editable 3D objects and scenes you can inspect, change and drop under physics.
+## Project name
 
-## What it does
+WorldKit
 
-WorldKit takes a short phone video and builds 3D objects from it. Muse Spark names the main object and picks the best frame, SAM 3.1 segments each object, and SAM 3D Objects reconstructs a textured 3D mesh for each. Several objects from one video are composed into a scene. A browser viewer lets you select each object, move/rotate/scale it, ask Muse Spark to edit by chat ("move it 10 cm to the left"), check overlaps, calibrate real-world scale, run a rigid-body physics drop, and export/reload the scene. Every result carries a report of which model made it and what is observed from the video versus generated.
+## Tagline
 
-## How Meta AI is used
+Film an object, get a real-size 3D model you can edit by typing and print.
 
-- **Muse Spark** (Meta Model API): object naming and best-frame choice; structured frame analysis (category, rim, pattern type, stripe count, pattern region) that decides whether a pattern model may be attempted; natural-language scene edits, validated server-side before they touch the model.
-- **SAM 3.1**: segmentation of objects (handle included) and a coin reference across all frames.
-- **SAM 3D Objects** (open weights, run on a Modal A100): the 3D reconstruction of every object.
+## Track
 
-Not used: Muse Wonder, Muse Image, VGGT. Non-Meta components are recorded as such in each report (TRELLIS fallback, Rapier physics, three.js).
+Indie Developer
 
-## Why it is credible
+## Description (250 words)
 
-- **Honest evaluation.** Texture changes are accepted only if they beat the generated texture on frames held out of their construction (3-fold cross-validated on the real video: stripe correlation 0.68 generated, 0.80 pixel projection, 0.84 cylindrical stripe model). The pipeline keeps the original when a candidate does not win.
-- **It caught its own mistakes.** An evaluation helper silently reused another mesh's camera poses; the resulting SAM 3D texture numbers were retracted and re-measured. Silhouette-only camera elevations turned out to be off by up to 30 degrees, which the pipeline now corrects against the texture.
-- **Provenance everywhere.** Observed, inferred and generated surface shares are reported (37% / 3% / 61% on the mug); scale is a flagged placeholder unless measured; `print_ready` stays false without a measured height.
-- **Reproducible.** The viewer, bundled real demo assets and physics run offline from a fresh clone; 162 Python tests and 129 real-browser checks run against real reconstructed meshes.
+WorldKit turns a short phone video into a real-size 3D model you can inspect, edit by typing, and 3D print.
 
-## Challenges
+You film an object with a coin beside it. Muse Spark names the object and picks the best frame. SAM 3.1 segments the object and the coin in every frame, and SAM 3D Objects, running on a Modal A100, rebuilds the object as a textured mesh. The coin fixes the scale and camera angle, and the mesh's proportions are fitted to the SAM silhouettes. On a real mug measured with a ruler, the model's height, rim and base came within +1.9%, +3.7% and -1.9%.
 
-Getting SAM 3D to run (CUDA extension builds, a missing Gaussian rasterizer, headless GL) took many logged iterations; the camera/texture problems above were found by looking at renders, not by metrics. Geometry is still generated rather than measured, and the pipeline says so.
+The browser viewer shows the model with millimetre dimensions and where its scale came from. You can type an edit such as "make the handle 2 mm thicker". Muse Wonder chooses and calls exact geometry tools, SAM 3.1 has already located the handle on the mesh, and Muse Spark compares before and after renders. Deterministic checks must also pass, otherwise the edit is rejected. Every version can be undone, and the STL downloads in millimetres.
 
-## What is next
+Scene mode finds several objects on a desk, builds each one, and places them together at one scale. VGGT cameras are used to check that layout.
 
-A full 360-degree capture protocol (closes the angular gap and lets pattern counts be verified), measured real-world scale, scenes with more than two objects and true layout, and using VGGT-style multi-view geometry so shape is grounded in the footage and not only generated.
+A phone web app uploads videos; a laptop worker processes them.
 
-## Limitations
+WorldKit reports its failures too: a run scaled by a bank card instead of a coin missed by up to 17%, published next to the good result.
 
-One object type in one video; the stripe model handles periodic vertical stripes on bodies of revolution only; scale accuracy on real footage is unverified; the two-object scene assumes the smaller object rests on the larger.
+## How each Meta model is used
+
+- **Muse Spark:** names the object and picks the best frame, discovers the objects in a scene, and judges before/after renders of every AI Edit.
+- **Muse Wonder:** turns a typed edit into calls to geometry tools (scale, engrave text, drill, flatten, split, thicken, mirror, thicken a part).
+- **SAM 3.1:** segments the object, the coin and every scene object in every frame, and finds the mug handle for part edits.
+- **SAM 3D Objects:** reconstructs each object's textured 3D mesh from one masked frame, on a Modal A100.
+- **VGGT:** estimates per-frame cameras on a Modal A100 to check the scene layout (silhouette agreement) and to correct perspective per object.
+
+## What is new in the hackathon
+
+Everything in the repository was built between Oct 26 and Nov 4, 2026; the commit history shows it. The first commit holds only the README, CLAUDE.md, .gitignore and the license. That covers:
+
+- the video-to-model pipeline;
+- coin-grounded scale with a ruler check;
+- the stripe-pattern texture model with held-out validation;
+- AI Edit (Muse Wonder tools, Muse Spark verification, versions and undo);
+- SAM-located part edits;
+- scene mode with VGGT verification;
+- the three.js viewer;
+- the Supabase web app and laptop worker;
+- the tests.
+
+Only the models and the vendored libraries (three.js, Rapier, fonts) come from outside.
+
+## Tech stack
+
+- **Python 3.10:** NumPy, OpenCV, trimesh, manifold3d, FastAPI, Flask, the OpenAI SDK pointed at the Meta Model API
+- **GPU:** Modal (A100) for SAM 3D Objects and VGGT
+- **Viewer:** three.js, with Rapier physics
+- **Web app:** Vite, supabase-js; Supabase (Auth, Postgres with Row Level Security, Storage, Realtime); Vercel
+- **Tests:** pytest and Playwright
 
 ## Links
 
 - Repository: https://github.com/No6Name8/Project_WorldKit
-- Demo video: TODO
-- Footage: `pipeline/samples/mug_on_table.mp4` (filmed by the author; confirm before submitting)
+- Live site: https://web-flame-psi-45.vercel.app (demo viewer without an account: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1)
+- Demo video: TODO (add the link after upload)
 
-## Built with
+## What makes it different
 
-Python, Modal (A100), Meta Model API (Muse Spark, SAM 3.1), SAM 3D Objects, trimesh/manifold3d, OpenCV, Flask, three.js, Rapier, Playwright.
+WorldKit checks its output against the real object instead of only showing a 3D model. Scale comes from a visible reference and is scored against a ruler; the model reports which parts are observed and which are generated. AI edits are made by geometry tools rather than by regenerating the mesh, so "2 mm thicker" means 2 mm. Each edit is checked twice: by deterministic tests and by a second model looking at renders. Failures are kept in the open; the card run's 17% error is published next to the 2% result.

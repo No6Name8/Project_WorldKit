@@ -1853,10 +1853,18 @@ function accClass(err) {
 function renderAccuracy(md) {
   const body = document.getElementById("accuracy-body");
   const notes = [];
-  let html = "", inTable = false;
+  let html = "", inTable = false, skipTable = false, section = "";
   const clean = (t) => esc(t.replace(/\*\*/g, "").replace(/`/g, ""));
   for (const line of md.split("\n")) {
-    if (line.startsWith("## ")) { if (inTable) html += "</tbody></table>"; inTable = false; html += `<h3>${clean(line.slice(3))}</h3>`; continue; }
+    if (line.startsWith("## ")) {
+      if (inTable) html += "</tbody></table>";
+      inTable = false; section = line.slice(3).trim();
+      if (!/^(How ground truth|Side by side)/.test(section)) html += `<h3>${clean(section)}</h3>`;  // markdown-only sections
+      continue;
+    }
+    if (line.startsWith("|") && !inTable && !line.slice(1).trim().startsWith("object")) skipTable = true;  // comparison tables: markdown only
+    if (skipTable) { if (line.startsWith("|")) continue; skipTable = false; }
+    if (section.startsWith("How ground truth")) continue;  // shown in the fixed note below
     if (line.startsWith("|")) {
       const cells = line.split("|").slice(1, -1).map((c) => c.trim());
       if (cells[0] === "object" || /^-+:?$/.test(cells[0].replace(/\s/g, ""))) {

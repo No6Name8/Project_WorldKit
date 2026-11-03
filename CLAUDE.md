@@ -67,7 +67,7 @@ Pitfalls learned the hard way:
 
 - **AI Edit gotchas:** engraved text viewed straight on is invisible in a plainly shaded render (pocket floor and base face the same way): the verifier renderer uses relief shading and a straight-on view, and per-face mean depth fakes geometry on big skinny triangles under oblique views. `printprep` adds a flat plate wider than the object, so measure the body footprint above it (`edit_tools.body_footprint`), not at z=0. Merging vertices of an already-watertight manifold output pinches it non-manifold. trimesh voxelising is far too slow (188 s); use manifold3d Minkowski sums.
 - **Dev environment:** stale `viewer/server.py` processes keep serving old code on port 5050 (killing the netstat PID is not enough on Windows; kill by command line). Node's `fetch` refuses ports 5060/5061.
-- **Known upstream bug:** `model_print.stl` is written in cm but slicers read STL as mm; AI Edit versions are true mm, the pipeline STL is not.
+- **STL units:** fixed in b3ed91e: every exported STL (`printprep.export_stl`) is mm and `report.json` records `stl_units`.
 
 ## Where to push next (ideas, not orders)
 
