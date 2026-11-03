@@ -14,7 +14,7 @@ const check = (name, cond, detail) => { results.push({ name, pass: !!cond }); co
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  const srv = spawn(PY, [path.join(__dirname, "serve_fake.py"), String(PORT)], { cwd: ROOT, stdio: process.env.DEBUG_SERVERS ? "inherit" : "ignore" });
+  const srv = spawn(PY, [path.join(__dirname, "serve_fake.py"), String(PORT)], { cwd: ROOT, stdio: process.env.DEBUG_SERVERS ? "inherit" : "ignore", env: { ...process.env, WK_FAKE_DELAY: "1.2" } });
   let browser;
   try {
     for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/api/health`)).ok) break; } catch (e) { /* starting */ } await sleep(500); }
@@ -34,7 +34,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const sizeBefore = await page.evaluate(() => window.__getMeshWorldVertices().length);
     await page.fill("#ai-input", "make it exactly 12 cm tall");
     await page.click("#ai-send");
-    await page.waitForFunction(() => document.getElementById("ai-status").innerText.includes("Wonder"), { timeout: 5000 }).catch(() => {});
+    // live progress: the stages come from the server's /edit/progress (scripted Wonder and Spark each take 1.2 s here)
+    const sawChoosing = await page.waitForFunction(() => { const a = document.querySelector("#ai-status .prog .st.active"); return a && a.textContent.startsWith("Choosing tool"); }, { timeout: 5000 }).then(() => true).catch(() => false);
+    check("while an edit runs the panel shows the server's stage (Choosing tool)", sawChoosing);
+    const sawChecking = await page.waitForFunction(() => { const a = document.querySelector("#ai-status .prog .st.active"); return a && a.textContent.startsWith("Checking with Spark") && document.querySelectorAll("#ai-status .prog .st.done").length === 2; }, { timeout: 15000 }).then(() => true).catch(() => false);
+    check("the stage advances to Checking with Spark, with the earlier stages marked done", sawChecking);
+    const el = await page.locator("#ai-status .prog .el").innerText().catch(() => "");
+    check("an elapsed-seconds counter is shown", /^\d+ s$/.test(el), el);
     await page.waitForFunction(() => document.querySelector("#ai-log .entry.ok"), { timeout: 60000 });
     const ok = await page.locator("#ai-log .entry.ok").first().innerText();
     const okFull = await page.locator("#ai-log .entry.ok").first().evaluate((e) => e.textContent);
@@ -42,6 +48,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check("the verification render is shown inline", await page.locator("#ai-log .entry.ok img").count() === 1);
     await page.waitForFunction(() => (window.__lastLoadLabel || "") === "edit v1", { timeout: 15000 });
     check("the model reloads after the edit (viewer shows the edited version)", (await page.locator("#ai-version").innerText()).includes("v1"));
+    check("the log row names the dimension the edit changed", /H [\d.]+ → 120\.0 mm/.test(await page.locator("#ai-log .entry.ok .chg").first().innerText().catch(() => "")),
+      await page.locator("#ai-log .entry.ok .chg").first().innerText().catch(() => "none"));
+    check("the changed W/H/D card is highlighted", await page.evaluate(() => document.querySelectorAll("#dim-cards .dim-card.changed").length) >= 1);
     check("the status line clears and Undo becomes available", (await page.locator("#ai-status").innerText()) === "" && !(await page.locator("#ai-undo").isDisabled()));
 
     await page.fill("#ai-input", "this should be rejected by the check");
@@ -74,6 +83,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check("the Download STL button triggers a file download named for the version", /v1_mm\.stl$/.test(download.suggestedFilename()), download.suggestedFilename());
     await page.screenshot({ path: path.join(require("os").tmpdir(), "worldkit_ai_edit_panel.png") });
     check("no page errors", errors.length === 0, errors.join(" | ").slice(0, 300));
+
+    // demo mode (?demo=1) on an edit server: the served run opens (not the bundled demo), developer tools hidden, UI at 110% on wide screens
+    const demo = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    await demo.goto(`http://127.0.0.1:${PORT}/?demo=1`, { waitUntil: "domcontentloaded" });
+    await demo.waitForFunction(() => window.__sceneReady === true && !window.__isLoading() && window.__aiState && window.__aiState(), null, { timeout: 30000 });
+    const dm = await demo.evaluate(() => ({ cls: document.documentElement.classList.contains("demo-mode"), dev: getComputedStyle(document.querySelector(".devtools")).display,
+      zoom: getComputedStyle(document.documentElement).zoom, label: window.__lastLoadLabel || "" }));
+    check("?demo=1 opens the served run with developer tools hidden and the UI at 110%", dm.cls && dm.dev === "none" && dm.zoom === "1.1" && !/run_mug/.test(dm.label), JSON.stringify(dm));
+    await demo.close();
   } finally {
     if (browser) await browser.close();
     srv.kill();

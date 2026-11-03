@@ -313,13 +313,29 @@ def load_parts(model_dir: Path) -> dict:
     return out
 
 
-def wonder_tool_step(client, messages: list[dict], mesh: trimesh.Trimesh, usage_acc: dict):
+def _emit(progress, stage: str, detail: str = "") -> None:
+    """Report a real stage of the edit to an optional callback (the edit server shows it in the AI Edit panel)."""
+    if progress is not None:
+        try:
+            progress(stage, detail)
+        except Exception:  # noqa: BLE001  a display problem must never break the edit
+            pass
+
+
+def wonder_tool_step(client, messages: list[dict], mesh: trimesh.Trimesh, usage_acc: dict, progress=None):
     """One bounded tool-calling conversation: Wonder calls tools, we run them on ``mesh`` and answer, until it stops calling tools.
     Returns (final mesh, calls[{name, arguments, result|error}], assistant_text). Wonder is called at most MAX_TOOL_TURNS times."""
     calls: list[dict] = []
     text = ""
     work = mesh
+    from . import budget
+
     for _ in range(MAX_TOOL_TURNS):
+        _emit(progress, "choosing", "Muse Wonder")
+        try:
+            budget.take("wonder", messages[1]["content"][:80])
+        except budget.BudgetExceeded as exc:
+            raise MetaAPIError(str(exc)) from exc
         try:
             resp = client.chat.completions.create(model=WONDER_MODEL, messages=messages, tools=TOOLS, max_tokens=16000)
         except Exception as exc:  # noqa: BLE001
@@ -345,6 +361,7 @@ def wonder_tool_step(client, messages: list[dict], mesh: trimesh.Trimesh, usage_
                 reply = {"ok": False, "error": rec["error"]}
             else:
                 try:
+                    _emit(progress, "applying", t.function.name)
                     work, summ = et.apply_tool(work, t.function.name, args)
                     rec["result"] = summ
                     reply = summ
@@ -356,7 +373,7 @@ def wonder_tool_step(client, messages: list[dict], mesh: trimesh.Trimesh, usage_
     return work, calls, text
 
 
-def run_edit(model_dir: Path, instruction: str, *, client=None, ask_spark=ask_muse_spark_with_usage, retries: int = 1) -> dict:
+def run_edit(model_dir: Path, instruction: str, *, client=None, ask_spark=ask_muse_spark_with_usage, retries: int = 1, progress=None) -> dict:
     """Apply one instruction. Returns the version record (applied) or the rejection record. Never leaves the model half-edited."""
     t0 = time.time()
     model_dir = Path(model_dir)
@@ -376,7 +393,9 @@ def run_edit(model_dir: Path, instruction: str, *, client=None, ask_spark=ask_mu
     attempts = []
     n_next = max(v["version"] for v in data["versions"]) + 1
     for attempt in range(retries + 1):
-        after, calls, text = wonder_tool_step(client, messages, before, wonder_usage)
+        if attempt:
+            _emit(progress, "retrying", f"attempt {attempt + 1}")
+        after, calls, text = wonder_tool_step(client, messages, before, wonder_usage, progress)
         ok_calls = [c for c in calls if "error" not in c]
         rec = {"attempt": attempt, "assistant": text, "tool_calls": calls}
         if not ok_calls:
@@ -386,6 +405,7 @@ def run_edit(model_dir: Path, instruction: str, *, client=None, ask_spark=ask_mu
                 break
             messages.append({"role": "user", "content": "None of your tool calls succeeded. Fix the arguments using the errors above and try again."})
             continue
+        _emit(progress, "checking", "deterministic checks and Muse Spark")
         det = deterministic_checks(before, after, ok_calls)
         images = render_comparison(before, after, ok_calls, ed, f"v{n_next}_try{attempt}")
         spark, usage = verify(before, after, instruction, ok_calls, images, ask=ask_spark)

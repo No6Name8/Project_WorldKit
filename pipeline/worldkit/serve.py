@@ -20,6 +20,7 @@ import io
 import json
 import re
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +50,7 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
     model_dir = Path(model_dir).resolve()
     app = FastAPI(title="WorldKit viewer + AI Edit")
     lock = threading.Lock()
+    prog = {"stage": None, "detail": "", "t0": None, "history": []}  # real stages reported by edit.run_edit while an edit runs
     kw = {}
     if ask_spark is not None:
         kw["ask_spark"] = ask_spark
@@ -78,11 +80,25 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
         except Exception:
             return None
 
+    sizes: dict[str, list] = {}
+
+    def size_of(root: Path, v: dict):
+        """Print-mesh size (mm, x y z) of a version; the original v0 record has none stored, so it is measured once from its STL."""
+        if v.get("size_mm"):
+            return v["size_mm"]
+        key = str(root / v["stl"])
+        if key not in sizes:
+            try:
+                sizes[key] = [round(float(x), 2) for x in trimesh.load(root / v["stl"]).extents]
+            except Exception:  # noqa: BLE001
+                sizes[key] = None
+        return sizes[key]
+
     def state(root: Path | None = None) -> dict:
         root = root or model_dir
         d = edit_mod._load(root)
         return {"enabled": True, "model": root.name, "units": d["units"], "scale_note": d.get("scale_note"), "current": d["current"],
-                "versions": [{"version": v["version"], "parent": v["parent"], "instruction": v.get("instruction"), "size_mm": v.get("size_mm"),
+                "versions": [{"version": v["version"], "parent": v["parent"], "instruction": v.get("instruction"), "size_mm": size_of(root, v),
                               "reason": (v.get("verdict") or {}).get("reason"), "seconds": v.get("seconds")} for v in d["versions"]],
                 "rejected": len(d.get("rejected", [])), "busy": lock.locked()}
 
@@ -150,11 +166,19 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
             raise HTTPException(422, "instruction must be 1-400 characters")
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "another edit is still running")
+        t0 = time.time()
+        prog.update(stage="starting", detail="", t0=t0, history=[])
+
+        def report(stage: str, detail: str = "") -> None:
+            prog.update(stage=stage, detail=detail)
+            prog["history"].append({"stage": stage, "detail": detail, "at_s": round(time.time() - t0, 2)})
+
         try:
-            r = edit_mod.run_edit(root, instruction, client=client, **kw)
+            r = edit_mod.run_edit(root, instruction, client=client, progress=report, **kw)
         except (edit_mod.EditFailed, MetaAPIError) as exc:
             return JSONResponse({"ok": False, "applied": False, "error": str(exc)}, status_code=502 if isinstance(exc, MetaAPIError) else 400)
         finally:
+            prog.update(stage="done", detail="")
             lock.release()
         attempts = r.get("attempts")
         last = (attempts[-1] if isinstance(attempts, list) and attempts else r)
@@ -165,6 +189,13 @@ def create_app(model_dir: Path, *, viewer_dir: Path = VIEWER_DIR, client=None, a
                 "spark_verified": r["verdict"].get("spark_verified"), "tools": [{"name": c["name"], "arguments": c["arguments"], "error": c.get("error"), "sentence": (c.get("result") or {}).get("sentence")} for c in calls],
                 "renders": [Path(p).name for p in images], "seconds": r.get("seconds"), "retries": r.get("retries", len(attempts) - 1 if isinstance(attempts, list) else 0),
                 "tokens": r.get("cost", {}), "state": state(root)}
+
+    @app.get("/edit/progress")
+    def edit_progress():
+        """The running edit's current stage (choosing / applying / retrying / checking) and seconds since it started."""
+        busy = lock.locked()
+        return {"busy": busy, "stage": prog["stage"] if busy else None, "detail": prog["detail"] if busy else "",
+                "elapsed_s": round(time.time() - prog["t0"], 1) if (busy and prog["t0"]) else None, "history": prog["history"]}
 
     @app.post("/undo")
     def do_undo(body: dict = Body(default={})):

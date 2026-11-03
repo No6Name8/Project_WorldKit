@@ -8,7 +8,9 @@
 // theme before the first paint: the saved choice ("wk-theme"), else the system preference; dark is the default
 (function () { var t = null; try { t = localStorage.getItem("wk-theme"); } catch (e) { /* storage blocked */ }
   if (t !== "light" && t !== "dark") t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  document.documentElement.dataset.theme = t; })();
+  document.documentElement.dataset.theme = t;
+  // demo mode (?demo=1, not the home-page preview): no developer tools, UI at 110% on wide screens for a readable 1080p recording
+  var q = new URLSearchParams(location.search); if (q.has("demo") && !q.has("preview")) document.documentElement.classList.add("demo-mode"); })();
 </script>
 <title>WorldKit</title>
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
@@ -1401,7 +1403,11 @@ async function startup() {
   }
   if (urlParams.has("preview")) document.body.classList.add("preview");
   if (urlParams.has("demo")) {
-    await loadDemoMug();
+    // served by an edit server (worldkit.serve, scripts/demo_reset): open that run, so AI Edit works; otherwise the bundled demo mug
+    let served = null;
+    if (!urlParams.has("preview")) { try { const c = await (await fetch("/api/autoload")).json(); if (c && c.kind === "object") served = c; } catch (e) { /* static hosting */ } }
+    if (served) { window.__runStl = served.stl || null; await loadObjectFromUrls(served.glb, served.report, "model.glb"); loadParts(); }
+    else await loadDemoMug();
     if (urlParams.has("preview") && !REDUCED_MOTION) {  // the home card turns slowly while idle and stops on the first touch
       orbit.autoRotate = true; orbit.autoRotateSpeed = 0.5;
       const stop = () => { orbit.autoRotate = false; };
@@ -1475,6 +1481,52 @@ async function aiReloadModel() {
   }
   if (partsState.on) { partsState.on = false; setPartsSwitch(false); }
   clearPartOverlay(); // the overlay marks the ORIGINAL mesh
+  const w = document.getElementById("canvas-wrap"); w.classList.remove("vp-in"); void w.offsetWidth; w.classList.add("vp-in");  // the edited model fades in
+}
+// live progress: the stages come from the edit server (/edit/progress), which reports them from edit.run_edit as they happen
+const AI_STAGES = [["choosing", "Choosing tool"], ["applying", "Applying"], ["checking", "Checking with Spark"]];
+function aiProgressHtml(p) {
+  const order = (st) => (st === "retrying" ? 0 : AI_STAGES.findIndex(([k]) => k === st));
+  const cur = p && p.stage ? order(p.stage) : -1;
+  const seen = new Set(((p && p.history) || []).map((h) => order(h.stage)));
+  const steps = AI_STAGES.map(([k, label], i) => {
+    const cls = i === cur ? "active" : (i < cur || (seen.has(i) && i < cur)) ? "done" : "";
+    const extra = k === "applying" && p && p.stage === "applying" && p.detail ? ` <span class="mono">${esc(p.detail)}</span>` : "";
+    return `<span class="st ${cls}"${i === cur ? ' aria-current="step"' : ""}>${label}${extra}</span>`;
+  }).join('<span class="sep" aria-hidden="true">/</span>');
+  const retry = p && p.stage === "retrying" ? ' <span class="st active">retrying</span>' : "";
+  const secs = p && p.elapsed_s != null ? `<span class="el mono">${p.elapsed_s.toFixed(0)} s</span>` : "";
+  return `<div class="prog">${steps}${retry}${secs}</div>`;
+}
+function aiWatchProgress(status) {
+  let last = null;
+  const draw = () => {
+    if (!last) return;
+    const elapsed = last.elapsed_s == null ? null : last.elapsed_s + (performance.now() - last.at) / 1000;  // server time since the edit began
+    status.innerHTML = aiProgressHtml({ ...last, elapsed_s: elapsed });
+  };
+  const poll = async () => {
+    try { const p = await (await fetch("/edit/progress" )).json(); if (p.busy) { last = { ...p, at: performance.now() }; draw(); } } catch (e) { /* keep the last stage */ }
+  };
+  poll();
+  const a = setInterval(poll, 400), b = setInterval(draw, 250);
+  return () => { clearInterval(a); clearInterval(b); };
+}
+window.__aiProgressHtml = aiProgressHtml;
+// after an edit: name the dimensions that changed (from the edit server's print-mesh sizes: x = W, z = H, y = D, mm) and highlight
+// those W/H/D cards in the Selection card
+function markChangedDims(beforeMm, afterMm) {
+  if (!beforeMm || !afterMm) return "";
+  const cards = document.querySelectorAll("#dim-cards .dim-card");
+  const notes = [];
+  [["W", 0, 0], ["H", 2, 1], ["D", 1, 2]].forEach(([l, k, card]) => {
+    if (Math.abs(afterMm[k] - beforeMm[k]) > 0.3) {
+      notes.push(`${l} ${beforeMm[k].toFixed(1)} → ${afterMm[k].toFixed(1)} mm`);
+      const c = cards[card];
+      if (c) { c.classList.add("changed"); setTimeout(() => c.classList.remove("changed"), 6000); }
+    }
+  });
+  return notes.join(", ");
 }
 async function aiSend() {
   const input = document.getElementById("ai-input");
@@ -1482,7 +1534,10 @@ async function aiSend() {
   if (!text || ai.busy) return;
   ai.busy = true; aiRefreshLabel(); input.value = "";
   const status = document.getElementById("ai-status");
-  status.textContent = "Muse Wonder is choosing tools, then Muse Spark verifies (about 15-60 s)...";
+  status.innerHTML = aiProgressHtml({ stage: "choosing", history: [] });
+  const stopProgress = aiWatchProgress(status);
+  const verSize = (st) => { const v = st && (st.versions || []).find((x) => x.version === st.current); return v && v.size_mm; };
+  const sizeBefore = verSize(ai.state);
   const entry = aiLog(`<div class="e-h"><span class="e-k">Working</span></div><div class="res">${esc(text)}</div><div class="meta">Wonder is editing, Spark verifies</div>`);
   try {
     const resp = await fetch("/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instruction: text, obj: ai.obj }) });
@@ -1499,19 +1554,22 @@ async function aiSend() {
     const row = (vtag, line) => `<div class="e-h"><span class="e-k">${r.applied ? "Applied edit" : "Not applied"}</span><span class="vtag">${vtag}</span></div><div class="res">${line}</div><details class="dt"><summary>Details</summary><pre class="mono">${esc(detail)}</pre></details>${img}`;
     if (r.applied) {
       entry.className = "entry ok";
-      entry.innerHTML = row(`v${r.version}`, `${esc(sentences.join(". ") || "Applied")}. Spark: ${esc(spark)}.`);
+      entry.innerHTML = row(`v${r.version}`, `${esc(sentences.join(". ") || "Applied")}. Spark: ${esc(String(spark).replace(/[.\s]+$/, ""))}.`);
       await aiReloadModel();
+      const changed = markChangedDims(sizeBefore, verSize(r.state));
+      if (changed) entry.querySelector(".res").insertAdjacentHTML("beforeend", ` <span class="chg mono">${esc(changed)}</span>`);
     } else {
       entry.className = "entry bad";
       entry.innerHTML = row(`no change`, `Not applied, the model is unchanged. ${esc(toolErrors.length ? toolErrors.join(" ") : String(r.reason || "").replace(/^no successful tool call:\s*/i, ""))}`);
     }
     if (imgUrl) { entry.dataset.expandable = "1"; entry.tabIndex = 0; entry.title = "Click for the before/after render"; }
+    entry.style.animation = "none"; void entry.offsetWidth; entry.style.animation = "";  // the finished row slides in
     status.textContent = "";
   } catch (e) {
     entry.className = "entry bad";
     entry.innerHTML = `<div class="e-h"><span class="e-k">Failed</span><span class="vtag">no change</span></div><div class="res">FAILED: ${esc(e.message || e)}</div><details class="dt"><summary>Details</summary><pre class="mono">${esc(`Request: ${text}`)}</pre></details>`;
     status.textContent = "";
-  } finally { ai.busy = false; aiRefreshLabel(); }
+  } finally { stopProgress(); ai.busy = false; aiRefreshLabel(); }
 }
 async function aiUndo(to) {
   if (ai.busy) return;

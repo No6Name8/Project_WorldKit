@@ -1,7 +1,9 @@
 """Test server for ai_edit_browser_test.js: the real FastAPI app (worldkit.serve) with a SCRIPTED Wonder and Spark so the UI can be
 tested deterministically without network or tokens.   python viewer/tests/serve_fake.py <port>"""
 import json
+import os
 import sys
+import time
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -10,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "pipeline"))
 
 import uvicorn  # noqa: E402
+
+DELAY = float(os.environ.get("WK_FAKE_DELAY", "0"))
 
 from tests.test_edit_tools import make_mug  # noqa: E402
 from worldkit import serve  # noqa: E402
@@ -26,6 +30,7 @@ class Wonder:
         self.chat = NS(completions=NS(create=self.create))
 
     def create(self, **kw):
+        time.sleep(DELAY)  # WK_FAKE_DELAY seconds: lets a browser test see the live progress stages
         msgs = kw["messages"]
         text = msgs[1]["content"].lower().split("measured model facts")[0]  # the instruction only (the facts JSON also mentions "handle")
         last_is_tool = msgs[-1]["role"] == "tool"
@@ -66,6 +71,7 @@ def write_parts(d, mug):
 
 
 def spark(images, prompt):
+    time.sleep(DELAY)
     ok = "reject" not in prompt.lower()
     return json.dumps({"matches_instruction": ok, "unintended_changes": False, "confidence": 0.9, "reason": "looks right" if ok else "does not match"}), {"total_tokens": 3}
 

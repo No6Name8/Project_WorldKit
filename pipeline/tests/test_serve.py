@@ -102,3 +102,33 @@ def test_scene_mode_edits_one_object_in_its_own_folder(model_dir, tmp_path):
     assert list(g.geometry.values())[0].extents.max() > 0  # keeps the object's original GLB scale (not renormalised to 2)
     assert c.post("/undo", json={"obj": "mug"}).json()["state"]["current"] == 0
     assert c.get("/open/objects/mug/model_print.stl").status_code == 200
+
+
+def test_edit_reports_real_stages(model_dir):
+    """run_edit reports choosing -> applying -> checking from the real steps; /edit/progress serves them while an edit runs."""
+    from worldkit import edit
+
+    seen = []
+    edit.run_edit(model_dir, "make it 12 cm tall", client=FakeWonder([reply([tool_call("scale_to", {"height_cm": 12})]), reply(text="ok")]),
+                  ask_spark=spark_ok, progress=lambda st, d="": seen.append((st, d)))
+    stages = [s for s, _ in seen]
+    assert stages[0] == "choosing" and ("applying", "scale_to") in seen and stages.index("checking") > stages.index("applying")
+
+    gate, release = threading.Event(), threading.Event()
+
+    def slow_spark(images, prompt):
+        gate.set()
+        release.wait(10)
+        return spark_ok(images, prompt)
+
+    c = client(model_dir, FakeWonder([reply([tool_call("scale_to", {"height_cm": 11})]), reply(text="ok")]), spark=slow_spark)
+    assert c.get("/edit/progress").json() == {"busy": False, "stage": None, "detail": "", "elapsed_s": None, "history": []}
+    out = {}
+    t = threading.Thread(target=lambda: out.update(r=c.post("/edit", json={"instruction": "make it 11 cm tall"}).json()))
+    t.start()
+    assert gate.wait(30)
+    p = c.get("/edit/progress").json()
+    assert p["busy"] and p["stage"] == "checking" and p["elapsed_s"] >= 0 and [h["stage"] for h in p["history"]][:2] == ["choosing", "applying"]
+    release.set()
+    t.join(30)
+    assert out["r"]["applied"] and c.get("/edit/progress").json()["busy"] is False

@@ -252,6 +252,16 @@ body[data-tab="accuracy"] .wk-label { display: none; }
 .entry[data-expandable="1"] { cursor: pointer; }
 #ai-status { font-size: var(--fs-xs); color: var(--status-warn); min-height: 16px; margin-bottom: var(--space-1); }
 #ai-status:empty { display: none; }
+/* live edit progress: stages reported by the edit server, elapsed seconds on the right */
+#ai-status .prog { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); color: var(--text-secondary); }
+#ai-status .prog .st { transition: color var(--dur-2) var(--ease-out); }
+#ai-status .prog .st.active { color: var(--accent-text); font-weight: var(--fw-semibold); }
+#ai-status .prog .st.done { color: var(--status-ok); }
+#ai-status .prog .sep { color: var(--border-strong); }
+#ai-status .prog .el { margin-left: auto; color: var(--text-secondary); }
+.entry .chg { color: var(--accent-text); font-size: var(--fs-xs); }
+.dim-card { transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-4) var(--ease-out), background-color var(--dur-4) var(--ease-out); }
+.dim-card.changed { border-color: var(--accent); background: var(--accent-bg); }
 #ai-input, #ai-disabled textarea { height: 44px; }
 #ai-send, #ai-disabled button { height: 44px; padding: 0 var(--space-4); font-size: var(--fs-md); }
 #ai-helper { margin-top: var(--space-2); }
@@ -324,6 +334,10 @@ td.e-ok .chip, td.e-warn .chip, td.e-err .chip, td.e-na .chip { border: 0; backg
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- demo mode (?demo=1): no developer tools; 110% UI on wide screens so text reads in a 1080p recording ---------- */
+html.demo-mode .devtools { display: none; }
+@media (min-width: 1200px) { html.demo-mode { zoom: 1.1; } }
 
 /* ---------- read-only preview (home page card): canvas only ---------- */
 body.preview #topbar, body.preview #proj-head, body.preview #side-left, body.preview #side-right, body.preview #statusbar,
