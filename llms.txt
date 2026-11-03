@@ -42,6 +42,7 @@ docs/                accuracy, architecture, submission text, demo script, deplo
 | | callers | `object.run_sam3d_on_modal` (Object and two-object scene), `mapmode._run` (Map mode, parallel) |
 | VGGT-1B (open weights, Modal A100) | `pipeline/modal_app/vggt_probe.py` | `run_vggt` (GPU function) |
 | | `pipeline/worldkit/vggt_cams.py` | `run_vggt` (cached client), `verify_with_vggt`, `perspective_corrections`; used by Map mode with `--vggt` |
+| | `pipeline/worldkit/desk.py` | desk scene v2: VGGT cameras for the table plane, fused table outline, triangulated placement and held-out verify |
 
 Not Meta: TRELLIS (hosted fallback, `reconstruct.py`), trimesh/manifold3d, Rapier, three.js, Supabase, Vercel.
 

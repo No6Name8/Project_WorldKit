@@ -2,42 +2,25 @@
  "worldkit_scene": 1,
  "mode": "map",
  "source_video": "desk_scene_coin.mp4",
- "frame": "sharp_52",
- "units": "centimetres on the desk plane (Y up, origin at the scale reference)",
+ "units": "centimetres on the table plane (Y up, origin at the table centre)",
  "cm_per_scene_unit": 1.0,
  "scale_source": {
-  "text": "scale source: coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)",
+  "text": "scale source: coin 21.5 mm, measured on the table plane in 5 frames (VGGT cameras)",
   "kind": "coin",
   "name": "coin",
   "size_mm": 21.5,
-  "frames_used": [
-   "sharp_52",
-   "sharp_60",
-   "sharp_63",
-   "sharp_64",
-   "sharp_65"
-  ],
-  "object_id": null,
-  "considered": [
-   "scale source: coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)"
-  ],
-  "notes": []
+  "object_id": "coin"
  },
- "scale_calibration": {
-  "reference": "coin",
-  "reference_size_mm": 21.5,
-  "relative_spread_mad": null,
-  "frames_used": 5
- },
+ "layout_method": "mask-centroid rays triangulated over the fit frames (VGGT cameras), dropped onto the fitted table plane; scale and yaw fitted to the SAM silhouettes in the fit frames; the case yaw seeded by its footprint's principal axis",
  "objects": [
   {
-   "id": "desk",
-   "name": "coffee table",
-   "mesh": "objects/desk/model.glb",
-   "report": "objects/desk/report.json",
+   "id": "table",
+   "name": "table top",
+   "mesh": "objects/table/model.glb",
    "role": "parent",
+   "printable": false,
    "reconstruction_model": {
-    "name": "procedural plane",
+    "name": "stadium fitted to fused SAM 3.1 table masks on the VGGT plane",
     "vendor": "WorldKit",
     "is_meta_model": false
    },
@@ -59,118 +42,196 @@
     ]
    },
    "size_cm": [
-    68.3,
-    1.0,
-    59.9
+    121.0,
+    2.0,
+    60.0
    ],
-   "printable": false
+   "note": "tabletop only (no legs); thickness 2.0 cm estimated (not measured); colour = median of the table masks"
   },
   {
-   "id": "black_case",
-   "name": "black case",
-   "mesh": "objects/black_case/model.glb",
-   "report": "objects/black_case/report.json",
+   "id": "coin",
+   "name": "reference: coin 21.5 mm",
+   "mesh": "objects/coin/model.glb",
    "role": "child",
+   "printable": false,
+   "is_scale_reference": true,
+   "reconstruction_model": {
+    "name": "known geometry (not reconstructed)",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     -11.592429310550283,
+     0.0,
+     -12.122514225515708
+    ],
+    "rotation_deg": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    2.15,
+    0.15,
+    2.15
+   ],
+   "note": "thickness 1.5 mm assumed"
+  },
+  {
+   "id": "mug",
+   "name": "striped mug",
+   "mesh": "objects/mug/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/mug/model_print.stl",
    "reconstruction_model": {
     "name": "SAM 3D Objects",
     "vendor": "Meta",
     "is_meta_model": true
    },
+   "built": "SAM 3D Objects (generated mesh)",
    "transform": {
     "position": [
-     -8.400681534878084,
-     2.794971946374098,
-     -50.40590298101885
+     -23.463140640683196,
+     0.0,
+     12.144148021509103
     ],
     "rotation_deg": [
      0.0,
-     318.0,
+     276.0,
      0.0
     ],
     "scale": [
-     8.50703332094102,
-     8.50703332094102,
-     8.50703332094102
+     5.081875090305272,
+     5.081875090305272,
+     5.081875090305272
     ]
    },
    "size_cm": [
-    15.44,
-    5.59,
-    14.22
+    10.14,
+    7.43,
+    8.01
    ],
    "size_mm": [
-    154.4,
-    55.9,
-    142.2
+    101.4,
+    74.3,
+    80.1
    ],
-   "stl": "objects/black_case/model_print.stl",
-   "printable": true,
    "is_scale_reference": false
   },
   {
-   "id": "striped_mug",
-   "name": "striped mug",
-   "mesh": "objects/striped_mug/model.glb",
-   "report": "objects/striped_mug/report.json",
+   "id": "case",
+   "name": "black case",
+   "mesh": "objects/case/model.glb",
    "role": "child",
+   "printable": true,
+   "stl": "objects/case/model_print.stl",
    "reconstruction_model": {
     "name": "SAM 3D Objects",
     "vendor": "Meta",
     "is_meta_model": true
    },
+   "built": "SAM 3D Objects (generated mesh)",
    "transform": {
     "position": [
-     36.09231661951504,
-     5.126800990237063,
-     -15.06087662241816
+     19.436835951844113,
+     0.0,
+     13.629959546139213
     ],
     "rotation_deg": [
      0.0,
-     197.0,
+     348.6,
      0.0
     ],
     "scale": [
-     5.618375656720693,
-     5.618375656720693,
-     5.618375656720693
+     7.5958379943825935,
+     7.5958379943825935,
+     7.5958379943825935
     ]
    },
    "size_cm": [
-    8.97,
-    6.56,
-    11.3
+    15.25,
+    4.96,
+    8.77
    ],
    "size_mm": [
-    89.7,
-    65.6,
-    113.0
+    152.5,
+    49.6,
+    87.7
    ],
-   "stl": "objects/striped_mug/model_print.stl",
+   "is_scale_reference": false
+  },
+  {
+   "id": "candle",
+   "name": "candle in red holder",
+   "mesh": "objects/candle/model.glb",
+   "role": "child",
    "printable": true,
+   "stl": "objects/candle/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     -37.447742511921184,
+     0.0,
+     -2.8946151068871164
+    ],
+    "rotation_deg": [
+     0.0,
+     75.0,
+     0.0
+    ],
+    "scale": [
+     11.001201097946229,
+     11.001201097946229,
+     11.001201097946229
+    ]
+   },
+   "size_cm": [
+    6.15,
+    22.0,
+    6.07
+   ],
+   "size_mm": [
+    61.5,
+    220.0,
+    60.7
+   ],
    "is_scale_reference": false
   }
  ],
- "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used",
  "verify": {
-  "mean_iou_before": 0.408,
-  "mean_iou_after": 0.408,
+  "mean_iou_before": 0.643,
+  "mean_iou_after": 0.643,
   "images": [
-   "verify/weak_view0_sharp_52.png",
-   "verify/weak_view1_sharp_60.png",
-   "verify/weak_view2_sharp_63.png",
-   "verify/vggt_view0_sharp_52.png",
-   "verify/vggt_view1_sharp_60.png",
-   "verify/vggt_view2_sharp_63.png"
-  ]
+   "verify/vggt_view0_frame_000006.png",
+   "verify/vggt_view1_frame_000012.png",
+   "verify/vggt_view2_frame_000029.png",
+   "verify/vggt_view3_frame_000041.png",
+   "verify/vggt_view4_frame_000048.png",
+   "verify/vggt_view5_frame_000057.png"
+  ],
+  "cameras": "VGGT, held-out frames"
  },
  "diorama": {
   "stl": "diorama.stl",
-  "scale_ratio": 0.4454,
-  "scale_text": "1:2.2",
+  "scale_ratio": 0.2073,
+  "scale_text": "1:4.8",
   "size_mm": [
-   256.0,
-   218.8,
-   34.9
+   250.9,
+   124.4,
+   49.7
   ],
   "bed_mm": [
    256.0,
@@ -179,27 +240,18 @@
   ],
   "watertight": true,
   "objects": [
-   "black_case",
-   "striped_mug"
+   "table",
+   "coin",
+   "mug",
+   "case",
+   "candle"
   ],
-  "repairs": [
-   "black_case: trimesh_repair",
-   "striped_mug: trimesh_repair"
-  ],
-  "warnings": [
-   "5% of sampled surface points are thinner than 1.2 mm at this scale: thin walls/handles may not print",
-   "scaled to 1:2.2 to fit the 256 mm bed: real sizes are 2.2x larger"
-  ],
-  "thin_feature_fraction": 0.054
+  "warnings": []
  },
  "skipped": [
   {
-   "name": "candle in red holder",
-   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
-  },
-  {
    "name": "silver incense burner",
-   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+   "reason": "not part of this scene build (shiny metal and mirror panels)"
   }
  ]
 }

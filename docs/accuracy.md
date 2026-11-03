@@ -70,13 +70,37 @@ working feature. Causes, plainly:
 - The frames with a large mug and the card together (43-47 of the 2 fps extraction) were not among the 12 kept, and the SAM call cap
   for the run (25) was spent.
 
+## d) Scene mode v2, coin scale, VGGT cameras, triangulated placement (`runs/desk_v2`, 2026-11-03)
+
+Video `pipeline/samples/desk_scene_coin.mp4` (33 s, about one lap). VGGT-1B cameras on all 66 frames (2 fps). Scale from the coin measured
+on the fitted table plane in 5 frames (plane method vs depth method 1.1% apart, spread 0.2%). The coin edge is re-segmented at half
+intensity because the colour detector kept only the coin's bright core (about 20% short in diameter). That was found while looking at why
+the first mug came out too large, so this result is partly informed by hindsight; the correction itself uses only the coin pixels.
+Objects are placed by triangulating their mask centroids over 6-7 fit frames; scale and yaw are fitted to SAM silhouettes in those frames
+only. The IoU below is measured on 6 other, held-out frames.
+
+| object | dimension | real mm | model mm | error % | model scale from |
+|---|---|---:|---:|---:|---|
+| mug | height | 70 | 74.3 | +6.1 | coin, 21.5 mm, on the VGGT table plane, 5 frames; layout, not metrology |
+| mug | rim_diameter | 85 | 77.4 | -8.9 | coin, 21.5 mm, on the VGGT table plane, 5 frames; layout, not metrology |
+| mug | base_diameter | 65 | 61.7 | -5.1 | coin, 21.5 mm, on the VGGT table plane, 5 frames; layout, not metrology |
+
+Mean absolute error 6.7%, worst 8.9%.
+
+Table top (stadium fitted to 15 fused SAM 3.1 masks on the VGGT plane, fit IoU 0.975): 121.0 x 60.0 cm, corner radius 29.4 cm (a full
+stadium). Not checked against a ruler: no table measurement was given. Thickness 2 cm is an estimate.
+
+Silhouette IoU on the 6 held-out frames (VGGT cameras): mug 0.608, black case 0.609, candle in red holder 0.710, mean 0.643; table top
+0.582. One Muse Spark correction round proposed 3 moves; none improved IoU, so before and after are equal. The mug's worst view (0.265) is
+one where the mug is cut off at the image edge.
+
 ## Side by side (mug)
 
-| dimension | real mm | a) coin, Object mode | b) coin, scene mode | c) card, scene mode |
-|---|---:|---:|---:|---:|
-| height | 70 | 71.3 (+1.9%) | 65.6 (-6.3%) | 81.8 (+16.9%) |
-| rim diameter | 85 | 88.1 (+3.7%) | 87.7 (+3.2%) | 77.5 (-8.8%) |
-| base diameter | 65 | 63.8 (-1.9%) | 66.8 (+2.7%) | 57.0 (-12.3%) |
+| dimension | real mm | a) coin, Object mode | b) coin, scene mode | c) card, scene mode | d) coin, scene v2 |
+|---|---:|---:|---:|---:|---:|
+| height | 70 | 71.3 (+1.9%) | 65.6 (-6.3%) | 81.8 (+16.9%) | 74.3 (+6.1%) |
+| rim diameter | 85 | 88.1 (+3.7%) | 87.7 (+3.2%) | 77.5 (-8.8%) | 77.4 (-8.9%) |
+| base diameter | 65 | 63.8 (-1.9%) | 66.8 (+2.7%) | 57.0 (-12.3%) | 61.7 (-5.1%) |
 
 ## Other runs (not headline)
 

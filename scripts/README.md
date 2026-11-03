@@ -8,6 +8,7 @@
 | `check_contrast.mjs` | WCAG contrast of every text/background token pair in both themes (`viewer/assets/tokens.css`); exits 1 below 4.5:1 (3:1 for non-text). |
 | `record_motion.mjs` | Records `docs/ui/motion_home.webm` and `motion_edit.webm` and reports layout shift (CLS) and long frames; `REDUCED=1` measures the same flows with motion off. |
 | `make_brand.mjs` | Writes the logo, banner, social preview, favicons and PWA icons from the app tokens. |
+| `scene_survey.py` | What each sample video contains: 24 frames, one Muse Spark contact-sheet call per video, free coin/card detectors. |
 | `card_preflight.py` | Checks whether a bank card is found (SAM 3.1, then the rectangle detector) in the frames a scene run will use; writes a contact sheet. |
 | `quick_views.py` | Shaded views of a GLB/STL from several angles, without a GPU or browser. |
 | `part_edit_live.py` | Live check of part edits with real Muse Wonder and Muse Spark (call counts capped). Spends API calls. |

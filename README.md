@@ -12,7 +12,7 @@
 
 - **Object mode.** Film an object next to a coin. You get a textured 3D model, its size in mm, and an STL in millimetres. On the one mug measured with a ruler, the model was within 3.7%.
 - **AI Edit.** Type "make the handle 2 mm thicker". Muse Wonder applies exact geometry tools, Muse Spark checks before/after renders, and every version can be undone.
-- **Map mode.** Film a desk. Each object is found, rebuilt and placed at one scale, and a diorama STL fits a 256 mm print bed.
+- **Map mode.** Film a desk. VGGT gives every frame a camera, the table top is fused from SAM masks into one stadium shape, each object (mug, case, candle) is rebuilt with SAM 3D and placed by triangulation, the coin is added as known geometry, and a diorama STL fits a 256 mm print bed. Held-out silhouette overlap: mean IoU 0.64.
 - **Phone app.** Upload from the phone; a laptop worker processes the video, and the result opens in the same viewer.
 
 Calm dark theme by default, and a light theme (sun/moon button in the viewer, account menu in the web app; the first visit follows your system setting).
