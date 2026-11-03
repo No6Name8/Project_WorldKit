@@ -9,7 +9,8 @@
     "dev": "npm run prepare-viewer && vite",
     "build": "npm run prepare-viewer && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "node --test tests/lib.test.js"
+    "test": "node --test tests/lib.test.js",
+    "check:live": "node ../scripts/check_live.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
