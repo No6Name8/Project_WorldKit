@@ -82,6 +82,9 @@
           <label class="file-btn"><button id="btn-load-scene" type="button">Scene folder</button><input id="file-scene" type="file" webkitdirectory multiple /></label>
           <label class="file-btn"><button id="btn-load-label" type="button">GLB file</button><input id="file-load" type="file" accept=".glb,.gltf" /></label>
         </div>
+        <div class="row" title="The second desk scene: 113 s, three laps, bank card as the scale reference, table base and incense burner">
+          <button id="btn-demo-desk3" class="grow">Demo: desk, three laps</button>
+        </div>
         <div class="row" title="Older bundled reconstructions (not coin-scaled)">
           <button id="btn-demo-mug">Demo: mug</button>
           <button id="btn-demo-scene">Demo: mug + table</button>
@@ -1362,8 +1365,9 @@ document.getElementById("btn-demo-run").onclick = async () => {
     else await loadDemoMug();
   } catch (e) { logEntry(`FAILED: demo run: ${e}`, true); }
 };
-window.__loadDemoRun = (kind) => (kind === "map" ? loadDemoDesk() : loadDemoMug());
+window.__loadDemoRun = (kind) => (kind === "map" ? loadDemoDesk() : kind === "desk3" ? loadSceneFromUrl("assets/demo/run_desk3/") : loadDemoMug());
 document.getElementById("btn-demo-mug").onclick = () => loadObjectFromUrls("assets/demo/mug/model.glb", "assets/demo/mug/report.json", "model.glb").catch((e) => logEntry(`Demo failed: ${e}`, true));
+document.getElementById("btn-demo-desk3").onclick = () => loadSceneFromUrl("assets/demo/run_desk3/").catch((e) => logEntry(`Demo failed: ${e}`, true));
 document.getElementById("btn-demo-scene").onclick = () => loadSceneFromUrl("assets/demo/scene/").catch((e) => logEntry(`Demo failed: ${e}`, true));
 window.__loadObjectFromUrls = loadObjectFromUrls;
 window.__loadSceneFromUrl = loadSceneFromUrl;

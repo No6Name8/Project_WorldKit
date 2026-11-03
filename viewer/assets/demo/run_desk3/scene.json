@@ -1,0 +1,300 @@
+{
+ "worldkit_scene": 1,
+ "mode": "map",
+ "source_video": "desk_scene_card.mp4",
+ "source_frames": 113,
+ "video_seconds": 113,
+ "units": "centimetres on the table plane (Y up, origin at the table centre)",
+ "cm_per_scene_unit": 1.0,
+ "scale_source": {
+  "text": "scale source: card 85.6 x 54.0 mm, 4 corners measured on the table plane in 7 frames (VGGT cameras)",
+  "kind": "card",
+  "name": "card",
+  "size_mm": [
+   85.6,
+   54.0
+  ],
+  "object_id": "reference"
+ },
+ "layout_method": "mask-centroid rays triangulated over the fit frames (VGGT cameras), dropped onto the fitted table plane; scale and yaw fitted to the SAM silhouettes in the fit frames; the case yaw seeded by its footprint's principal axis",
+ "objects": [
+  {
+   "id": "table",
+   "name": "table (top and base)",
+   "mesh": "objects/table/model.glb",
+   "role": "parent",
+   "printable": false,
+   "reconstruction_model": {
+    "name": "stadium fitted to fused SAM 3.1 table masks on the VGGT plane",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "rotation_deg": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    118.3,
+    14.6,
+    56.3
+   ],
+   "note": "top: stadium from the fused masks, thickness 2.0 cm estimated (not measured); base (rings, posts) estimated from frames; colours = median of the masks"
+  },
+  {
+   "id": "reference",
+   "name": "reference: card 85.6 x 54 mm",
+   "mesh": "objects/reference/model.glb",
+   "role": "child",
+   "printable": false,
+   "is_scale_reference": true,
+   "reconstruction_model": {
+    "name": "known geometry (not reconstructed)",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     -1.5491628138662528,
+     0.0,
+     -4.464327196433496
+    ],
+    "rotation_deg": [
+     0,
+     -122.05119377474546,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    8.559999999999999,
+    0.076,
+    5.4
+   ],
+   "note": "ID-1 card, 0.76 mm thick (standard)"
+  },
+  {
+   "id": "mug",
+   "name": "striped mug",
+   "mesh": "objects/mug/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/mug/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     -35.47990251026522,
+     0.0,
+     -3.3547665410376344
+    ],
+    "rotation_deg": [
+     0.0,
+     270.0,
+     0.0
+    ],
+    "scale": [
+     5.876414161367711,
+     5.876414161367711,
+     5.876414161367711
+    ]
+   },
+   "size_cm": [
+    11.75,
+    8.58,
+    8.92
+   ],
+   "size_mm": [
+    117.5,
+    85.8,
+    89.2
+   ],
+   "is_scale_reference": false
+  },
+  {
+   "id": "case",
+   "name": "black case",
+   "mesh": "objects/case/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/case/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     8.131977043871343,
+     0.0,
+     14.078970567739633
+    ],
+    "rotation_deg": [
+     0.0,
+     187.0,
+     0.0
+    ],
+    "scale": [
+     7.5422985061281445,
+     7.5422985061281445,
+     7.5422985061281445
+    ]
+   },
+   "size_cm": [
+    15.07,
+    4.95,
+    6.09
+   ],
+   "size_mm": [
+    150.7,
+    49.5,
+    60.9
+   ],
+   "is_scale_reference": false
+  },
+  {
+   "id": "burner",
+   "name": "incense burner (bokhoor stand)",
+   "mesh": "objects/burner/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/burner/model_print.stl",
+   "reconstruction_model": {
+    "name": "parametric",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "built": "revolved profile, estimated (radius vs height from the SAM silhouettes in several views, VGGT scale)",
+   "transform": {
+    "position": [
+     23.570375636673692,
+     0.0,
+     -12.96539007480327
+    ],
+    "rotation_deg": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scale": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "size_cm": [
+    15.28,
+    30.25,
+    15.28
+   ],
+   "size_mm": [
+    152.8,
+    302.5,
+    152.8
+   ],
+   "is_scale_reference": false
+  },
+  {
+   "id": "bottle",
+   "name": "water bottle",
+   "mesh": "objects/bottle/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/bottle/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     -12.213308565218766,
+     0.0,
+     -17.28502341066687
+    ],
+    "rotation_deg": [
+     0.0,
+     60.0,
+     0.0
+    ],
+    "scale": [
+     8.205749919434975,
+     8.205749919434975,
+     8.205749919434975
+    ]
+   },
+   "size_cm": [
+    4.99,
+    16.41,
+    5.0
+   ],
+   "size_mm": [
+    49.9,
+    164.1,
+    50.0
+   ],
+   "is_scale_reference": false
+  }
+ ],
+ "verify": {
+  "mean_iou_before": 0.542,
+  "mean_iou_after": 0.542,
+  "images": [
+   "verify/vggt_view0_frame_000006.png",
+   "verify/vggt_view1_frame_000017.png",
+   "verify/vggt_view2_frame_000051.png",
+   "verify/vggt_view3_frame_000072.png",
+   "verify/vggt_view4_frame_000084.png",
+   "verify/vggt_view5_frame_000090.png"
+  ],
+  "cameras": "VGGT, held-out frames"
+ },
+ "diorama": {
+  "stl": "diorama.stl",
+  "scale_ratio": 0.2107,
+  "scale_text": "1:4.7",
+  "size_mm": [
+   250.9,
+   136.9,
+   93.4
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "table",
+   "reference",
+   "mug",
+   "case",
+   "burner",
+   "bottle"
+  ],
+  "warnings": []
+ },
+ "skipped": []
+}

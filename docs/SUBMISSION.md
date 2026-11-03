@@ -66,6 +66,24 @@ Only the models and the vendored libraries (three.js, Rapier, fonts) come from o
 - Live site: https://web-flame-psi-45.vercel.app (demo viewer without an account: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1)
 - Demo video: TODO (add the link after upload)
 
+## 3D environment
+
+Map mode turns one phone video of a desk into a 3D environment. It reconstructs:
+
+- a real-size table: a stadium top fused from SAM 3.1 masks on the VGGT plane, plus the gold base estimated from the frames;
+- the objects: SAM 3D Objects meshes, or a revolved silhouette profile for the incense burner;
+- the scale reference (coin or bank card) as known geometry;
+- a printable diorama.
+
+Objects are placed by triangulating their mask centres across VGGT cameras. The silhouette overlap is measured on 6 held-out frames:
+
+| Desk | Held-out mean IoU | Reference | Mug vs ruler |
+|---|---|---|---|
+| Coin desk, 33 s (default demo) | 0.643 | coin | +6.1 / -8.9 / -5.1 % |
+| Three-lap desk, 113 s | 0.542 | card | +22.6 / +2.8 / -1.8 % |
+
+The two scales disagree on the table size by 2-6 %. The table height and base shapes are estimates.
+
 ## What makes it different
 
 WorldKit checks its output against the real object instead of only showing a 3D model. Scale comes from a visible reference and is scored against a ruler; the model reports which parts are observed and which are generated. AI edits are made by geometry tools rather than by regenerating the mesh, so "2 mm thicker" means 2 mm. Each edit is checked twice: by deterministic tests and by a second model looking at renders. Failures are kept in the open; the card run's 17% error is published next to the 2% result.

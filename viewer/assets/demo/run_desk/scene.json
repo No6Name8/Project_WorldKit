@@ -2,6 +2,8 @@
  "worldkit_scene": 1,
  "mode": "map",
  "source_video": "desk_scene_coin.mp4",
+ "source_frames": 66,
+ "video_seconds": 33,
  "units": "centimetres on the table plane (Y up, origin at the table centre)",
  "cm_per_scene_unit": 1.0,
  "scale_source": {
@@ -9,7 +11,7 @@
   "kind": "coin",
   "name": "coin",
   "size_mm": 21.5,
-  "object_id": "coin"
+  "object_id": "reference"
  },
  "layout_method": "mask-centroid rays triangulated over the fit frames (VGGT cameras), dropped onto the fitted table plane; scale and yaw fitted to the SAM silhouettes in the fit frames; the case yaw seeded by its footprint's principal axis",
  "objects": [
@@ -46,12 +48,12 @@
     2.0,
     60.0
    ],
-   "note": "tabletop only (no legs); thickness 2.0 cm estimated (not measured); colour = median of the table masks"
+   "note": "top: stadium from the fused masks, thickness 2.0 cm estimated (not measured); tabletop only (no legs); colours = median of the masks"
   },
   {
-   "id": "coin",
+   "id": "reference",
    "name": "reference: coin 21.5 mm",
-   "mesh": "objects/coin/model.glb",
+   "mesh": "objects/reference/model.glb",
    "role": "child",
    "printable": false,
    "is_scale_reference": true,
@@ -68,7 +70,7 @@
     ],
     "rotation_deg": [
      0,
-     0,
+     0.0,
      0
     ],
     "scale": [
@@ -241,7 +243,7 @@
   "watertight": true,
   "objects": [
    "table",
-   "coin",
+   "reference",
    "mug",
    "case",
    "candle"
@@ -251,7 +253,7 @@
  "skipped": [
   {
    "name": "silver incense burner",
-   "reason": "not part of this scene build (shiny metal and mirror panels)"
+   "reason": "not part of this scene build"
   }
  ]
 }

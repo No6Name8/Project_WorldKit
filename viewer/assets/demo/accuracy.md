@@ -94,13 +94,36 @@ Silhouette IoU on the 6 held-out frames (VGGT cameras): mug 0.608, black case 0.
 0.582. One Muse Spark correction round proposed 3 moves; none improved IoU, so before and after are equal. The mug's worst view (0.265) is
 one where the mug is cut off at the image edge.
 
+## e) Scene mode, card scale, three laps (`runs/desk_card3`, 2026-11-03)
+
+Video `pipeline/samples/desk_scene_card.mp4` (113 s, three laps), VGGT on 113 frames (1 fps). Scale from the bank card: the rectangle
+detector found it in 42 frames; 7 passed the checks on the table plane (rectangular, ID-1 aspect within 6%), spread 1.1%. The mug was
+found by SAM 3.1 in only 4 of 15 frames, so its scale rests on 3 fit frames.
+
+| object | dimension | real mm | model mm | error % | model scale from |
+|---|---|---:|---:|---:|---|
+| mug | height | 70 | 85.8 | +22.6 | card 85.6 x 54 mm, 4 corners on the VGGT table plane, 7 frames; layout, not metrology |
+| mug | rim_diameter | 85 | 87.4 | +2.8 | card 85.6 x 54 mm, 4 corners on the VGGT table plane, 7 frames; layout, not metrology |
+| mug | base_diameter | 65 | 63.8 | -1.8 | card 85.6 x 54 mm, 4 corners on the VGGT table plane, 7 frames; layout, not metrology |
+
+Mean absolute error 9.1%, worst 22.6% (height).
+
+Table top 118.3 x 56.3 cm (corner radius 21.6 cm, stadium fit IoU 0.879). The same table measured from the coin video (d) is
+121.0 x 60.0 cm: card vs coin scale differ by -2.2% on length and -6.2% on width. Neither is ruler-checked. Table height 14.6 cm and the
+gold base (lower ring, 4 posts, rim) are estimated from VGGT points under SAM 3.1 frame masks; VGGT depth below the top looks compressed,
+so the height is likely low (a camera plane sweep was tried and was inconclusive).
+
+Silhouette IoU on 6 held-out frames (VGGT cameras): incense burner 0.639 (revolved profile: its SAM 3D mesh was not watertight),
+black case 0.627, water bottle 0.381, mug 0.185 (one held-out frame); mean 0.542; table top 0.501. One Muse Spark round: no correction
+improved IoU.
+
 ## Side by side (mug)
 
-| dimension | real mm | a) coin, Object mode | b) coin, scene mode | c) card, scene mode | d) coin, scene v2 |
-|---|---:|---:|---:|---:|---:|
-| height | 70 | 71.3 (+1.9%) | 65.6 (-6.3%) | 81.8 (+16.9%) | 74.3 (+6.1%) |
-| rim diameter | 85 | 88.1 (+3.7%) | 87.7 (+3.2%) | 77.5 (-8.8%) | 77.4 (-8.9%) |
-| base diameter | 65 | 63.8 (-1.9%) | 66.8 (+2.7%) | 57.0 (-12.3%) | 61.7 (-5.1%) |
+| dimension | real mm | a) coin, Object mode | b) coin, scene mode | c) card, scene mode | d) coin, scene v2 | e) card, three laps |
+|---|---:|---:|---:|---:|---:|---:|
+| height | 70 | 71.3 (+1.9%) | 65.6 (-6.3%) | 81.8 (+16.9%) | 74.3 (+6.1%) | 85.8 (+22.6%) |
+| rim diameter | 85 | 88.1 (+3.7%) | 87.7 (+3.2%) | 77.5 (-8.8%) | 77.4 (-8.9%) | 87.4 (+2.8%) |
+| base diameter | 65 | 63.8 (-1.9%) | 66.8 (+2.7%) | 57.0 (-12.3%) | 61.7 (-5.1%) | 63.8 (-1.8%) |
 
 ## Other runs (not headline)
 

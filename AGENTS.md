@@ -46,6 +46,30 @@ docs/                accuracy, architecture, submission text, demo script, deplo
 
 Not Meta: TRELLIS (hosted fallback, `reconstruct.py`), trimesh/manifold3d, Rapier, three.js, Supabase, Vercel.
 
+## 3D environment (Map mode)
+
+Map mode turns one phone video of a desk into a 3D environment: a real-size table, the objects on it, the scale reference object as known geometry, and a printable diorama. Two scenes are bundled. In the viewer, **Demo run** in Map loads the coin desk, and **Demo: desk, three laps** (Developer tools) loads the second.
+
+Screenshots: `docs/ui/desk_v2_*` (coin desk) and `docs/ui/desk3_*` (three-lap desk).
+
+| | Coin desk (default demo) | Three-lap desk |
+|---|---|---|
+| Objects | table top, coin (reference), mug, case, candle in holder: 3 SAM 3D meshes | table top + base, card (reference), mug, case, bottle (SAM 3D), incense burner (revolved profile) |
+| Scale | coin 21.5 mm measured on the table plane, 5 frames | card 85.6 x 54 mm, 4 corners on the table plane, 7 frames |
+| Held-out silhouette IoU (6 frames, VGGT cameras) | mean 0.643 (mug 0.61, case 0.61, candle 0.71; table 0.58) | mean 0.542 (burner 0.64, case 0.63, bottle 0.38, mug 0.19; table 0.50) |
+| Mug vs ruler (70 / 85 / 65 mm) | +6.1 / -8.9 / -5.1 % | +22.6 / +2.8 / -1.8 % (SAM found the mug in only 4 frames) |
+| Table top | 121.0 x 60.0 cm stadium | 118.3 x 56.3 cm (card vs coin scale: -2.2 % length, -6.2 % width) |
+| Not measured, estimated | table thickness 2 cm; table size not ruler-checked | table height 14.6 cm (likely low), ring and post sizes, burner shape |
+
+How it is built (`pipeline/worldkit/desk.py`):
+
+1. VGGT gives every frame a camera.
+2. The table top is fused from SAM 3.1 masks projected onto the fitted plane, then fitted as a stadium.
+3. Objects are rebuilt with SAM 3D and placed by triangulating their mask centres across views.
+4. Scale and rotation are fitted on some frames; the IoU above is measured on 6 others.
+
+Details and the full tables are in [docs/accuracy.md](docs/accuracy.md).
+
 ## Main commands (Windows)
 
 From the repo root:

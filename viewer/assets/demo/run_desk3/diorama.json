@@ -1,0 +1,25 @@
+{
+ "stl": "diorama.stl",
+ "scale_ratio": 0.2107,
+ "scale_text": "1:4.7",
+ "size_mm": [
+  250.9,
+  136.9,
+  93.4
+ ],
+ "bed_mm": [
+  256.0,
+  256.0,
+  256.0
+ ],
+ "watertight": true,
+ "objects": [
+  "table",
+  "reference",
+  "mug",
+  "case",
+  "burner",
+  "bottle"
+ ],
+ "warnings": []
+}

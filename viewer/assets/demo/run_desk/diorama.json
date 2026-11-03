@@ -15,7 +15,7 @@
  "watertight": true,
  "objects": [
   "table",
-  "coin",
+  "reference",
   "mug",
   "case",
   "candle"
