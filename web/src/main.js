@@ -12,7 +12,7 @@ const app = document.getElementById("app");
 const ctx = { session: null, user: null, navigate: (h) => { location.hash = h; }, rerender: () => route() };
 let cleanup = null;
 
-const LOGO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="square" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>';
+const LOGO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7"/><path d="M12 11.5v10" style="stroke:var(--fg-accent)"/></svg>';
 
 const CRUMBS = { home: [["Projects", "#/projects"], ["New project", "#/new"]], projects: [["Projects"]], new: [["Projects", "#/projects"], ["New project"]], help: [["Help"]], login: [["Sign in"]] };
 const crumbHtml = (name) => (CRUMBS[name] || []).map(([t, h], i, a) => `${i ? '<span class="sep" aria-hidden="true">/</span>' : ""}${h ? `<a href="${h}">${t}</a>` : `<b>${t}</b>`}`).join("");
