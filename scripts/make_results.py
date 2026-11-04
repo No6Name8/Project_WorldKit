@@ -101,6 +101,10 @@ def main() -> None:
                            "python -m worldkit.object samples/mug_on_table.mp4 --out runs/mug_grounded --object mug --coin saudi-25-halalas "
                            "--mesh-backend import --mesh-file runs/final_e2e/model.glb   (reconstructed: argv is not logged; the report records the imported "
                            "SAM 3D mesh from runs/final_e2e, sha256 in the copied report)")),
+        ("a2", object_claim("object_mug_coin_web_run", RUNS / "web" / "999042e1-e1a2-4b49-861e-ca449f14d8a8" / "run", mug_v,
+                            "python -m worldkit.object video.mp4 --out run --object mug --coin saudi-25-halalas   (run by python -m worldkit.worker --once "
+                            "on a real upload to the live site, 2026-11-04; no dry run; a fresh SAM 3D Objects mesh. The worker's downloaded video is "
+                            "byte-identical to mug_on_table.mp4; see docs/results/e2e_web_real.json)")),
         ("b", mapmode_claim("scene_desk_coin_v1", RUNS / "desk_coin", SAMPLES / "desk_scene_coin.mp4",
                             "python -m worldkit.scene samples/desk_scene_coin.mp4 --out runs/desk_coin --coin saudi-25-halalas --vggt --fresh --keep-frames 20", "striped mug")),
         ("c", mapmode_claim("scene_desk_card_v1", RUNS / "desk_card", SAMPLES / "desk_scene_card.mp4",

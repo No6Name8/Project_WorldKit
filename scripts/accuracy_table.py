@@ -128,7 +128,22 @@ def from_results(results_dir: Path, out: Path) -> str:
         if sec.get("before"):
             lines += [sec["before"], ""]
         c = claims.get(key)
-        if c and sec.get("scale_label"):
+        c2 = claims.get(key + "2")  # a second independent run of the same claim (a2: the fresh web-worker mesh), shown side by side
+        if c and c2 and sec.get("scale_label"):
+            r1, r2 = c["ruler"]["dimensions"], c2["ruler"]["dimensions"]
+            lines += [f"| object | dimension | real mm | {sec['run_labels'][0]} | {sec['run_labels'][1]} | run 2 vs run 1 |", "|---|---|---:|---:|---:|---:|"]
+            for dim, v in r1.items():
+                w = r2[dim]
+                lines.append(f"| {sec['object_label']} | {names[dim]} | {v['ruler_mm']:g} | {v['model_mm']:.1f} ({v['error_pct']:+.1f}%) | "
+                             f"{w['model_mm']:.1f} ({w['error_pct']:+.1f}%) | {100.0 * (w['model_mm'] - v['model_mm']) / v['model_mm']:+.1f}% |")
+            lines.append("")
+            worst = max(c["ruler"]["worst_abs_error_pct"], c2["ruler"]["worst_abs_error_pct"])
+            after = sec.get("after", "").format(m1=c["ruler"]["mean_abs_error_pct"], w1=c["ruler"]["worst_abs_error_pct"],
+                                                m2=c2["ruler"]["mean_abs_error_pct"], w2=c2["ruler"]["worst_abs_error_pct"], worst=worst)
+            if after:
+                lines += [after, ""]
+            lines += [f"Sources: `docs/results/{c['id']}.json` and `docs/results/{c2['id']}.json` (command, input SHA-256, measured STL SHA-256).", ""]
+        elif c and sec.get("scale_label"):
             lines += ["| object | dimension | real mm | model mm | error % | model scale from |", "|---|---|---:|---:|---:|---|"]
             for dim, v in c["ruler"]["dimensions"].items():
                 lines.append(f"| {sec['object_label']} | {names[dim]} | {v['ruler_mm']:g} | {v['model_mm']:.1f} | {v['error_pct']:+.1f} | {sec['scale_label']} |")
@@ -139,8 +154,8 @@ def from_results(results_dir: Path, out: Path) -> str:
                 lines += [after, ""]
             lines += [f"Source: `docs/results/{c['id']}.json` (command, input SHA-256, measured STL SHA-256).", ""]
         elif key.startswith("Side by side"):
-            cols = [k for k in "abcde" if k in claims]
-            hdr = {"a": "a) coin, Object mode", "b": "b) coin, scene mode", "c": "c) card, scene mode", "d": "d) coin, scene v2", "e": "e) card, three laps"}
+            cols = [k for k in ("a", "a2", "b", "c", "d", "e") if k in claims]
+            hdr = {"a": "a) coin, Object mode, run 1", "a2": "a) coin, Object mode, run 2 (fresh mesh)","b": "b) coin, scene mode", "c": "c) card, scene mode", "d": "d) coin, scene v2", "e": "e) card, three laps"}
             lines += ["| dimension | real mm | " + " | ".join(hdr[k] for k in cols) + " |", "|---|---:|" + "---:|" * len(cols)]
             for dim, label in (("height_mm", "height"), ("rim_diameter_mm", "rim diameter"), ("base_diameter_mm", "base diameter")):
                 vals = [claims[k]["ruler"]["dimensions"].get(dim) for k in cols]

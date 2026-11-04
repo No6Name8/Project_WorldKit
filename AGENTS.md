@@ -8,7 +8,7 @@ WorldKit turns a short phone video of a real object into a 3D model with its sca
 
 - **Input:** a video of an object next to a coin, or a bank card.
 - **Output:** a textured GLB, a print STL in mm, and `report.json`. The report records which model produced what, what was observed vs generated, and the scale source.
-- **Headline result:** one real mug against a ruler, Object mode, coin scale. Height +1.9%, rim +3.7%, base -1.9% (`docs/accuracy.md`, table a).
+- **Headline result:** one real mug against a ruler, Object mode, coin scale, two independent runs of the same video. Run 1 (stored SAM 3D mesh, the demo mug): height +1.9%, rim +3.7%, base -1.9%. Run 2 (fresh SAM 3D mesh, live web upload + worker): +6.0 / +2.4 / -5.5%. Mean error within about 5% across the two runs (2.5% and 4.6%), worst single dimension 6.0%; each run builds a new SAM 3D mesh, so numbers vary by a few percent (`docs/accuracy.md`, table a; `docs/results/object_mug_coin*.json`).
 
 ## Repo map
 
@@ -127,7 +127,7 @@ npm --prefix web run check:live                                      # the deplo
 - **Part edits work on the mug handle only.**
 - **Scene AI Edit has not been run live.**
 - **The hosted viewer has no AI Edit.** It needs `worldkit.serve` on the laptop.
-- **The web upload → worker path was run for real once** (2026-11-04, `docs/results/e2e_web_real.json`): it works, and a fresh SAM 3D mesh differs from the headline mesh by up to 4% (height).
+- **The web upload → worker path was run for real once** (2026-11-04, `docs/results/e2e_web_real.json`): it works, and its fresh SAM 3D mesh differs from run 1's mesh by up to 4.1% (height); it is run 2 in the headline table.
 
 ## Rules for agents working here
 

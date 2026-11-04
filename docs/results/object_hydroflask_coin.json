@@ -37,5 +37,9 @@
   "printprep": 0.41,
   "preview": 3.0
  },
- "report_copy": "docs/results/reports/object_hydroflask_coin_report.json"
+ "report_copy": "docs/results/reports/object_hydroflask_coin_report.json",
+ "rechecked": {
+  "date": "2026-11-04",
+  "result": "video unchanged (same SHA-256 and file time as the failed attempt, and pipeline/samples/object-2.mp4 is the same file), so it was not run again and nothing was tuned"
+ }
 }

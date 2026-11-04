@@ -1,0 +1,53 @@
+{
+ "id": "object_mug_coin_web_run",
+ "kind": "object",
+ "run": "pipeline/runs/web/999042e1-e1a2-4b49-861e-ca449f14d8a8/run",
+ "command": "python -m worldkit.object video.mp4 --out run --object mug --coin saudi-25-halalas   (run by python -m worldkit.worker --once on a real upload to the live site, 2026-11-04; no dry run; a fresh SAM 3D Objects mesh. The worker's downloaded video is byte-identical to mug_on_table.mp4; see docs/results/e2e_web_real.json)",
+ "input": {
+  "video": "pipeline/samples/mug_on_table.mp4",
+  "sha256": "540d0261ac46224aa91b68cd292cb1ba08efb9ca68e324f1e8603c044163c880"
+ },
+ "stl": {
+  "path": "pipeline/runs/web/999042e1-e1a2-4b49-861e-ca449f14d8a8/run/model_print.stl",
+  "sha256": "f78f29d9cbd027a3503336ead455b52423627b4349dd79c144901f3b2fa62274",
+  "bbox_mm": [
+   93.3,
+   115.2,
+   75.8
+  ]
+ },
+ "scale_source": "coin (coin, 2.15 cm diameter, 4 frames)",
+ "measure_method": "scripts/accuracy_table.measure (base plate excluded by the report's body height)",
+ "measured_mm": {
+  "height_mm": 74.2,
+  "_plate_mm": 1.57,
+  "rim_diameter_mm": 87.04,
+  "base_diameter_mm": 61.4,
+  "diameter_mm": 85.91,
+  "width_mm": 94.93,
+  "depth_mm": 89.45
+ },
+ "ruler": {
+  "dimensions": {
+   "height_mm": {
+    "ruler_mm": 70,
+    "model_mm": 74.2,
+    "error_pct": 6.0
+   },
+   "rim_diameter_mm": {
+    "ruler_mm": 85,
+    "model_mm": 87.0,
+    "error_pct": 2.4
+   },
+   "base_diameter_mm": {
+    "ruler_mm": 65,
+    "model_mm": 61.4,
+    "error_pct": -5.5
+   }
+  },
+  "mean_abs_error_pct": 4.6,
+  "worst_abs_error_pct": 6.0
+ },
+ "report_copy": "docs/results/reports/object_mug_coin_web_run_report.json",
+ "section": "a2"
+}

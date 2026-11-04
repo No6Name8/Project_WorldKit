@@ -10,7 +10,7 @@
 
 ## What it does
 
-- **Object mode.** Film an object next to a coin. You get a textured 3D model, its size in mm, and an STL in millimetres. On the one mug measured with a ruler, the model was within 3.7%.
+- **Object mode.** Film an object next to a coin. You get a textured 3D model, its size in mm, and an STL in millimetres. On the one mug measured with a ruler, two independent runs had a mean error within about 5% (2.5% and 4.6%; worst single dimension 6.0%).
 - **AI Edit.** Type "make the handle 2 mm thicker". Muse Wonder applies exact geometry tools, Muse Spark checks before/after renders, and every version can be undone.
 - **Map mode.** Film a desk. VGGT gives every frame a camera, the table top is fused from SAM masks into one stadium shape, each object (mug, case, candle) is rebuilt with SAM 3D and placed by triangulation, the coin is added as known geometry, and a diorama STL fits a 256 mm print bed. Held-out silhouette overlap: mean IoU 0.64.
 - **Phone app.** Upload from the phone; a laptop worker processes the video, and the result opens in the same viewer.
@@ -95,16 +95,19 @@ Function-level call sites are listed in [AGENTS.md](AGENTS.md).
 
 ## Results
 
-Object mode, scale estimated from a coin, against a ruler:
+Object mode, scale estimated from a coin, against a ruler. The same mug video, run twice:
 
-| Object | Dimension | Ruler | Model | Error |
+| Object | Dimension | Ruler | Run 1: stored SAM 3D mesh (CLI) | Run 2: fresh SAM 3D mesh (live web upload + worker) |
 |---|---|---:|---:|---:|
-| Mug (`runs/mug_grounded`, the bundled demo mug) | Height | 70 mm | 71.3 mm | +1.9% |
-| | Rim diameter | 85 mm | 88.1 mm | +3.7% |
-| | Base diameter | 65 mm | 63.8 mm | -1.9% |
+| Mug | Height | 70 mm | 71.3 mm (+1.9%) | 74.2 mm (+6.0%) |
+| | Rim diameter | 85 mm | 88.1 mm (+3.7%) | 87.0 mm (+2.4%) |
+| | Base diameter | 65 mm | 63.8 mm (-1.9%) | 61.4 mm (-5.5%) |
+| | Mean absolute error | | 2.5% | 4.6% |
 | Hydro Flask 32 oz bottle (`runs/object2`) | Height, body diameter, cap rim width | 240 / 90 / 70 mm | not scored | - |
 
-The Hydro Flask, a second object filmed the same way, could not be scored. SAM 3.1 found the coin in only 1 of 12 frames, so its scale stayed a placeholder. That leaves one mug as the only scored object. A fresh run of the same mug video through the live web app and the laptop worker gave +6.0 / +2.4 / -5.5%: SAM 3D generates a new mesh each run, and that variation is larger than the headline error ([docs/results/e2e_web_real.json](docs/results/e2e_web_real.json)).
+**The mean error is within about 5% across two independent runs; the worst single dimension is 6.0% (run 2's height).** Each run that builds a new SAM 3D mesh gets slightly different geometry, so the numbers vary by a few percent: the two runs differ from each other by +4.1 / -1.2 / -3.8%. Run 1 (`runs/mug_grounded`) is the bundled demo mug. It used a mesh generated earlier, and the CLI reproduces it exactly from the same video. Run 2 is a real upload on the live site, processed by the laptop worker with a new mesh ([docs/results/e2e_web_real.json](docs/results/e2e_web_real.json)). Run 1 is partly tuned by hindsight: the taper fit was added after seeing its base error. Run 2 used the same code afterwards, so it is the fairer estimate of a new run.
+
+The Hydro Flask, a second object filmed the same way, could not be scored. SAM 3.1 found the coin in only 1 of 12 frames, so its scale stayed a placeholder. That leaves one mug as the only scored object.
 
 The full tables, and how the ground truth was measured, are in [docs/accuracy.md](docs/accuracy.md). With a bank card instead of a coin (scene mode), the error rose to +16.9 / -8.8 / -12.3%: the mug was only about 65 px wide in the card frames, and SAM 3.1 never found the card.
 

@@ -13,23 +13,30 @@ diameter 65 mm. These are the only measured dimensions; the handle is not measur
 about 1 mm, which is 1.2-1.5% of these sizes. The values are stored in `pipeline/samples/ground_truth.json`. The coin was not measured:
 its 21.5 mm diameter (Saudi 25 halalas) is a looked-up value. The card uses the ISO ID-1 size, 85.6 x 54 mm.
 
-## a) HEADLINE: Object mode, coin scale, real mug vs ruler (`runs/mug_grounded`)
+## a) HEADLINE: Object mode, coin scale, real mug vs ruler, two independent runs
 
 Video `pipeline/samples/mug_on_table.mp4` (mug and coin on a round table, 16 s). Scale from the coin
 (21.5 mm, 4 frames) with the coin-grounded reshape (`scale_cal.calibrate_grounded`: the coin ellipse fixes the camera elevation; the
-height aspect and taper of the generated mesh are fitted to SAM 3.1 silhouettes, IoU only).
+height aspect and taper of the generated mesh are fitted to SAM 3.1 silhouettes, IoU only). Two runs of the same video and the same
+code: run 1 (`runs/mug_grounded`, the bundled demo mug) used a SAM 3D mesh generated earlier (`runs/final_e2e`); run 2 is the real
+upload on the live site processed by the laptop worker (2026-11-04), which generated a new SAM 3D mesh. Each run that builds a new
+SAM 3D mesh gets slightly different geometry, so the numbers vary by a few percent from run to run.
 
-| object | dimension | real mm | model mm | error % | model scale from |
-|---|---|---:|---:|---:|---|
-| mug | height | 70 | 71.3 | +1.9 | coin, 21.5 mm, 4 frames, grounded reshape |
-| mug | rim_diameter | 85 | 88.1 | +3.7 | coin, 21.5 mm, 4 frames, grounded reshape |
-| mug | base_diameter | 65 | 63.8 | -1.9 | coin, 21.5 mm, 4 frames, grounded reshape |
+| object | dimension | real mm | run 1: stored SAM 3D mesh (CLI), mm (error) | run 2: fresh SAM 3D mesh (web upload + worker), mm (error) | run 2 vs run 1 |
+|---|---|---:|---:|---:|---:|
+| mug | height | 70 | 71.3 (+1.9%) | 74.2 (+6.0%) | +4.1% |
+| mug | rim_diameter | 85 | 88.1 (+3.7%) | 87.0 (+2.4%) | -1.2% |
+| mug | base_diameter | 65 | 63.8 (-1.9%) | 61.4 (-5.5%) | -3.8% |
 
-Mean absolute error 2.5%, worst 3.7%. Caveats: one mug only; the silhouette IoU is flat over heights 70.5-72.9 mm, so the real
-uncertainty is about +-2%; the taper stage was added after seeing the base-diameter error (its fit uses no ground truth), so this result
-is partly tuned by hindsight and needs a second object to confirm. Run-to-run variation: the same video run fresh through the web app and the laptop worker (2026-11-04, a new SAM 3D mesh, `docs/results/e2e_web_real.json`) gave 74.2 / 87.0 / 61.4 mm (+6.0 / +2.4 / -5.5%). The CLI with the headline's own mesh reproduces 71.3 / 88.1 / 63.8 mm exactly from that same video, so the difference is the generated mesh, not the web path.
+Run 1: mean absolute error 2.5%, worst 3.7%. Run 2: mean absolute error 4.6%, worst 6.0%. So the mean error is within about 5%
+across two independent runs; the worst single dimension is 6.0% (run 2, height), and the two runs differ from each other by up to
+4.1% (height). The CLI with run 1's mesh reproduces 71.3 / 88.1 / 63.8 mm exactly from the worker's own
+copy of the video (`runs/cli_repro`, byte-identical input), so the difference between the runs is the generated mesh, not the web path
+(`docs/results/e2e_web_real.json`). Caveats: one mug only; the silhouette IoU is flat over heights 70.5-72.9 mm; the taper stage
+was added after seeing run 1's base-diameter error (its fit uses no ground truth), so run 1 is partly tuned by hindsight. Run 2 used
+the same code after that change and is the fairer estimate of a new run.
 
-Source: `docs/results/object_mug_coin.json` (command, input SHA-256, measured STL SHA-256).
+Sources: `docs/results/object_mug_coin.json` and `docs/results/object_mug_coin_web_run.json` (command, input SHA-256, measured STL SHA-256).
 
 ## b) Scene mode, coin scale, desk run (`runs/desk_coin`): layout, not metrology
 
@@ -135,11 +142,11 @@ Video `pipeline/samples/object2.mp4` (67 s; the bottle with the coin on a small 
 
 ## Side by side (mug)
 
-| dimension | real mm | a) coin, Object mode | b) coin, scene mode | c) card, scene mode | d) coin, scene v2 | e) card, three laps |
-|---|---:|---:|---:|---:|---:|---:|
-| height | 70 | 71.3 (+1.9%) | 65.6 (-6.3%) | 81.8 (+16.9%) | 74.3 (+6.1%) | 85.8 (+22.6%) |
-| rim diameter | 85 | 88.1 (+3.7%) | 87.7 (+3.2%) | 77.5 (-8.8%) | 77.4 (-8.9%) | 87.4 (+2.8%) |
-| base diameter | 65 | 63.8 (-1.9%) | 66.8 (+2.7%) | 57.0 (-12.3%) | 61.7 (-5.1%) | 63.8 (-1.8%) |
+| dimension | real mm | a) coin, Object mode, run 1 | a) coin, Object mode, run 2 (fresh mesh) | b) coin, scene mode | c) card, scene mode | d) coin, scene v2 | e) card, three laps |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| height | 70 | 71.3 (+1.9%) | 74.2 (+6.0%) | 65.6 (-6.3%) | 81.8 (+16.9%) | 74.3 (+6.1%) | 85.8 (+22.6%) |
+| rim diameter | 85 | 88.1 (+3.7%) | 87.0 (+2.4%) | 87.7 (+3.2%) | 77.5 (-8.8%) | 77.4 (-8.9%) | 87.4 (+2.8%) |
+| base diameter | 65 | 63.8 (-1.9%) | 61.4 (-5.5%) | 66.8 (+2.7%) | 57.0 (-12.3%) | 61.7 (-5.1%) | 63.8 (-1.8%) |
 
 ## Other runs (not headline)
 

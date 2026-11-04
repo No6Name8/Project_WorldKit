@@ -18,15 +18,15 @@ Indie Developer
 
 WorldKit turns a short phone video into a 3D model, with its scale estimated from a coin or card, that you can inspect, edit by typing, and 3D print.
 
-You film an object with a coin beside it. Muse Spark names the object and picks the best frame. SAM 3.1 segments the object and the coin in every frame, and SAM 3D Objects, running on a Modal A100, rebuilds the object as a textured mesh. The coin fixes the scale and camera angle, and the mesh's proportions are fitted to the SAM silhouettes. On a real mug measured with a ruler, the model's height, rim and base came within +1.9%, +3.7% and -1.9%.
+You film an object beside a coin. Muse Spark names it and picks the best frame, SAM 3.1 segments the object and coin in every frame, and SAM 3D Objects on a Modal A100 rebuilds the object as a textured mesh. The coin fixes the scale and camera angle, and the mesh's proportions are fitted to the SAM silhouettes. On a real mug measured with a ruler, two independent runs had a mean error within about 5% (height, rim, base: +1.9/+3.7/-1.9% and +6.0/+2.4/-5.5%); each new SAM 3D mesh varies slightly.
 
-The browser viewer shows the model with millimetre dimensions and where its scale came from. You can type an edit such as "make the handle 2 mm thicker". Muse Wonder chooses and calls exact geometry tools, SAM 3.1 has already located the handle on the mesh, and Muse Spark compares before and after renders. Deterministic checks must also pass, otherwise the edit is rejected. Every version can be undone, and the STL downloads in millimetres.
+The browser viewer shows the model with millimetre dimensions and where its scale came from. You can type an edit such as "make the handle 2 mm thicker". Muse Wonder chooses and calls exact geometry tools, SAM 3.1 has already located the handle on the mesh, and Muse Spark compares before and after renders. Deterministic checks must also pass. Every version can be undone, and the STL downloads in millimetres.
 
-Scene mode finds several objects on a desk, builds each one, and places them together at one scale. VGGT cameras are used to check that layout.
+Scene mode finds several objects on a desk, builds each one, and places them together at one scale. VGGT cameras check that layout.
 
 A phone web app uploads videos; a laptop worker processes them.
 
-WorldKit reports its failures too: a run scaled by a bank card instead of a coin missed by up to 17%, published next to the good result.
+WorldKit reports its failures too: a run scaled by a bank card instead of a coin missed by up to 17%, and is published too.
 
 ## How each Meta model is used
 
