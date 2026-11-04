@@ -24,7 +24,7 @@ powershell -ExecutionPolicy Bypass -File scripts\demo_reset.ps1
 ```
 
 This copies the clean coin-scaled mug to `pipeline\runs\demo_live` at v0, then starts the edit server (`worldkit.serve`, port 5070) and the scene
-viewer (`viewer\server.py`, port 5050), and opens <http://127.0.0.1:5070/?demo=1>. Run it again before every take: it stops the old
+viewer (`viewer\server.py`, port 5050), and opens <http://127.0.0.1:5070/?demo=1> on the Source tab (the reset also copies the mug's Source data: video, poster, frames). Run it again before every take: it stops the old
 servers and resets the edit history. On Git Bash, macOS or Linux, use `bash scripts/demo_reset.sh`.
 
 Check the edit server: the top bar must say "Muse Spark ready". If it says unavailable, `MODEL_API_KEY` is missing from `pipeline\.env`.
@@ -38,7 +38,7 @@ Check the edit server: the top bar must say "Muse Spark ready". If it says unava
    .venv\Scripts\python.exe -m worldkit.worker --once
    ```
    Decide before recording: a real run takes several minutes and Modal credits (cut the wait in the edit), and the real pipeline through the hosted path took 715 s in its one real run (2026-11-04), so rehearse it once. `--dry-run` publishes the bundled mug instead, and the voice-over must say so.
-3. **Chrome tab 1:** <http://127.0.0.1:5070/?demo=1>. The mug at v0, with Object, AI Edit and the SAM overlay.
+3. **Chrome tab 1:** <http://127.0.0.1:5070/?demo=1>. It opens on the **Source** tab: the original video (muted), the mug at v0 next to it, and the frames used. Viewer, AI Edit and the SAM overlay are one click away.
 4. **Chrome tab 2:** <http://127.0.0.1:5050/?demo=1>, switched to **Map**: the coin desk scene. For the second scene, use the Developer tools button "Demo: desk, three laps" on <http://127.0.0.1:5050/>, without `?demo=1`.
 5. **Slicer** (PrusaSlicer, Cura or Bambu Studio), units mm, an empty plate. Before the take, drop in the STL from tab 1's "Download STL (mm)" and check that it reads about 72.9 mm tall: the mug's 71.3 mm plus the base plate. Then clear the plate.
 6. **Downloads folder:** where "Download STL (mm)" saves, ready to drag into the slicer.
@@ -50,7 +50,7 @@ Check the edit server: the top bar must say "Muse Spark ready". If it says unava
 | 1 | Problem line: the mug on the desk, phone in hand | 10 s | 1 min |
 | 2 | Phone upload on the live site: New project → Object → video → progress → "uploaded" | 20 s | 2 min |
 | 3 | Worker on the laptop: claims the project → "processing" → "done" | 15 s (cut) | 5-10 min real, or 1 min with `--dry-run` |
-| 4 | Object result in tab 1: orbit, W/H/D cards, scale source; then the Accuracy tab, table a | 25 s | 2 min |
+| 4 | Tab 1 opens on Source: play about two seconds of the original video, then switch to Viewer: orbit, W/H/D cards, scale source; then the Accuracy tab, table a | 30 s | 2 min |
 | 5 | AI Edit: SAM overlay on, `make the handle 2 mm thicker`, stages and seconds, the row, Details | 35 s | about 20 s per edit, 2 min with retakes |
 | 6 | Undo back to v0 | 10 s | 30 s |
 | 7 | Optional: `make it exactly 12 cm tall`, the H card highlights (H 72.9 → 120.0 mm), then Undo | 10 s | 1 min |

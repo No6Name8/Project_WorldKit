@@ -57,11 +57,11 @@ def create_app(viewer_dir: Path, open_dir: Path | None = None) -> Flask:
         if open_dir is None or not open_dir.is_dir():
             return jsonify({"kind": None})
         if (open_dir / "scene.json").is_file():
-            return jsonify({"kind": "scene", "base": "/open/", "scene": "scene.json", "name": open_dir.name})
+            return jsonify({"kind": "scene", "base": "/open/", "scene": "scene.json", "name": open_dir.name, "source": (open_dir / "source" / "source.json").is_file()})
         if (open_dir / "model.glb").is_file():
             report = (open_dir / "report.json").is_file()
             return jsonify({"kind": "object", "glb": "/open/model.glb", "report": "/open/report.json" if report else None, "name": open_dir.name,
-                            "stl": "/open/model_print.stl" if (open_dir / "model_print.stl").is_file() else None})
+                            "stl": "/open/model_print.stl" if (open_dir / "model_print.stl").is_file() else None, "source": (open_dir / "source" / "source.json").is_file()})
         return jsonify({"kind": None, "error": f"{open_dir} has neither scene.json nor model.glb"})
 
     @app.get("/edit/state")

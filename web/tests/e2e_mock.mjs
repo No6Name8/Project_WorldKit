@@ -61,6 +61,14 @@ async function mockSupabase(page, state) {
       if (m === "DELETE") { state.deleted = url.searchParams.get("id"); return route.fulfill({ status: 204, headers: cors }); }
     }
     if (p.startsWith("/storage/v1/object/videos/") && m === "POST") { state.uploaded = { path: p.split("/videos/")[1], auth: req.headers()["authorization"], size: (req.postDataBuffer() || Buffer.alloc(0)).length }; return json({ Key: "videos/x" }); }
+    if (p.startsWith("/storage/v1/object/sign/videos/") && m === "POST") {  // the uploaded video for the Source tab
+      state.videoSigned = p.split("/sign/videos/")[1];
+      if (state.videoSignFail) return json({ statusCode: "404", error: "not_found", message: "Object not found" }, 400);
+      return json({ signedURL: `/object/sign/videos/${state.videoSigned}?token=t` });
+    }
+    if (p.startsWith("/storage/v1/object/sign/videos/") && m === "GET") {
+      return route.fulfill({ status: 200, headers: { ...cors, "content-type": "video/mp4" }, body: readFileSync(join(root, "viewer", "assets", "demo", "run_mug", "source", "mug_on_table.mp4")) });
+    }
     if (p === "/storage/v1/object/sign/results" && m === "POST") {
       const body = JSON.parse(req.postData());
       return json(body.paths.map((path) => ({ error: null, path, signedURL: `/object/sign/results/${path}?token=t` })));
@@ -181,6 +189,23 @@ async function mockSupabase(page, state) {
       check(`[${tag}] the viewer got the model, the STL download and the SAM part through signed URLs`, await fr.evaluate(() => !document.getElementById("btn-print-obj").disabled && window.__partsUi().enabled));
       await sleep(800);
       await shot("viewer");
+      // Source tab: the user's own uploaded video through a signed URL from the private videos bucket, next to the model
+      await frame.locator("#tab-source").click();
+      await fr.waitForFunction(() => { const v = document.getElementById("src-video-el"); return v.readyState >= 1; }, null, { timeout: 20000 }).catch(() => {});
+      const s1 = await fr.evaluate(() => ({ ...window.__source(), ready: document.getElementById("src-video-el").readyState }));
+      check(`[${tag}] Source tab plays the uploaded video from a signed videos-bucket URL, muted, with no error`,
+        state.videoSigned === `${UID}/p-done/video.mp4` && /\/sign\/videos\//.test(s1.src) && s1.muted && !s1.msg && s1.ready >= 1, JSON.stringify({ signed: state.videoSigned, src: s1.src.slice(-60), ready: s1.ready, msg: s1.msg }));
+      await shot("source");
+      state.videoSignFail = true;
+      await page.reload();
+      await frame.locator("#obj-name").filter({ hasText: "my mug" }).waitFor({ timeout: 40000 });
+      await frame.locator("#tab-source").click();
+      const fr2 = page.frames().find((f) => f.url().includes("/viewer/"));
+      const s2 = await fr2.evaluate(() => window.__source());
+      check(`[${tag}] a failed signed URL for the video is a clear message, and the model still opens`, /Could not open the original video: Object not found/.test(s2.msg) && s2.hidden && /mm/.test(await frame.locator("#obj-dims").innerText()), s2.msg);
+      await shot("source_error");
+      state.videoSignFail = false;
+      await frame.locator("#tab-viewer").click();
       await frame.locator("#btn-back").click();
       await page.waitForURL(/#\/projects/);
       check(`[${tag}] the viewer's Projects button goes back to the list`, true);

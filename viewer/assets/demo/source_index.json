@@ -1,0 +1,7 @@
+{
+ "runs": [
+  "assets/demo/run_desk/",
+  "assets/demo/run_mug/"
+ ],
+ "note": "bundled runs with Source-tab data (scripts/make_source_view.py)"
+}

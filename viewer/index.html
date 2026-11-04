@@ -49,6 +49,7 @@
     </div>
   </div>
   <div class="tabs" role="tablist" aria-label="Project sections">
+    <button id="tab-source" type="button" role="tab" aria-selected="false">Source</button>
     <button id="tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
     <button id="tab-ai" type="button" role="tab" aria-selected="false">AI Edit</button>
     <button id="btn-accuracy" type="button" role="tab" aria-selected="false">Accuracy</button>
@@ -158,6 +159,7 @@
     </div>
     <div id="vp-legend"><i></i><span id="vp-legend-text"></span></div>
     <div id="vp-part-legend" role="status"><i></i><span id="vp-part-legend-text"></span></div>
+    <div id="vp-src-cap" class="mono-free"><span class="dot" aria-hidden="true"></span><span id="vp-src-cap-text">Built from this video: Muse Spark, SAM 3.1, SAM 3D</span></div>
     <div id="vp-foot"><span id="vp-mesh"></span><span id="vp-grid" class="mono"></span></div>
     <div id="loading" role="status"><div class="bar"></div><span id="loading-text">Loading</span></div>
     <div id="verify-panel">
@@ -229,6 +231,28 @@
       </div>
     </section>
   </aside>
+
+  <!-- Source tab: the original video next to the model built from it (data: RUN/source/source.json, scripts/make_source_view.py) -->
+  <section id="src-card" class="card" aria-label="Original video">
+    <div class="card-h big"><h2>Original video</h2><span id="src-meta" class="mono"></span></div>
+    <div class="src-body">
+      <div class="src-player"><video id="src-video-el" controls playsinline muted loop preload="metadata" aria-label="Original video"></video>
+        <div id="src-novideo" class="src-empty" hidden></div></div>
+      <div class="src-side">
+        <div class="kv"><span class="lbl">File</span><span id="src-file" class="mono"></span></div>
+        <div class="kv"><span class="lbl">Length</span><span id="src-len" class="mono"></span></div>
+        <div class="kv"><span class="lbl">Frames used</span><span id="src-nframes" class="mono"></span></div>
+        <div id="src-frames-note" class="hint"></div>
+        <div id="src-msg" class="src-msg" role="alert" hidden></div>
+        <figure id="src-verify" hidden><img id="src-verify-img" alt="Held-out frame: the real frame on the left, the reconstruction rendered from the same camera on the right" /><figcaption id="src-verify-cap"></figcaption></figure>
+      </div>
+    </div>
+  </section>
+  <section id="src-strip" class="card" aria-label="Frames used">
+    <div class="card-h"><span>Frames used, with the SAM 3.1 mask outline</span><span class="hint">Click a frame to jump the video to it</span></div>
+    <div id="src-frames" class="src-frames"></div>
+    <div class="src-foot"><span id="src-scale"></span><span id="src-object"></span></div>
+  </section>
 
   <section id="accuracy-view" aria-label="Accuracy">
     <div class="card acc-card">
@@ -482,6 +506,7 @@ window.__sceneReady = false;
 window.__lastLoadError = null;
 
 function loadGLBFromArrayBuffer(arrayBuffer, label) {
+  clearSource();  // a URL loader sets the run's source again once the model is in
   return new Promise((resolve, reject) => {
     loader.parse(
       arrayBuffer,
@@ -1089,6 +1114,7 @@ window.__getSceneObjects = () => sceneObjects.map((o) => ({
 }
 
 async function loadSceneFromFiles(fileList) {
+  clearSource();
   const files = Array.from(fileList);
   const rel = (f) => (f.webkitRelativePath || f.name).replace(/\\/g, "/");
   const manifests = files.filter((f) => rel(f).endsWith("scene.json")).sort((a, b) => rel(a).length - rel(b).length);
@@ -1329,10 +1355,154 @@ window.__physicsState = () => (physics ? physics.state() : null);
 window.__physicsReset = () => { if (physics) { physics.reset(); physicsReadout(); } };
 window.__physicsSelfTest = async () => (await ensurePhysics()).selfTest();
 
+// --- Source tab: the original video next to the model built from it. Data: RUN/source/source.json (scripts/make_source_view.py: a re-encoded
+// copy of the video, a poster, thumbnails of the frames used and their SAM 3.1 mask outlines from the run's cache). Web projects pass a signed
+// URL for the uploaded video instead (no frames: the worker keeps them). Nothing here is generated: a missing piece is said, not drawn. ---
+const srcState = { base: null, doc: null, embed: null, token: 0 };
+const srcEl = (id) => document.getElementById(id);
+const srcEsc = (t) => String(t ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+let srcAutoPauseAt = 0;
+function srcAutoPause(v) { srcAutoPauseAt = performance.now(); v.pause(); }  // a pause by the page, not the user
+function clearSource() { srcState.token++; srcState.base = null; srcState.doc = null; srcState.embed = null; renderSource(); }
+async function setSource(base) {
+  const tok = ++srcState.token;
+  srcState.base = base; srcState.doc = null; srcState.embed = null;
+  let doc = null;
+  if (await hasSourceData(base)) {
+    try { const r = await fetch(resUrl(base + "source/source.json")); if (r.ok) doc = await r.json(); } catch (e) { /* no source data for this run */ }
+  }
+  if (tok !== srcState.token) return;
+  srcState.doc = doc && doc.worldkit_source ? doc : null;
+  renderSource();
+}
+// which runs have Source data: the bundled demos are listed in assets/demo/source_index.json, an opened run says so in /api/autoload
+// (asking for a file that is not there would put a 404 in the console)
+let srcIndex = null;
+window.__autoloadSource = false;
+async function hasSourceData(base) {
+  if (base === "/open/") return !!window.__autoloadSource;
+  if (!srcIndex) { try { const r = await fetch("assets/demo/source_index.json"); srcIndex = r.ok ? await r.json() : { runs: [] }; } catch (e) { srcIndex = { runs: [] }; } }
+  return (srcIndex.runs || []).includes(String(base).replace(/^\.\//, ""));
+}
+function setSourceEmbed(msg) {
+  srcState.token++;
+  srcState.base = null; srcState.doc = null;
+  srcState.embed = msg.video || { error: "the project page did not pass a video link" };
+  renderSource();
+}
+function fmtSec(s) { return s == null || !isFinite(s) ? "" : `${(+s).toFixed(1)} s`; }
+function renderSource() {
+  const doc = srcState.doc, emb = srcState.embed, v = srcEl("src-video-el");
+  const rep = sceneObjects.length > 1 ? window.__sceneManifest : window.__lastReport;
+  const url = doc ? resUrl(srcState.base + "source/" + doc.video) : emb && emb.url ? emb.url : "";
+  srcAutoPause(v);
+  v.muted = true;  // never starts with sound
+  if (url) { if (v.getAttribute("src") !== url) { v.src = url; v.poster = doc && doc.poster ? resUrl(srcState.base + "source/" + doc.poster) : ""; } }
+  else { v.removeAttribute("src"); v.removeAttribute("poster"); v.load(); }
+  v.hidden = !url;
+  const nov = srcEl("src-novideo");
+  nov.hidden = !!url;
+  nov.textContent = emb && emb.error ? "Video unavailable" : "No copy of the original video is stored with this run.";
+  const msg = srcEl("src-msg");
+  msg.hidden = !(emb && emb.error);
+  msg.textContent = emb && emb.error ? `Could not open the original video: ${emb.error}. The 3D model is still shown, here and in Viewer.` : "";
+  const name = (doc && doc.file_name) || (emb && emb.name) || (rep && (rep.source_video || rep.video) ? String(rep.source_video || rep.video).split(/[\\/]/).pop() : "");
+  const nFrames = (doc && doc.frames_used) || (rep && (rep.source_frames || rep.frames_extracted)) || null;
+  srcEl("src-file").textContent = name || "not recorded";
+  srcEl("src-len").textContent = fmtSec(doc ? doc.duration_s : rep && rep.video_seconds) || (url ? "…" : "not recorded");
+  srcEl("src-nframes").textContent = nFrames ? String(nFrames) : "not recorded";
+  srcEl("src-meta").textContent = [fmtSec(doc ? doc.duration_s : null), nFrames ? `${nFrames} frames used` : ""].filter(Boolean).join(" · ");
+  srcEl("src-frames-note").textContent = doc ? doc.frames_note || "" : emb ? "A web project stores the video and the model; the frames used stay on the laptop worker." : "";
+  // verify image (scene runs): the real held-out frame next to the reconstruction rendered from the same camera
+  const ver = doc && doc.verify;
+  srcEl("src-verify").hidden = !ver;
+  if (ver) { srcEl("src-verify-img").src = resUrl(srcState.base + "source/" + ver.img); srcEl("src-verify-cap").textContent = ver.label; }
+  // frames strip
+  const box = srcEl("src-frames");
+  box.textContent = "";
+  const frames = (doc && doc.frames) || [];
+  const [tw, th] = (doc && doc.thumb_size) || [9, 16];
+  box.style.setProperty("--thumb-ar", `${tw} / ${th}`);
+  for (const f of frames) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "src-frame"; b.setAttribute("aria-pressed", "false");
+    const t = f.time_s;
+    const outs = Object.entries(f.outlines || {});
+    if (!outs.length) b.classList.add("no-mask");
+    b.title = `${f.name}${t != null ? ` at ${t.toFixed(1)} s` : ", time not recorded"}${outs.length ? `; SAM 3.1 mask: ${outs.map(([o]) => o).join(", ")}` : "; no cached SAM 3.1 mask, so no outline"}${f.coin ? "; the coin was found here" : ""}`;
+    b.setAttribute("aria-label", b.title);
+    const img = document.createElement("img"); img.src = resUrl(srcState.base + "source/" + f.img); img.alt = ""; img.loading = "lazy"; b.appendChild(img);
+    if (outs.length) {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", `0 0 ${tw} ${th}`); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true");
+      for (const [obj, polys] of outs) for (const poly of polys) {
+        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.setAttribute("class", "src-outline"); p.dataset.object = obj;
+        p.setAttribute("d", "M" + poly.map(([x, y]) => `${x} ${y}`).join("L") + "Z");
+        svg.appendChild(p);
+      }
+      b.appendChild(svg);
+    }
+    const lab = document.createElement("span"); lab.className = "t"; lab.textContent = t != null ? `${t.toFixed(1)} s` : "time n/a"; b.appendChild(lab);
+    if (f.coin) { const g = document.createElement("span"); g.className = "tag"; g.textContent = "coin"; b.appendChild(g); }
+    if (t == null || !url) b.disabled = true;
+    else b.onclick = () => {
+      v.pause();
+      v.currentTime = Math.max(0, Math.min(t, (isFinite(v.duration) ? v.duration : t) - 0.05));
+      box.querySelectorAll(".src-frame").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    };
+    box.appendChild(b);
+  }
+  if (!frames.length) {
+    const h = document.createElement("div"); h.className = "hint";
+    h.textContent = emb ? "The frames used are not stored with a web project." : "No frames are stored with this run.";
+    box.appendChild(h);
+  }
+  const sc = (doc && doc.scale_source) || (sceneObjects[0] ? scaleSourceText(sceneObjects[0]).replace(/^scale source:\s*/i, "") : "");
+  srcEl("src-scale").innerHTML = sc ? `Scale source: <b>${srcEsc(sc)}</b>` : "Scale source: not calibrated";
+  const objName = (doc && doc.object) || (sceneObjects.length === 1 && sceneObjects[0].name) || sceneObjects.filter((o) => !o.missing).map((o) => o.name).join(", ");
+  srcEl("src-object").innerHTML = objName ? `${sceneObjects.length > 1 ? "Objects" : "Object"}: <b>${srcEsc(objName)}</b>` : "";
+  srcEl("vp-src-cap-text").textContent = `Built from this video: ${(doc && doc.built_with) || "Muse Spark, SAM 3.1, SAM 3D"}`;
+  if (document.body.dataset.tab === "source") playSourceMuted();
+}
+function playSourceMuted() {  // muted loop, only while the Source tab is shown, never under reduced motion
+  const v = srcEl("src-video-el");
+  if (!v.getAttribute("src") || REDUCED_MOTION || !v.muted || document.hidden || v.dataset.userPaused === "1") return;
+  v.play().catch(() => {});
+}
+(() => {
+  const v = srcEl("src-video-el");
+  v.addEventListener("loadedmetadata", () => { if (!srcState.doc || srcState.doc.duration_s == null) srcEl("src-len").textContent = fmtSec(v.duration); });
+  v.addEventListener("error", () => {
+    if (!v.getAttribute("src")) return;
+    const m = srcEl("src-msg"); m.hidden = false;
+    m.textContent = "Could not play the original video (the link may have expired, or the file is missing). The 3D model is still shown, here and in Viewer.";
+  });
+  v.addEventListener("pause", () => { if (performance.now() - srcAutoPauseAt > 400 && !document.hidden && !v.ended) v.dataset.userPaused = "1"; });
+  v.addEventListener("play", () => { v.dataset.userPaused = "0"; });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) srcAutoPause(v); else if (document.body.dataset.tab === "source") playSourceMuted(); });
+})();
+function onSourceTab(shown) {
+  const v = srcEl("src-video-el");
+  if (shown) playSourceMuted();
+  else srcAutoPause(v);
+}
+window.__source = () => {
+  const v = srcEl("src-video-el");
+  return { tab: document.body.dataset.tab, src: v.getAttribute("src") || "", poster: v.getAttribute("poster") || "", muted: v.muted, paused: v.paused, time: v.currentTime,
+    hidden: v.hidden, frames: document.querySelectorAll("#src-frames .src-frame").length, outlined: document.querySelectorAll("#src-frames .src-frame svg").length,
+    noMask: document.querySelectorAll("#src-frames .src-frame.no-mask").length, outlines: document.querySelectorAll("#src-frames .src-outline").length,
+    msg: srcEl("src-msg").hidden ? "" : srcEl("src-msg").textContent, verify: srcEl("src-verify").hidden ? "" : srcEl("src-verify-cap").textContent,
+    file: srcEl("src-file").textContent, length: srcEl("src-len").textContent, nframes: srcEl("src-nframes").textContent,
+    scale: srcEl("src-scale").textContent, object: srcEl("src-object").textContent, caption: srcEl("vp-src-cap-text").textContent, hasDoc: !!srcState.doc };
+};
+window.__setSourceDoc = (base, doc) => { srcState.token++; srcState.base = base; srcState.embed = null; srcState.doc = doc; renderSource(); };  // tests
+
 // --- Loading real pipeline output from URLs: opened run directory (server --open) and the bundled demos --------------
 async function loadObjectFromUrls(glbUrl, reportUrl, label) {
   setLoading(true, `Loading ${label || "model"}…`);
   try { await loadObjectFromUrlsInner(glbUrl, reportUrl, label); } finally { setLoading(false); }
+  if (!String(glbUrl).startsWith(PROJECT_BASE)) setSource(String(glbUrl).replace(/[^/]*$/, ""));  // RUN/source/source.json, when the run has one
 }
 async function loadObjectFromUrlsInner(glbUrl, reportUrl, label) {
   const r = await fetch(glbUrl);
@@ -1348,7 +1518,10 @@ async function loadObjectFromUrlsInner(glbUrl, reportUrl, label) {
 
 async function loadSceneFromUrl(baseUrl) {
   setLoading(true, "Loading scene…");
-  try { window.__sceneBase = baseUrl; return await loadSceneFromUrlInner(baseUrl); } finally { setLoading(false); }
+  let r;
+  try { window.__sceneBase = baseUrl; r = await loadSceneFromUrlInner(baseUrl); } finally { setLoading(false); }
+  if (baseUrl !== PROJECT_BASE) setSource(baseUrl);
+  return r;
 }
 async function loadSceneFromUrlInner(baseUrl) {
   const mk = async (rel, required) => {
@@ -1487,6 +1660,7 @@ async function openProject(msg) {
     }
     if (sceneObjects.length === 1 && msg.project.name) { sceneObjects[0].name = msg.project.name; refreshObjectList(); refreshSelection(); }
     if (msg.project.name) setCrumb(msg.project.name);
+    setSourceEmbed(msg);
     logEntry(`Opened project ${msg.project.name}`);
   } catch (e) { logEntry(`FAILED: could not open the project: ${e}`, true); }
 }
@@ -1502,9 +1676,10 @@ async function startup() {
   if (urlParams.has("demo")) {
     // served by an edit server (worldkit.serve, scripts/demo_reset): open that run, so AI Edit works; otherwise the bundled demo mug
     let served = null;
-    if (!urlParams.has("preview")) { try { const c = await (await fetch("/api/autoload")).json(); if (c && c.kind === "object") served = c; } catch (e) { /* static hosting */ } }
+    if (!urlParams.has("preview")) { try { const c = await (await fetch("/api/autoload")).json(); if (c && c.kind === "object") { served = c; window.__autoloadSource = !!c.source; } } catch (e) { /* static hosting */ } }
     if (served) { window.__runStl = served.stl || null; await loadObjectFromUrls(served.glb, served.report, "model.glb"); loadParts(); }
     else await loadDemoMug();
+    if (!urlParams.has("preview")) showTab("source");  // a demo opens on "this video", then the model built from it
     if (urlParams.has("preview") && !REDUCED_MOTION) {  // the home card turns slowly while idle and stops on the first touch
       orbit.autoRotate = true; orbit.autoRotateSpeed = 0.5;
       const stop = () => { orbit.autoRotate = false; };
@@ -1518,6 +1693,7 @@ async function startup() {
   }
   try {
     const cfg = await (await fetch("/api/autoload")).json();
+    window.__autoloadSource = !!cfg.source;
     if (cfg.kind === "scene") { await loadSceneFromUrl(cfg.base); logEntry(`Opened run ${cfg.name}`); return; }
     if (cfg.kind === "object") { window.__runStl = cfg.stl || null; await loadObjectFromUrls(cfg.glb, cfg.report, "model.glb"); logEntry(`Opened run ${cfg.name}`); loadParts(); return; }
     if (cfg.error) logEntry(cfg.error, true);
@@ -1842,7 +2018,7 @@ function setMeshLine() {
 function updateStatusBar(projectName) {
   const nm = projectName || (document.getElementById("crumb-name").dataset.set === "1" ? document.getElementById("crumb-name").textContent : "No project");
   const ver = ai.state ? `v${ai.state.current}${ai.state.current === 0 ? " original" : ""}` : "original";
-  const tab = { ai: "AI Edit", accuracy: "Accuracy" }[document.body.dataset.tab];
+  const tab = { source: "Source", ai: "AI Edit", accuracy: "Accuracy" }[document.body.dataset.tab];
   document.getElementById("sb-left").textContent = nm === "No project" ? nm : [nm, tab, ver].filter(Boolean).join(" / ");
   updateHeader(nm);
   const saved = !!ai.state || IS_EMBED;
@@ -2147,7 +2323,7 @@ function placeTabIndicator(tabs, animate = true) {
 }
 function tabBar() { return document.querySelector("#proj-head .tabs"); }
 function setTab(name) {
-  for (const [id, n] of [["tab-viewer", "viewer"], ["tab-ai", "ai"], ["btn-accuracy", "accuracy"]]) document.getElementById(id).setAttribute("aria-selected", String(n === name));
+  for (const [id, n] of [["tab-source", "source"], ["tab-viewer", "viewer"], ["tab-ai", "ai"], ["btn-accuracy", "accuracy"]]) document.getElementById(id).setAttribute("aria-selected", String(n === name));
   document.body.dataset.tab = name;
   placeTabIndicator(tabBar());
   updateStatusBar();
@@ -2158,9 +2334,11 @@ placeTabIndicator(tabBar(), false);
 function showTab(name) {
   if (document.body.dataset.tab !== name) { const app = document.getElementById("app"); app.classList.remove("tab-in"); void app.offsetWidth; app.classList.add("tab-in"); }
   setTab(name);
+  onSourceTab(name === "source");
   if (name === "accuracy") openAccuracy();
   else requestAnimationFrame(onResize);  // the viewport card changes width between Viewer and AI Edit
 }
+document.getElementById("tab-source").onclick = () => showTab("source");
 document.getElementById("tab-viewer").onclick = () => showTab("viewer");
 document.getElementById("tab-ai").onclick = () => showTab("ai");
 document.getElementById("btn-accuracy").onclick = () => showTab(document.body.dataset.tab === "accuracy" ? "viewer" : "accuracy");

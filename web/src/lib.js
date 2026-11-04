@@ -102,3 +102,11 @@ export function collectSignedUrls(view, dl, prefix) {
   }
   return { files, downloads, missing };
 }
+
+/** The uploaded video for the viewer's Source tab, from a createSignedUrl result: {url, name} or {error, name}. A failure is shown to the user. */
+export function videoLinkFrom(res, path) {
+  const name = path ? `your upload (${String(path).split("/").pop()})` : "";
+  if (!path) return { error: "this project has no stored video", name };
+  if (!res || res.error || !res.data || !res.data.signedUrl) return { error: res && res.error ? res.error.message || String(res.error) : "no signed link was returned", name };
+  return { url: res.data.signedUrl, name };
+}

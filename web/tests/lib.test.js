@@ -78,3 +78,11 @@ test("collectSignedUrls reports every file without a signed URL instead of skipp
   assert.match(bad.missing[1], /timeout/);
   assert.match(collectSignedUrls({ error: { message: "403" } }, null, pre).missing[0], /all files \(403\)/);
 });
+
+test("videoLinkFrom gives the signed video link, or an error the Source tab shows", async () => {
+  const { videoLinkFrom } = await import("../src/lib.js");
+  assert.deepEqual(videoLinkFrom({ data: { signedUrl: "https://v" } }, "u/p/video.mp4"), { url: "https://v", name: "your upload (video.mp4)" });
+  assert.equal(videoLinkFrom({ error: { message: "Object not found" } }, "u/p/video.mp4").error, "Object not found");
+  assert.match(videoLinkFrom({ data: {} }, "u/p/video.mp4").error, /no signed link/);
+  assert.match(videoLinkFrom(null, null).error, /no stored video/);
+});

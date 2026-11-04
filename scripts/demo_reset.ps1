@@ -1,6 +1,6 @@
 # Resets the live demo: a clean copy of the mug run at v0, the edit server and the scene viewer started, the browser opened.
 #   powershell -ExecutionPolicy Bypass -File scripts\demo_reset.ps1 [-Source pipeline\runs\mug_grounded] [-NoBrowser]
-# Object + AI Edit:  http://127.0.0.1:5070/?demo=1   (worldkit.serve on runs\demo_live; needs MODEL_API_KEY in pipeline\.env)
+# Object + AI Edit:  http://127.0.0.1:5070/?demo=1   (worldkit.serve on runs\demo_live; opens on the Source tab; needs MODEL_API_KEY in pipeline\.env)
 # Map scenes:        http://127.0.0.1:5050/?demo=1   (viewer\server.py; Map > Demo run, Developer tools hidden in demo mode)
 param([string]$Source = "", [switch]$NoBrowser)
 $ErrorActionPreference = "Stop"
@@ -21,6 +21,9 @@ if (Test-Path $Live) { Remove-Item -Recurse -Force $Live }
 New-Item -ItemType Directory -Force $Live | Out-Null
 foreach ($f in "model.glb", "model_print.stl", "report.json") { Copy-Item (Join-Path $Source $f) $Live }
 if (Test-Path (Join-Path $Source "parts")) { Copy-Item -Recurse (Join-Path $Source "parts") $Live }
+# the Source tab's data (original video, frames used, mask outlines): from the run if it has one, else the tracked demo copy of the same run
+$SrcView = if (Test-Path (Join-Path $Source "source\source.json")) { Join-Path $Source "source" } else { Join-Path $Root "viewerssets\demoun_mug\source" }
+if (Test-Path $SrcView) { Copy-Item -Recurse $SrcView (Join-Path $Live "source") }
 Write-Host "demo_live reset to v0 from $Source"
 
 Start-Process -FilePath $Py -ArgumentList "-m", "worldkit.serve", $Live, "--port", "5070" -WorkingDirectory (Join-Path $Root "pipeline") -WindowStyle Minimized

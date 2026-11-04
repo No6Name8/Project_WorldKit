@@ -15,6 +15,10 @@
 - **Map mode.** Film a desk. VGGT gives every frame a camera, the table top is fused from SAM masks into one stadium shape, each object (mug, case, candle) is rebuilt with SAM 3D and placed by triangulation, the coin is added as known geometry, and a diorama STL fits a 256 mm print bed. Held-out silhouette overlap: mean IoU 0.64.
 - **Phone app.** Upload from the phone; a laptop worker processes the video, and the result opens in the same viewer.
 
+**Source tab:** the original video next to the 3D model built from it, with the frames the pipeline used and each one's SAM 3.1 mask outline. Click a frame to jump the video there. The demo opens on this tab.
+
+![Source tab, dark: the original mug video, the model built from it, and the frames used with their SAM 3.1 outlines](docs/ui/source_mug_1440.png)
+
 Calm dark theme by default, and a light theme (sun/moon button in the viewer, account menu in the web app; the first visit follows your system setting).
 
 | Dark | Light |
@@ -24,7 +28,7 @@ Calm dark theme by default, and a light theme (sun/moon button in the viewer, ac
 | ![Map mode, dark: desk scene with three objects and the diorama button](docs/ui/2_scene_1440.png) | ![Map mode, light](docs/ui/2_scene_1440_light.png) |
 | ![Web app home, dark, with the live demo card](docs/ui/home_1440.png) | ![Projects, light, with status chips](docs/ui/projects_1440_light.png) |
 
-Phone width: [home](docs/ui/home_390.png), [viewer](docs/ui/1_object_390.png), [AI Edit](docs/ui/3_ai_edit_390_light.png). Motion (8 s clips): [home scroll](docs/ui/motion_home.webm), [tab change and an AI Edit row](docs/ui/motion_edit.webm).
+Phone width: [home](docs/ui/home_390.png), [Source](docs/ui/source_mug_390.png), [viewer](docs/ui/1_object_390.png), [AI Edit](docs/ui/3_ai_edit_390_light.png). Coin desk Source tab with its held-out verify frame: [1440](docs/ui/source_desk_1440.png), [390](docs/ui/source_desk_390.png). Motion (8 s clips): [home scroll](docs/ui/motion_home.webm), [tab change and an AI Edit row](docs/ui/motion_edit.webm).
 
 The light AI Edit screenshot uses real geometry edits on the real mug, with scripted Wonder and Spark replies (`viewer/tests/ui_screens.js`). The live runs with real models are listed under Results.
 

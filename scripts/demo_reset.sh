@@ -16,6 +16,8 @@ pkill -f "viewer/server.py" 2>/dev/null || true
 rm -rf "$LIVE"; mkdir -p "$LIVE"
 cp "$SRC/model.glb" "$SRC/model_print.stl" "$SRC/report.json" "$LIVE/"
 [ -d "$SRC/parts" ] && cp -r "$SRC/parts" "$LIVE/"
+# the Source tab's data (original video, frames used, mask outlines): from the run if it has one, else the tracked demo copy of the same run
+if [ -f "$SRC/source/source.json" ]; then cp -r "$SRC/source" "$LIVE/"; elif [ -d "$ROOT/viewer/assets/demo/run_mug/source" ]; then cp -r "$ROOT/viewer/assets/demo/run_mug/source" "$LIVE/"; fi
 echo "demo_live reset to v0 from $SRC"
 
 (cd "$ROOT/pipeline" && "$PY" -m worldkit.serve "$LIVE" --port 5070 >/dev/null 2>&1 &)

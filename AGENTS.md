@@ -108,6 +108,7 @@ npm --prefix web run check:live                                      # the deplo
 ## Evidence
 
 - **Accuracy vs a ruler:** `docs/accuracy.md`, generated from one JSON per claim in `docs/results/` (command, input and STL SHA-256, measured and ruler values) by `python scripts/accuracy_table.py --from-results`; `python scripts/make_results.py` rebuilds the JSON from local runs. The second object (Hydro Flask) is recorded there as not scored: SAM 3.1 found the coin in 1 of 12 frames.
+- **Source tab (original video next to the model):** `viewer/assets/demo/run_mug/source/` and `run_desk/source/` (from `scripts/make_source_view.py`): a re-encoded copy of the video (H.264 CRF 28, no audio), a poster, 8-9 thumbnails of the frames used with SAM 3.1 outlines read from the runs' mask caches (no new model calls), `source.json`. The three-lap card video is not included (9.6 MB compressed, over the 8 MB limit). Web projects play the uploaded video from the private `videos` bucket through a signed URL. Tabs: Source | Viewer | AI Edit | Accuracy; `?demo=1` opens on Source.
 - **AI Edit replay:** `viewer/assets/demo/edit_replay/` (from `scripts/make_edit_replay.py`): five real recorded edits the hosted demo viewer can replay without an edit server.
 - **Measurements and diagnosis:** `docs/TECHNICAL_NOTES.md`. Failed experiments: `docs/what_we_tried.md`.
 - **Screenshots:**

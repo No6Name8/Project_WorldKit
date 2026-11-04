@@ -91,7 +91,7 @@ def test_scene_mode_edits_one_object_in_its_own_folder(model_dir, tmp_path):
     (odir / "model.glb").write_bytes(serve.stl_to_glb(trimesh.load(odir / "model_print.stl")))
     (scene / "scene.json").write_text(json.dumps({"worldkit_scene": 1, "objects": [{"id": "desk", "mesh": "x"}, {"id": "mug", "stl": "objects/mug/model_print.stl"}]}))
     c = TestClient(serve.create_app(scene, client=FakeWonder([reply([tool_call("scale_to", {"height_cm": 12})]), reply(text="Scaled.")]), ask_spark=spark_ok))
-    assert c.get("/api/autoload").json() == {"kind": "scene", "base": "/open/", "name": "scene"}
+    assert c.get("/api/autoload").json() == {"kind": "scene", "base": "/open/", "name": "scene", "source": False}  # no Source-tab data in this run
     assert c.get("/edit/state").json() == {"enabled": True, "scene_mode": True, "objects": ["mug"]}
     assert c.get("/edit/state?obj=desk").status_code == 404 and c.post("/edit", json={"instruction": "x", "obj": "../x"}).status_code == 404
     r = c.post("/edit", json={"instruction": "make it 12 cm tall", "obj": "mug"}).json()
