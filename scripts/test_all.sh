@@ -24,7 +24,7 @@ run "pytest" "$ROOT" "$PY" -m pytest pipeline/tests -q -p no:cacheprovider
 "$PY" "$ROOT/viewer/server.py" >/dev/null 2>&1 &
 SERVER=$!
 for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:5050/ && break; sleep 1; done
-for t in browser_test integration_test sam3d_browser_test scene_physics_browser_test demo_readiness_test ai_edit_browser_test map_scene_browser_test parts_browser_test; do
+for t in browser_test integration_test sam3d_browser_test scene_physics_browser_test demo_readiness_test ai_edit_browser_test map_scene_browser_test parts_browser_test replay_browser_test; do
   run "viewer/$t" "$ROOT/viewer/tests" node "$t.js"
 done
 kill $SERVER 2>/dev/null

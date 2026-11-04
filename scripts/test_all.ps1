@@ -26,7 +26,7 @@ Run-Suite "pytest" $Root $Py @("-m", "pytest", "pipeline\tests", "-q", "-p", "no
 $server = Start-Process -FilePath $Py -ArgumentList "viewer\server.py" -WorkingDirectory $Root -PassThru -WindowStyle Hidden
 for ($i = 0; $i -lt 30; $i++) { try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5050/ -TimeoutSec 2 | Out-Null; break } catch { Start-Sleep 1 } }
 try {
-  foreach ($t in "browser_test", "integration_test", "sam3d_browser_test", "scene_physics_browser_test", "demo_readiness_test", "ai_edit_browser_test", "map_scene_browser_test", "parts_browser_test") {
+  foreach ($t in "browser_test", "integration_test", "sam3d_browser_test", "scene_physics_browser_test", "demo_readiness_test", "ai_edit_browser_test", "map_scene_browser_test", "parts_browser_test", "replay_browser_test") {
     Run-Suite "viewer/$t" (Join-Path $Root "viewer\tests") "node" @("$t.js")
   }
 } finally { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }

@@ -1,0 +1,307 @@
+{
+ "title": "Replay of a real run",
+ "banner": "Recorded from a real Muse Wonder and Muse Spark run. Live editing needs the local edit server.",
+ "source": {
+  "run": "rehearse",
+  "made_by": "scripts/rehearse_edits.mjs (run 1 of 2 for each instruction)",
+  "date": "2026-11-03",
+  "models": {
+   "tool_calls": "muse-wonder-1.0 (Meta Model API)",
+   "verification": "muse-spark-1.3 (Meta Model API)"
+  },
+  "v0_stl_sha256": "e9d119a6d408db5e3f518bc0302498390f356574884b9b085500f942b32c4b5e",
+  "notes": "docs/DEMO_EDITS.md"
+ },
+ "v0": {
+  "model": "v0.glb",
+  "size_mm": [
+   95.3,
+   118.6,
+   72.9
+  ]
+ },
+ "edits": [
+  {
+   "id": "a",
+   "version": 1,
+   "instruction": "make the handle 2 mm thicker",
+   "seconds": 19.6,
+   "tools": [
+    {
+     "name": "thicken_part",
+     "arguments": {
+      "part": "handle",
+      "by_mm": 2.0
+     },
+     "sentence": "Thickened handle by 2 mm (SAM found 11 of 12 views)"
+    }
+   ],
+   "spark": "Close-up shows handle visibly wider while cup and saucer remain unchanged.",
+   "verdict": "all checks passed",
+   "retries": 0,
+   "size_before_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "size_after_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "deterministic_checks": [
+    {
+     "name": "watertight solid",
+     "ok": true,
+     "detail": "volume 64022 mm3"
+    },
+    {
+     "name": "base on z=0",
+     "ok": 1.0,
+     "detail": "min z 0.000"
+    }
+   ],
+   "renders": [
+    "a_render0.jpg",
+    "a_render1.jpg"
+   ],
+   "model": "a.glb",
+   "created": "2026-11-03T13:24:09",
+   "sam_overlay": true,
+   "handle_wall_mm": [
+    5.22,
+    7.34
+   ]
+  },
+  {
+   "id": "b",
+   "version": 3,
+   "instruction": "put a 5 mm hole through the handle side",
+   "seconds": 19.0,
+   "tools": [
+    {
+     "name": "drill_hole",
+     "arguments": {
+      "diameter_mm": 5.0,
+      "position": [
+       -1.66,
+       53.13,
+       60.62
+      ],
+      "direction": [
+       -0.9998,
+       -0.0187,
+       0.0
+      ],
+      "through": true
+     },
+     "sentence": "Drilled a 5 mm hole all the way through"
+    }
+   ],
+   "spark": "Close-up shows a clear through-hole in the handle side with no other visible changes.",
+   "verdict": "all checks passed",
+   "retries": 0,
+   "size_before_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "size_after_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "deterministic_checks": [
+    {
+     "name": "watertight solid",
+     "ok": true,
+     "detail": "volume 61920 mm3"
+    },
+    {
+     "name": "base on z=0",
+     "ok": 1.0,
+     "detail": "min z 0.000"
+    },
+    {
+     "name": "hole removed material",
+     "ok": 1.0,
+     "detail": "volume change -150.9 mm3"
+    },
+    {
+     "name": "hole did not enlarge the model",
+     "ok": true,
+     "detail": ""
+    }
+   ],
+   "renders": [
+    "b_render0.jpg",
+    "b_render1.jpg"
+   ],
+   "model": "b.glb",
+   "created": "2026-11-03T13:24:52",
+   "sam_overlay": false
+  },
+  {
+   "id": "c",
+   "version": 5,
+   "instruction": "make the handle thinner",
+   "seconds": 20.0,
+   "tools": [
+    {
+     "name": "thicken_part",
+     "arguments": {
+      "part": "handle",
+      "by_mm": -2.0
+     },
+     "sentence": "Thinned handle by 2 mm (SAM found 11 of 12 views)"
+    }
+   ],
+   "spark": "Close-up shows handle narrower while cup and saucer look unchanged.",
+   "verdict": "all checks passed",
+   "retries": 0,
+   "size_before_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "size_after_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "deterministic_checks": [
+    {
+     "name": "watertight solid",
+     "ok": true,
+     "detail": "volume 60486 mm3"
+    },
+    {
+     "name": "base on z=0",
+     "ok": 1.0,
+     "detail": "min z 0.000"
+    }
+   ],
+   "renders": [
+    "c_render0.jpg",
+    "c_render1.jpg"
+   ],
+   "model": "c.glb",
+   "created": "2026-11-03T13:25:33",
+   "sam_overlay": false,
+   "handle_wall_mm": [
+    5.22,
+    3.16
+   ]
+  },
+  {
+   "id": "d",
+   "version": 7,
+   "instruction": "make it exactly 12 cm tall",
+   "seconds": 18.1,
+   "tools": [
+    {
+     "name": "scale_to",
+     "arguments": {
+      "height_cm": 12.0
+     },
+     "sentence": "Scaled to 120 mm tall"
+    }
+   ],
+   "spark": "After Z is 120 mm with proportional scaling and no shape change.",
+   "verdict": "all checks passed",
+   "retries": 0,
+   "size_before_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "size_after_mm": [
+    157.0,
+    195.3,
+    120.0
+   ],
+   "deterministic_checks": [
+    {
+     "name": "watertight solid",
+     "ok": true,
+     "detail": "volume 277226 mm3"
+    },
+    {
+     "name": "base on z=0",
+     "ok": 1.0,
+     "detail": "min z 0.000"
+    },
+    {
+     "name": "height as requested",
+     "ok": 1.0,
+     "detail": "120.00 mm vs 120.00 mm"
+    }
+   ],
+   "renders": [
+    "d_render0.jpg",
+    "d_render1.jpg"
+   ],
+   "model": "d.glb",
+   "created": "2026-11-03T13:26:30",
+   "sam_overlay": false
+  },
+  {
+   "id": "e",
+   "version": 9,
+   "instruction": "add the text WORLDKIT on the base",
+   "seconds": 15.7,
+   "tools": [
+    {
+     "name": "emboss_text",
+     "arguments": {
+      "text": "WORLDKIT",
+      "face": "base"
+     },
+     "sentence": "Engraved \"WORLDKIT\" on the base"
+    }
+   ],
+   "spark": "AFTER underside clearly shows WORLDKIT with no other visible changes.",
+   "verdict": "all checks passed",
+   "retries": 0,
+   "size_before_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "size_after_mm": [
+    95.3,
+    118.6,
+    72.9
+   ],
+   "deterministic_checks": [
+    {
+     "name": "watertight solid",
+     "ok": true,
+     "detail": "volume 62015 mm3"
+    },
+    {
+     "name": "base on z=0",
+     "ok": 1.0,
+     "detail": "min z 0.000"
+    },
+    {
+     "name": "text changed the solid in the right direction",
+     "ok": 1.0,
+     "detail": "volume change -55.4 mm3"
+    },
+    {
+     "name": "base text kept the outline and height",
+     "ok": true,
+     "detail": "[0.0, 0.0, 0.0]"
+    }
+   ],
+   "renders": [
+    "e_render0.jpg",
+    "e_render1.jpg"
+   ],
+   "model": "e.glb",
+   "created": "2026-11-03T13:27:09",
+   "sam_overlay": false
+  }
+ ]
+}
