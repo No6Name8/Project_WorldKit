@@ -276,6 +276,16 @@ body.ai-loading #ai-empty, body.ai-loading #ai-disabled { display: none; }
 #ai-disabled { margin-top: var(--space-3); }
 #aiedit-panel[style*="block"] ~ #ai-disabled { display: none; }
 #ai-disabled .instruction-row { display: flex; }
+/* hosted demo: replay of real recorded edits */
+body.ai-replay #ai-empty, body.ai-replay #ai-disabled { display: none; }
+#aiedit-panel[style*="block"] ~ #ai-replay { display: none; }
+.replay-banner { font-size: var(--fs-xs); line-height: 16px; padding: var(--space-2) var(--space-3); border: var(--border-w) solid var(--accent); border-radius: var(--radius-2); background: var(--accent-bg); color: var(--text-primary); margin-bottom: var(--space-3); }
+.rp-list { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0 var(--space-3); }
+.rp-edit { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); width: 100%; text-align: left; height: auto; min-height: 32px; padding: var(--space-1) var(--space-2); font-weight: var(--fw-regular); }
+.rp-edit .mono { color: var(--text-secondary); font-size: var(--fs-xs); }
+.rp-edit[aria-pressed="true"] { border-color: var(--accent); background: var(--bg-selected); }
+#rp-log { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-2); }
+#rp-status:empty { display: none; }
 
 /* ---------- verify overlay ---------- */
 #verify-panel { position: absolute; inset: var(--space-2); display: none; z-index: 20; background: var(--bg-surface); border: var(--border-w) solid var(--border-default); border-radius: var(--radius-2); box-shadow: var(--elev-2); overflow-y: auto; padding: var(--space-3); }
@@ -337,7 +347,11 @@ td.e-ok .chip, td.e-warn .chip, td.e-err .chip, td.e-na .chip { border: 0; backg
 
 /* ---------- demo mode (?demo=1): no developer tools; 110% UI on wide screens so text reads in a 1080p recording ---------- */
 html.demo-mode .devtools { display: none; }
-@media (min-width: 1200px) { html.demo-mode { zoom: 1.1; } }
+/* scale with a transform, not the non-standard `zoom`: with zoom, some browsers and automation tools compute pointer positions from
+   unzoomed boxes, and a click aimed at the Map button landed on its .ph-row parent. A transform is hit-tested the same way everywhere. */
+@media (min-width: 1200px) {
+  html.demo-mode body { transform: scale(1.1); transform-origin: 0 0; width: calc(100% / 1.1); height: calc(100% / 1.1); }
+}
 
 /* ---------- read-only preview (home page card): canvas only ---------- */
 body.preview #topbar, body.preview #proj-head, body.preview #side-left, body.preview #side-right, body.preview #statusbar,

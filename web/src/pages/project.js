@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { esc, resultPaths } from "../lib.js";
+import { esc, resultPaths, collectSignedUrls } from "../lib.js";
 
 /** Full-screen viewer for one finished project: the viewer (an iframe of /viewer/) gets signed URLs for the project's private result files. */
 export async function renderProject(app, id, ctx) {
@@ -17,11 +17,10 @@ export async function renderProject(app, id, ctx) {
     supabase.storage.from("results").createSignedUrls(paths, 3600),
     supabase.storage.from("results").createSignedUrls(paths.filter((x) => x.endsWith(".stl")), 3600, { download: true }),
   ]);
-  if (view.error) return fail(`Could not open the result files: ${view.error.message}`);
   const prefix = `${p.result_path}/`;
-  const files = {}, downloads = {};
-  for (const r of view.data) if (r.signedUrl) files[r.path.slice(prefix.length)] = r.signedUrl;
-  for (const r of (dl.data || [])) if (r.signedUrl) downloads[r.path.slice(prefix.length)] = r.signedUrl;
+  const { files, downloads, missing } = collectSignedUrls(view, dl, prefix);
+  // a file without a signed URL is an error the user sees, not a silent gap in the viewer
+  if (missing.length) return fail(`Could not open ${missing.length} result file(s): ${missing.join(", ")}. Try again; if it keeps failing, the files may have been removed.`);
 
   app.innerHTML = '<iframe id="viewer-frame" title="WorldKit viewer" src="/viewer/index.html?embed=1"></iframe>';
   const frame = app.querySelector("#viewer-frame");

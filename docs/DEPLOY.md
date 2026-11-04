@@ -68,6 +68,9 @@ Screenshots go to `docs/web/live_*.png`.
 
 ## Supabase settings to confirm by hand
 
+- **Storage limits (2026-11-04):** run `supabase/migrations/20261104000000_upload_limits.sql` once in the Supabase SQL editor (it is also at the end of `supabase/RUN_THIS_IN_SQL_EDITOR.sql`). It sets 50 MB and video-only types on `videos`, and 50 MB and GLB/STL/JSON/PNG/JPEG on `results`. Until it runs, only the web app and the worker enforce these limits.
+
+
 Supabase dashboard > Authentication > URL Configuration:
 
 - **Site URL:** `https://web-flame-psi-45.vercel.app`

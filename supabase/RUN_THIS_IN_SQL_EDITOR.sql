@@ -65,3 +65,15 @@ begin
     alter publication supabase_realtime add table public.projects;
   end if;
 end $$;
+
+-- 2026-11-04 (supabase/migrations/20261104000000_upload_limits.sql): server-side upload limits
+-- Storage refuses anything else with 413 / 415 before it is stored.
+update storage.buckets
+   set file_size_limit = 52428800,
+       allowed_mime_types = array['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/3gpp']
+ where id = 'videos';
+
+update storage.buckets
+   set file_size_limit = 52428800,
+       allowed_mime_types = array['model/gltf-binary', 'model/stl', 'application/json', 'image/png', 'image/jpeg']
+ where id = 'results';

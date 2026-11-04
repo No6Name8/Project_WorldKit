@@ -64,3 +64,17 @@ test("help is a route", async () => {
   const { parseRoute } = await import("../src/lib.js");
   assert.deepEqual(parseRoute("#/help"), { name: "help" });
 });
+
+test("collectSignedUrls reports every file without a signed URL instead of skipping it", async () => {
+  const { collectSignedUrls } = await import("../src/lib.js");
+  const pre = "u/p/";
+  const ok = collectSignedUrls({ data: [{ path: "u/p/model.glb", signedUrl: "https://a" }] }, { data: [{ path: "u/p/model_print.stl", signedUrl: "https://b" }] }, pre);
+  assert.deepEqual(ok.missing, []);
+  assert.equal(ok.files["model.glb"], "https://a");
+  assert.equal(ok.downloads["model_print.stl"], "https://b");
+  const bad = collectSignedUrls({ data: [{ path: "u/p/model.glb", signedUrl: null, error: "Object not found" }] }, { error: { message: "timeout" } }, pre);
+  assert.equal(bad.missing.length, 2);
+  assert.match(bad.missing[0], /model\.glb \(Object not found\)/);
+  assert.match(bad.missing[1], /timeout/);
+  assert.match(collectSignedUrls({ error: { message: "403" } }, null, pre).missing[0], /all files \(403\)/);
+});

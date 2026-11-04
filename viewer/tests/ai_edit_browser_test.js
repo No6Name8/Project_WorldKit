@@ -89,9 +89,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await demo.goto(`http://127.0.0.1:${PORT}/?demo=1`, { waitUntil: "domcontentloaded" });
     await demo.waitForFunction(() => window.__sceneReady === true && !window.__isLoading() && window.__aiState && window.__aiState(), null, { timeout: 30000 });
     const dm = await demo.evaluate(() => ({ cls: document.documentElement.classList.contains("demo-mode"), dev: getComputedStyle(document.querySelector(".devtools")).display,
-      zoom: getComputedStyle(document.documentElement).zoom, label: window.__lastLoadLabel || "" }));
-    check("?demo=1 opens the served run with developer tools hidden and the UI at 110%", dm.cls && dm.dev === "none" && dm.zoom === "1.1" && !/run_mug/.test(dm.label), JSON.stringify(dm));
+      zoom: getComputedStyle(document.documentElement).zoom, transform: getComputedStyle(document.body).transform, label: window.__lastLoadLabel || "" }));
+    check("?demo=1 opens the served run with developer tools hidden and the UI at 110% (a transform, not CSS zoom)",
+      dm.cls && dm.dev === "none" && dm.zoom === "1" && /matrix\(1\.1, 0, 0, 1\.1/.test(dm.transform) && !/run_mug/.test(dm.label), JSON.stringify(dm));
     await demo.close();
+
+    // the Map button takes a REAL mouse click at its centre (a reviewer saw .ph-row intercept it at desktop demo scale)
+    for (const [w, h, q] of [[1440, 900, ""], [1440, 900, "?demo=1"], [1920, 1080, "?demo=1"]]) {
+      const pg = await browser.newPage({ viewport: { width: w, height: h } });
+      await pg.goto(`http://127.0.0.1:${PORT}/${q}`, { waitUntil: "domcontentloaded" });
+      await pg.waitForFunction(() => window.__sceneReady === true && !window.__isLoading(), null, { timeout: 30000 });
+      const box = await pg.locator("#mode-map").boundingBox();
+      const top = await pg.evaluate(([x, y]) => { const el = document.elementFromPoint(x, y); return el && (el.id || el.className); }, [box.x + box.width / 2, box.y + box.height / 2]);
+      await pg.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      const pressed = await pg.waitForFunction(() => document.getElementById("mode-map").getAttribute("aria-pressed") === "true", null, { timeout: 30000 }).then(() => true).catch(() => false);
+      check(`[${w}x${h}${q}] a real mouse click on Map hits the button and switches to Map`, top === "mode-map" && pressed, `topmost element: ${top}`);
+      await pg.close();
+    }
   } finally {
     if (browser) await browser.close();
     srv.kill();

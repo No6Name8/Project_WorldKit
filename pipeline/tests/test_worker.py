@@ -43,6 +43,9 @@ class FakeBackend:
         self.last_type = content_type
 
 
+MP4 = b"\x00\x00\x00\x18ftypmp42" + bytes(64)  # the start of a real MP4 file: the worker checks the container signature
+
+
 def opts(**kw):
     return argparse.Namespace(**{"dry_run": False, "coin": "saudi-25-halalas", "object": "mug", "poll": 0.0, **kw})
 
@@ -62,7 +65,7 @@ def fake_run(tmp_files):
 
 
 def test_uploaded_to_processing_to_done_with_result_paths_and_report(tmp_path):
-    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): b"video"})
+    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): MP4})
     calls = {}
 
     def pipeline(proj, video, out_dir, o):
@@ -72,7 +75,7 @@ def test_uploaded_to_processing_to_done_with_result_paths_and_report(tmp_path):
 
     assert w.Worker(b, opts(), tmp_path, pipeline, log=lambda s: None).run_once() == "done"
     assert b.history == [("p1", "processing"), ("p1", "done")]
-    assert calls == {"video": b"video", "mode": "object", "coin": "saudi-25-halalas", "object": "mug"}
+    assert calls == {"video": MP4, "mode": "object", "coin": "saudi-25-halalas", "object": "mug"}
     keys = {k for k in b.storage if k[0] == "results"}
     assert keys == {("results", "user-1/p1/model.glb"), ("results", "user-1/p1/model_print.stl"), ("results", "user-1/p1/report.json")}  # user_id/project_id/..., no frames or cache
     p = b.projects["p1"]
@@ -82,7 +85,7 @@ def test_uploaded_to_processing_to_done_with_result_paths_and_report(tmp_path):
 
 
 def test_map_mode_runs_the_scene_pipeline_name_and_uploads_nested_files(tmp_path):
-    b = FakeBackend([project(mode="map")], {("videos", "user-1/p1/video.mp4"): b"v"})
+    b = FakeBackend([project(mode="map")], {("videos", "user-1/p1/video.mp4"): MP4})
     seen = {}
 
     def pipeline(proj, video, out_dir, o):
@@ -97,7 +100,7 @@ def test_map_mode_runs_the_scene_pipeline_name_and_uploads_nested_files(tmp_path
 
 
 def test_pipeline_failure_sets_failed_with_a_plain_sentence_and_uploads_nothing(tmp_path):
-    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): b"v"})
+    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): MP4})
 
     def boom(*a):
         raise w.WorkerError("The pipeline stopped: SAM 3.1 could not find the mug in any frame.")
@@ -109,7 +112,7 @@ def test_pipeline_failure_sets_failed_with_a_plain_sentence_and_uploads_nothing(
 
 
 def test_unexpected_errors_and_missing_downloads_do_not_kill_the_worker(tmp_path):
-    b = FakeBackend([project("p1"), project("p2")], {("videos", "user-1/p1/video.mp4"): b"v", ("videos", "user-1/p2/video.mp4"): b"v"})
+    b = FakeBackend([project("p1"), project("p2")], {("videos", "user-1/p1/video.mp4"): MP4, ("videos", "user-1/p2/video.mp4"): MP4})
     b.fail_download = True
     wk = w.Worker(b, opts(), tmp_path, lambda *a: (_ for _ in ()).throw(KeyError("x")), log=lambda s: None)
     assert wk.run_once() == "failed" and "404" in b.projects["p1"]["error"]
@@ -119,7 +122,7 @@ def test_unexpected_errors_and_missing_downloads_do_not_kill_the_worker(tmp_path
 
 
 def test_a_model_less_run_fails_instead_of_reporting_done(tmp_path):
-    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): b"v"})
+    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): MP4})
     assert w.Worker(b, opts(), tmp_path, fake_run({"report.json": b"{}"}), log=lambda s: None).run_once() == "failed"
     assert "no 3D model" in b.projects["p1"]["error"]
 
@@ -196,3 +199,65 @@ def test_main_reports_missing_settings_without_crashing(monkeypatch, capsys):
     monkeypatch.setattr(w, "load_env_files", lambda: None)
     assert w.main(["--once"]) == 2
     assert "WORKER_EMAIL" in capsys.readouterr().err
+
+
+def test_a_non_video_or_oversized_upload_fails_before_the_pipeline_runs(tmp_path):
+    ran = []
+    def run(*a):
+        ran.append(a)
+        return fake_run({"model.glb": b"g"})(*a)
+    b = FakeBackend([project("p1"), project("p2")], {("videos", "user-1/p1/video.mp4"): b"%PDF-1.7 not a video", ("videos", "user-1/p2/video.mp4"): MP4})
+    wk = w.Worker(b, opts(), tmp_path, pipeline=run, log=lambda m: None)
+    assert wk.run_once() == "failed" and "not a video WorldKit can read" in b.projects["p1"]["error"] and not ran
+    big = tmp_path / "big.mp4"
+    big.write_bytes(MP4 + bytes(1) * (w.MAX_VIDEO_MB * 1_000_000 + 10))
+    with pytest.raises(w.WorkerError, match="the limit is 50 MB"):
+        w.check_video(big)
+    assert wk.run_once() == "done" and len(ran) == 1
+
+
+def test_result_files_over_the_storage_limit_are_reported_not_silently_dropped(tmp_path, monkeypatch):
+    monkeypatch.setattr(w, "MAX_RESULT_FILE_MB", 0.000005)  # 5 bytes
+    logs = []
+    b = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): MP4})
+    wk = w.Worker(b, opts(), tmp_path, pipeline=fake_run({"model.glb": b"g", "diorama.stl": b"a big file"}), log=logs.append)
+    assert wk.run_once() == "done"
+    rep = b.projects["p1"]["report"]
+    assert rep["files"] == ["model.glb"] and any("diorama.stl" in x and "storage limit" in x for x in rep["warnings"]) and any("diorama.stl" in m for m in logs)
+    b2 = FakeBackend([project()], {("videos", "user-1/p1/video.mp4"): MP4})
+    w.Worker(b2, opts(), tmp_path / "2", pipeline=fake_run({"model.glb": b"far too big"}), log=logs.append).run_once()
+    assert b2.projects["p1"]["status"] == "failed" and "model.glb" in b2.projects["p1"]["error"] and "limit" in b2.projects["p1"]["error"]
+
+
+def test_the_retry_after_a_401_keeps_the_request_headers_and_timeout():
+    calls = []
+
+    class R:
+        def __init__(self, code=200, body=None):
+            self.status_code, self._b, self.content, self.text = code, body, b"", ""
+
+        def json(self):
+            return self._b
+
+        def raise_for_status(self):
+            assert self.status_code < 400
+
+    class S:
+        n = 0
+
+        def post(self, url, **kw):
+            S.n += 1
+            return R(200, {"access_token": f"tok{S.n}", "user": {"id": "u1"}})
+
+        def request(self, method, url, **kw):
+            calls.append((method, dict(kw["headers"]), kw["timeout"]))
+            return R(401) if len(calls) % 2 == 1 else R(200, [{"id": "p9", "status": "processing"}])
+
+    c = w.SupabaseRest("https://x.supabase.co", "sb_publishable_abc", "a@b.c", "pw", session=S())
+    c.upload("results", "u1/p9/model.glb", b"g", "model/gltf-binary")
+    (m1, h1, t1), (m2, h2, t2) = calls[0], calls[1]
+    assert m1 == m2 == "POST" and t1 == t2 == 600
+    assert h2["Content-Type"] == "model/gltf-binary" and h2["x-upsert"] == "true" and h2["Authorization"] == "Bearer tok2"
+    calls.clear()
+    c._req("PATCH", "https://x.supabase.co/rest/v1/projects", headers={"Prefer": "return=representation", "Content-Type": "application/json"}, data="{}")
+    assert calls[1][1]["Prefer"] == "return=representation" and calls[1][1]["Content-Type"] == "application/json" and calls[1][2] == 60

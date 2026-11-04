@@ -86,3 +86,19 @@ export function resultPaths(project) {
   const files = (project.report && project.report.files) || [];
   return files.map((f) => `${project.result_path}/${f}`);
 }
+
+/** Signed URLs for a project's result files (view and download). Returns {files, downloads, missing}: missing lists every requested file
+ *  that got no URL (a whole-call error or a per-file error), so the page can say so instead of opening a viewer with gaps. */
+export function collectSignedUrls(view, dl, prefix) {
+  const files = {}, downloads = {}, missing = [];
+  const rel = (p) => (p || "").slice(prefix.length);
+  if (view && view.error) return { files, downloads, missing: [`all files (${view.error.message})`] };
+  for (const r of (view && view.data) || []) {
+    if (r.signedUrl) files[rel(r.path)] = r.signedUrl; else missing.push(`${rel(r.path)}${r.error ? ` (${r.error})` : ""}`);
+  }
+  if (dl && dl.error) missing.push(`STL download links (${dl.error.message})`);
+  for (const r of (dl && dl.data) || []) {
+    if (r.signedUrl) downloads[rel(r.path)] = r.signedUrl; else missing.push(`${rel(r.path)} download${r.error ? ` (${r.error})` : ""}`);
+  }
+  return { files, downloads, missing };
+}

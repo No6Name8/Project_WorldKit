@@ -32,6 +32,8 @@ PIPELINE = ROOT / "pipeline"
 DEMO = {"object": ROOT / "viewer" / "assets" / "demo" / "run_mug", "map": ROOT / "viewer" / "assets" / "demo" / "run_desk"}
 SKIP_DIRS = {"cache", "frames", "_all_frames", "__pycache__", "previews"}
 MAX_RESULT_FILE_MB = 45  # Supabase free plan limits one object to 50 MB
+MAX_VIDEO_MB = 50        # same limit as the web app and the videos bucket (supabase/migrations/20261104000000_upload_limits.sql)
+VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".3gp"}
 CONTENT_TYPES = {".glb": "model/gltf-binary", ".stl": "model/stl", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg"}
 
 
@@ -96,10 +98,11 @@ class SupabaseRest:
         return {"apikey": self.key, "Authorization": f"Bearer {self.token}", **(extra or {})}
 
     def _req(self, method: str, url: str, **kw):
-        r = self.http.request(method, url, headers=self._h(kw.pop("headers", None)), timeout=kw.pop("timeout", 60), **kw)
-        if r.status_code == 401:  # token expired: sign in again once
+        extra, timeout = kw.pop("headers", None), kw.pop("timeout", 60)
+        r = self.http.request(method, url, headers=self._h(extra), timeout=timeout, **kw)
+        if r.status_code == 401:  # token expired: sign in again once, with the SAME request headers (Prefer, content type, upsert) and timeout
             self.sign_in()
-            r = self.http.request(method, url, headers=self._h(kw.get("headers")), timeout=60, **kw)
+            r = self.http.request(method, url, headers=self._h(extra), timeout=timeout, **kw)
         return r
 
     def claim_next(self) -> dict | None:
@@ -154,8 +157,22 @@ def run_pipeline(project: dict, video: Path, out_dir: Path, opts: argparse.Names
     return out_dir
 
 
-def result_files(run_dir: Path) -> list[Path]:
-    """Every file of a finished run that the viewer or a print needs (no frames, caches or previews)."""
+def check_video(video: Path) -> None:
+    """Refuse what the pipeline cannot use, with a sentence, before spending any GPU or API time: the 50 MB limit and a real video file
+    (the extension and the container signature: MP4/MOV/3GP 'ftyp' box, WebM/Matroska EBML header)."""
+    mb = video.stat().st_size / 1_000_000
+    if mb > MAX_VIDEO_MB:
+        raise WorkerError(f"The video is {mb:.0f} MB; the limit is {MAX_VIDEO_MB} MB. Film about 20 seconds.")
+    head = video.read_bytes()[:16]
+    is_iso = head[4:8] == b"ftyp"
+    is_webm = head[:4] == b"\x1aE\xdf\xa3"
+    if video.suffix.lower() not in VIDEO_SUFFIXES or not (is_iso or is_webm):
+        raise WorkerError("The uploaded file is not a video WorldKit can read (MP4, MOV, M4V, 3GP or WebM).")
+
+
+def result_files(run_dir: Path, oversized: list | None = None) -> list[Path]:
+    """Every file of a finished run that the viewer or a print needs (no frames, caches or previews). Files over the storage limit are
+    left out and listed in ``oversized`` (name, MB) so the caller can say so instead of dropping them silently."""
     files = []
     for f in sorted(run_dir.rglob("*")):
         if not f.is_file() or any(part in SKIP_DIRS for part in f.relative_to(run_dir).parts):
@@ -163,6 +180,8 @@ def result_files(run_dir: Path) -> list[Path]:
         if f.suffix.lower() not in CONTENT_TYPES:
             continue
         if f.stat().st_size > MAX_RESULT_FILE_MB * 1_000_000:
+            if oversized is not None:
+                oversized.append((f.relative_to(run_dir).as_posix(), round(f.stat().st_size / 1_000_000, 1)))
             continue
         files.append(f)
     return files
@@ -199,15 +218,21 @@ class Worker:
                 run_dir = DEMO[project["mode"]]
             else:
                 video.write_bytes(self.b.download("videos", project["video_path"]))
+                check_video(video)
                 run_dir = self.pipeline(project, video, work / "run", self.opts)
-            names = []
-            for f in result_files(run_dir):
+            names, oversized = [], []
+            for f in result_files(run_dir, oversized):
                 rel = f.relative_to(run_dir).as_posix()
                 self.b.upload("results", f"{base}/{rel}", f.read_bytes(), CONTENT_TYPES.get(f.suffix.lower()) or mimetypes.guess_type(f.name)[0] or "application/octet-stream")
                 names.append(rel)
+            too_big = [f"{n} ({mb} MB)" for n, mb in oversized]
+            if too_big:
+                self.log(f"{pid}: not uploaded, over the {MAX_RESULT_FILE_MB} MB storage limit: {', '.join(too_big)}")
             if not any(n.endswith(".glb") for n in names):
-                raise WorkerError("The run produced no 3D model to show.")
+                raise WorkerError("The run produced no 3D model to show." + (f" Over the {MAX_RESULT_FILE_MB} MB limit: {', '.join(too_big)}." if too_big else ""))
             report = read_report(run_dir, project["mode"])
+            if too_big:
+                report.setdefault("warnings", []).append(f"Not uploaded, over the {MAX_RESULT_FILE_MB} MB storage limit: {', '.join(too_big)}")
             report["files"] = names
             report["kind"] = project["mode"]
             if self.opts.dry_run:

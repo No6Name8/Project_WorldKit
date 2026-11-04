@@ -218,6 +218,15 @@
       <div id="ai-disabled" aria-hidden="true">
         <div class="instruction-row"><textarea rows="2" disabled placeholder="Edit server not connected" tabindex="-1"></textarea><button disabled tabindex="-1">Send</button></div>
       </div>
+      <!-- hosted demo: a replay of real recorded edits (viewer/assets/demo/edit_replay, made by scripts/make_edit_replay.py) -->
+      <div id="ai-replay" hidden>
+        <div class="replay-banner" role="note"><b>Replay of a real run.</b> <span id="rp-banner"></span></div>
+        <div class="ver-row"><span class="lbl">Showing</span><span id="rp-version" class="vchip" aria-current="true">original</span><button id="rp-undo" type="button" class="link-btn" disabled>Undo</button></div>
+        <div class="lbl" style="margin-top: var(--space-3);">Recorded edits: click one to replay it</div>
+        <div id="rp-list" class="rp-list"></div>
+        <div id="rp-status" class="hint" aria-live="polite"></div>
+        <div id="rp-log"></div>
+      </div>
     </section>
   </aside>
 
@@ -998,6 +1007,12 @@ function collapseToSingle() {
   clearOutline(); updateMapBar();
 }
 
+// one answer for "is there a printable STL for this object", shared by the object list and the Selection card
+function hasStl(o) {
+  const spec = (o.meta && o.meta.spec) || {};
+  if (spec.stl) return true;
+  return sceneObjects.length <= 1 && !!(window.__runStl || ai.state);
+}
 function refreshObjectList() {
   const box = document.getElementById("object-list");
   box.textContent = "";
@@ -1005,8 +1020,9 @@ function refreshObjectList() {
     const b = document.createElement("button");
     const spec = (o.meta && o.meta.spec) || {};
     const mk = document.createElement("span");
-    mk.className = "mk " + (o.missing ? "err" : o.role === "parent" ? "" : spec.stl ? "ok" : sceneObjects.length > 1 ? "warn" : "ok");
-    mk.title = o.missing ? "mesh missing" : o.role === "parent" ? "support surface (not printable)" : spec.stl ? "printable STL available" : "no STL for this object";
+    const stlOk = hasStl(o);
+    mk.className = "mk " + (o.missing ? "err" : o.role === "parent" ? "" : stlOk ? "ok" : "warn");
+    mk.title = o.missing ? "mesh missing" : o.role === "parent" ? "support surface (not printable)" : stlOk ? "printable STL available" : "no STL for this object";
     const nm = document.createElement("span");
     nm.className = "nm";
     nm.textContent = o.name;
@@ -1359,7 +1375,88 @@ async function loadDemoMug() {
   window.__runStl = "assets/demo/run_mug/model_print.stl";
   await loadObjectFromUrls("assets/demo/run_mug/model.glb", "assets/demo/run_mug/report.json", "model.glb");
   await loadParts("assets/demo/run_mug/parts/parts.json");
+  initReplay();
 }
+
+// --- AI Edit replay (hosted demo, no edit server): real recorded edits played from stored data. Nothing here is generated in the browser:
+// instruction, tool calls, Spark's sentence, timing, sizes, handle wall and renders all come from replay.json (scripts/make_edit_replay.py) ---
+const replay = { data: null, cur: null, base: "assets/demo/edit_replay/" };
+async function initReplay() {
+  if (ai.state || ai.sceneMode || IS_EMBED || urlParams.has("preview")) return;
+  try { const r = await fetch(replay.base + "replay.json"); if (!r.ok) return; replay.data = await r.json(); } catch (e) { return; }
+  if (ai.state) return;  // an edit server answered meanwhile: live editing wins
+  document.getElementById("rp-banner").textContent = replay.data.banner.replace(/^Recorded/, "Recorded");
+  const list = document.getElementById("rp-list");
+  list.textContent = "";
+  for (const e of replay.data.edits) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "rp-edit"; b.dataset.id = e.id;
+    b.innerHTML = `<span>${esc(e.instruction)}</span><span class="mono">${e.seconds} s</span>`;
+    b.onclick = () => playReplay(e);
+    list.appendChild(b);
+  }
+  document.getElementById("rp-undo").onclick = replayUndo;
+  document.getElementById("ai-replay").hidden = false;
+  document.body.classList.add("ai-replay");
+}
+async function showReplayModel(file, sizeMm, label) {
+  const r = await fetch(replay.base + file);
+  if (!r.ok) throw new Error(`could not load ${file}`);
+  await loadGLBFromArrayBuffer(await r.arrayBuffer(), label);
+  cmPerSceneUnit = Math.max(...sizeMm) / 20; calibrated = true;  // the GLB is the print mesh normalised to 2 units, as the edit server sends it
+  calibrationInfo = { source: "edit_replay", info: {} };
+  updateBanner(); updateReadout();
+  const w = document.getElementById("canvas-wrap"); w.classList.remove("vp-in"); void w.offsetWidth; w.classList.add("vp-in");
+}
+async function playReplay(e) {
+  const status = document.getElementById("rp-status");
+  document.querySelectorAll(".rp-edit").forEach((b) => { b.disabled = true; b.setAttribute("aria-pressed", String(b.dataset.id === e.id)); });
+  try {
+    if (e.sam_overlay && partsState.data && !replay.cur) {  // as in the real run: the SAM overlay was on for the handle edit
+      partsState.on = true; setPartsSwitch(true); buildPartOverlay();
+      status.textContent = "SAM 3.1 found the handle; the overlay marks it on the original model.";
+      await new Promise((res) => setTimeout(res, REDUCED_MOTION ? 0 : 1100));
+    }
+    status.innerHTML = aiProgressHtml({ stage: "checking", history: [{ stage: "choosing" }, { stage: "applying" }], elapsed_s: null }).replace("</div>", `<span class="el mono">recorded ${e.seconds} s</span></div>`);
+    if (partsState.on) { partsState.on = false; setPartsSwitch(false); }
+    clearPartOverlay();  // the overlay marks the ORIGINAL mesh
+    await showReplayModel(e.model, e.size_after_mm, `replay ${e.id}`);
+    replay.cur = e;
+    const tools = e.tools.map((t) => `${t.name} ${JSON.stringify(t.arguments)}`);
+    const sentence = e.tools.map((t) => t.sentence).filter(Boolean).join(". ") || "Applied";
+    const changed = markChangedDims(e.size_before_mm, e.size_after_mm);
+    const wall = e.handle_wall_mm ? `Handle wall ${e.handle_wall_mm[0].toFixed(2)} → ${e.handle_wall_mm[1].toFixed(2)} mm` : "";
+    const checks = (e.deterministic_checks || []).map((c) => `${c.ok ? "ok" : "FAILED"} ${c.name}: ${c.detail}`);
+    const imgs = (e.renders || []).map((r) => `<img class="thumb" src="${replay.base}${r}" alt="before and after render that Muse Spark judged">`).join("");
+    const d = document.createElement("div");
+    d.className = "entry ok"; d.dataset.expandable = "1"; d.tabIndex = 0; d.title = "Click for the before/after renders Muse Spark judged";
+    d.innerHTML = `<div class="e-h"><span class="e-k">Recorded edit</span><span class="vtag">${esc(e.id)}</span></div>` +
+      `<div class="res">${esc(sentence)}. Spark: ${esc(String(e.spark || "").replace(/[.\s]+$/, ""))}.${changed || wall ? ` <span class="chg mono">${esc([wall, changed].filter(Boolean).join(", "))}</span>` : ""}</div>` +
+      `<details class="dt"><summary>Details</summary><pre class="mono">${esc([`Request: ${e.instruction}`, ...tools, `Muse Wonder chose the tool; Muse Spark verified: ${e.verdict}`, ...checks, `${e.seconds} s on the edit server, ${e.retries} retries, recorded ${e.created}`].join("\n"))}</pre></details>${imgs}`;
+    d.addEventListener("click", () => d.classList.toggle("open"));
+    d.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); d.classList.toggle("open"); } });
+    document.getElementById("rp-log").prepend(d);
+    document.getElementById("rp-version").textContent = `edit ${e.id}`;
+    document.getElementById("rp-undo").disabled = false;
+    status.textContent = "";
+  } catch (err) { status.textContent = `FAILED: ${err.message || err}`; }
+  finally { document.querySelectorAll(".rp-edit").forEach((b) => { b.disabled = false; }); }
+}
+async function replayUndo() {
+  if (!replay.data || !replay.cur) return;
+  const from = replay.cur;
+  await showReplayModel(replay.data.v0.model, replay.data.v0.size_mm, "replay v0");
+  markChangedDims(from.size_after_mm, replay.data.v0.size_mm);
+  replay.cur = null;
+  const d = document.createElement("div");
+  d.className = "entry"; d.innerHTML = `<span class="vtag">original</span> undo: back to the original print mesh`;
+  document.getElementById("rp-log").prepend(d);
+  document.getElementById("rp-version").textContent = "original";
+  document.getElementById("rp-undo").disabled = true;
+  document.querySelectorAll(".rp-edit").forEach((b) => b.setAttribute("aria-pressed", "false"));
+}
+window.__replay = () => ({ shown: !document.getElementById("ai-replay").hidden, current: replay.cur && replay.cur.id, edits: replay.data ? replay.data.edits.length : 0,
+  label: window.__lastLoadLabel || "", rows: document.querySelectorAll("#rp-log .entry").length });
 async function loadDemoDesk() { await loadSceneFromUrl("assets/demo/run_desk/"); }
 document.getElementById("btn-demo-run").onclick = async () => {
   try {
@@ -1765,7 +1862,8 @@ function updateHeader(name) {
   if (!sceneObjects.length) state = "Open a run or a demo";
   else if (multi) state = `${sceneObjects.filter((o) => !o.missing).length} objects`;
   else if (ai.state && ai.state.current > 0) state = `v${ai.state.current}`;
-  else if (pp && pp.watertight && pp.geometry_checks_passed !== false) state = "ready to print";
+  else if (window.__lastReport && window.__lastReport.print_ready === true) state = "ready to print";  // only a user-measured size makes a model print-ready
+  else if (pp && pp.watertight && pp.geometry_checks_passed !== false) { const src = scaleSourceText(sceneObjects[0]) || "", ref = /card/i.test(src) ? "card" : /coin/i.test(src) ? "coin" : null; state = ref ? `Printable STL, scale estimated from ${ref}` : "Printable STL, scale not calibrated"; }
   else if (pp) state = "mesh needs checks";
   else state = "no print check yet";
   document.getElementById("proj-sub").textContent = sceneObjects.length ? `${kind} · ${state}` : state;
@@ -1966,7 +2064,7 @@ function drawBed(d) {
   bedLine = new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: css("--accent") }));
   bedLine.raycast = () => {};
   scene.add(bedLine);
-  document.getElementById("vp-legend-text").textContent = `print bed 256 x 256 mm = ${sideCm.toFixed(1)} cm at real size (diorama ${d.scale_text})`;
+  document.getElementById("vp-legend-text").textContent = `print bed 256 x 256 mm = ${sideCm.toFixed(1)} cm at the estimated scale (diorama ${d.scale_text})`;
   legend.style.display = "block";
 }
 window.__bedVisible = () => !!bedLine;

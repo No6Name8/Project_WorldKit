@@ -8,7 +8,7 @@ export async function renderHome(root, ctx) {
     <section class="home">
       <div class="home-l">
         <h1>Film it. Print it.</h1>
-        <p class="lead">Turn a phone video into a print-ready STL.<br />Edit the model with a plain-text request.</p>
+        <p class="lead">Turn a phone video into a printable STL, scaled from a coin.<br />Edit the model with a plain-text request.</p>
         <div class="cta">
           ${ctx.user ? '<a class="btn primary big" href="#/projects">Your projects</a>' : '<a class="btn primary big" href="#/login">Sign in</a>'}
           <a class="btn big" href="/viewer/index.html?demo=1">Open demo viewer</a>

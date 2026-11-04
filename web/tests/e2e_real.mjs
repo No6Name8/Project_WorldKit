@@ -53,7 +53,7 @@ const rest = (path, init = {}) => fetch(`${URL_}${path}`, { ...init, headers: { 
     const page = await ctx.newPage();
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/i.test(m.text())) errors.push(m.text()); });
-    const shot = (name, tag = "390") => page.screenshot({ path: join(SHOTS, `${name}_${tag}.png`) });
+    const shot = async (name, tag = "390") => { await page.evaluate(() => { for (const id of ["who", "user-mail"]) { const e = document.getElementById(id); if (e) e.textContent = "signed-in account"; } }).catch(() => {}); await page.screenshot({ path: join(SHOTS, `${name}_${tag}.png`) }); };  // never publish the account email
 
     await page.goto(BASE + "/", { waitUntil: "networkidle" });
     await shot("home");
@@ -134,7 +134,7 @@ const rest = (path, init = {}) => fetch(`${URL_}${path}`, { ...init, headers: { 
     const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const p2 = await ctx2.newPage();
     p2.on("pageerror", (e) => errors.push(String(e)));
-    const s2 = (name) => p2.screenshot({ path: join(SHOTS, `${name}_1440.png`) });
+    const s2 = async (name) => { await p2.evaluate(() => { for (const id of ["who", "user-mail"]) { const e = document.getElementById(id); if (e) e.textContent = "signed-in account"; } }).catch(() => {}); await p2.screenshot({ path: join(SHOTS, `${name}_1440.png`) }); };
     await p2.goto(BASE + "/", { waitUntil: "networkidle" }); await s2("home");
     await p2.goto(BASE + "/#/login"); await p2.waitForSelector("#email"); await s2("login");
     await p2.fill("#email", EMAIL); await p2.fill("#password", PASS); await p2.click("#submit");

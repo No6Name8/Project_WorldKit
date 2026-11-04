@@ -35,7 +35,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       page.on("pageerror", (e) => errors.push(`${tag}: ${e}`));
       page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/i.test(m.text())) errors.push(`${tag}: ${m.text()}`); });
       page.on("response", (r) => { if (r.url().startsWith(BASE) && r.status() >= 400) failed.push(`${tag}: ${r.status()} ${r.url().slice(BASE.length)}`); });
-      const shot = (n) => page.screenshot({ path: join(SHOTS, `live_${n}_${tag}.png`) });
+      const shot = async (n) => { await page.evaluate(() => { for (const id of ["who", "user-mail"]) { const e = document.getElementById(id); if (e) e.textContent = "signed-in account"; } }).catch(() => {}); await page.screenshot({ path: join(SHOTS, `live_${n}_${tag}.png`) }); };  // never publish the account email
 
       // home + demo viewer card (a live preview of the demo mug whose size comes from the viewer itself)
       await page.goto(BASE + "/", { waitUntil: "networkidle" });
