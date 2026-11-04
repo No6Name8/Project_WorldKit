@@ -68,7 +68,7 @@ Screenshots go to `docs/web/live_*.png`.
 
 ## Supabase settings to confirm by hand
 
-- **Storage limits (2026-11-04):** run `supabase/migrations/20261104000000_upload_limits.sql` once in the Supabase SQL editor (it is also at the end of `supabase/RUN_THIS_IN_SQL_EDITOR.sql`). It sets 50 MB and video-only types on `videos`, and 50 MB and GLB/STL/JSON/PNG/JPEG on `results`. Until it runs, only the web app and the worker enforce these limits.
+- **Storage limits (2026-11-04):** `supabase/migrations/20261104000000_upload_limits.sql` (also at the end of `supabase/RUN_THIS_IN_SQL_EDITOR.sql`) sets 50 MB and video-only types on `videos`, and 50 MB and GLB/STL/JSON/PNG/JPEG on `results`. **Applied to project `ttetqcbvyqleyxyryspx` and checked live (2026-11-04):** a text file to `videos` -> 415, a 50 MB + 1 KB mp4 -> 413, `application/octet-stream` to `results` -> 415; a small mp4 and an STL were accepted (probe files deleted). A new Supabase project needs it run once.
 
 
 Supabase dashboard > Authentication > URL Configuration:
