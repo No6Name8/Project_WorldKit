@@ -1,5 +1,7 @@
 # WorldKit demo script (3:00)
 
+Recorded video: https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d
+
 Screen recording at 1080p, voice-over. Every line in the "Say" column is backed by `docs/accuracy.md` or a recorded run. Do not add
 claims while recording. Where a number comes from the live screen (AI Edit), read it off the screen, not from this page.
 

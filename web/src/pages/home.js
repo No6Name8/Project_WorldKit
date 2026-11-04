@@ -12,6 +12,7 @@ export async function renderHome(root, ctx) {
         <div class="cta">
           ${ctx.user ? '<a class="btn primary big" href="#/projects">Your projects</a>' : '<a class="btn primary big" href="#/login">Sign in</a>'}
           <a class="btn big" href="/viewer/index.html?demo=1">Open demo viewer</a>
+          <a class="btn big" href="https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d" target="_blank" rel="noopener">Watch demo video (3 min)</a>
         </div>
         <p class="hint">Object or desk <span aria-hidden="true">·</span> STL in millimetres</p>
       </div>

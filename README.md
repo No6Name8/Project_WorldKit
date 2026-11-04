@@ -1,10 +1,16 @@
 ![WorldKit: Film it. Print it.](docs/assets/banner.png)
 
+## Demo video
+
+[Watch the 3-minute demo video on Loom](https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d)
+
+[![Demo video: the Source tab with the original mug video next to the 3D model built from it (opens the video on Loom)](docs/ui/demo_video_thumb.jpg)](https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d)
+
 > **For judges.** Evidence index with a 2-minute check for each claim: [docs/JUDGING.md](docs/JUDGING.md).
 > The AI Edit agent (Muse Wonder tool calls, SAM 3.1 parts, Muse Spark verification): [docs/AGENTIC.md](docs/AGENTIC.md), traces in [docs/agent_traces/](docs/agent_traces/).
 > How Muse Wonder is used: [docs/WONDER.md](docs/WONDER.md). Every Meta model, its job, file and fallback: [docs/MODELS.md](docs/MODELS.md).
 > Accuracy against a ruler, generated from [docs/results/](docs/results/): [docs/accuracy.md](docs/accuracy.md). Recheck it all offline: `python scripts/verify_claims.py`.
-> Demo video: TODO (link after upload). Hosted demo, no account: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1
+> [Demo video (3 min)](https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d). Hosted demo, no account: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1
 
 **WorldKit turns a short phone video of a real object into a 3D model, with its scale estimated from a coin or card, that you can edit by typing and 3D print.**
 
@@ -12,7 +18,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-a6adb8)](LICENSE)
 [![Built for Meta Global AI Developer Hackathon 2026](https://img.shields.io/badge/built_for-Meta_Global_AI_Developer_Hackathon_2026-203754)](docs/SUBMISSION.md)
 
-[Live app](https://web-flame-psi-45.vercel.app) · Demo video (TODO: link after upload) · [Submission text](docs/SUBMISSION.md) · [Accuracy](docs/accuracy.md)
+[Live app](https://web-flame-psi-45.vercel.app) · [Demo video (3 min)](https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d) · [Submission text](docs/SUBMISSION.md) · [Accuracy](docs/accuracy.md)
 
 ## What it does
 

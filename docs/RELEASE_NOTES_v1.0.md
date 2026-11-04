@@ -23,7 +23,7 @@ Hosted demo, no account: https://web-flame-psi-45.vercel.app/viewer/index.html?d
 - Evidence index for judges: `docs/JUDGING.md`
 - The AI Edit agent: `docs/AGENTIC.md`; Muse Wonder: `docs/WONDER.md`; every Meta model: `docs/MODELS.md`
 - Live site: https://web-flame-psi-45.vercel.app
-- Demo video: TODO
+- Demo video (3 min): https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d
 
 ## Attached files
 

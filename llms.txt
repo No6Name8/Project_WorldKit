@@ -2,6 +2,8 @@
 
 Orientation for AI agents and human reviewers. The same text is in `llms.txt`.
 
+Demo video (3 min): https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d
+
 ## What this project is
 
 WorldKit turns a short phone video of a real object into a 3D model with its scale estimated from a coin or card. You can inspect the model, edit it by typing, and download it as an STL in millimetres. Built for the Meta Global AI Developer Hackathon 2026 (commits from 2026-10-26).

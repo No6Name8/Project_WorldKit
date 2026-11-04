@@ -75,7 +75,7 @@ Only the models and the vendored libraries (three.js, Rapier, fonts) come from o
 
 - Repository: https://github.com/No6Name8/Project_WorldKit
 - Live site: https://web-flame-psi-45.vercel.app (demo viewer without an account: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1)
-- Demo video: TODO (add the link after upload)
+- Demo video (3 min): https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d
 
 ## 3D environment
 

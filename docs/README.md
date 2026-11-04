@@ -1,5 +1,7 @@
 # Docs index
 
+Demo video (3 min): https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d
+
 | File | What it is |
 |---|---|
 | [accuracy.md](accuracy.md) | The model compared with a ruler: headline Object-mode table, scene runs with a coin and a card, and how the ground truth was measured. |

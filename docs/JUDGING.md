@@ -11,7 +11,7 @@
 7. Muse Spark Open on Baseten gave the same accept decision as Muse Spark on all 5 rehearsed edits ([results/spark_open_agreement.json](results/spark_open_agreement.json)).
 8. Live site with a phone upload, a laptop worker and a viewer: https://web-flame-psi-45.vercel.app (one real upload-to-result run: 715 s, [results/e2e_web_real.json](results/e2e_web_real.json)).
 9. Every accuracy number has a JSON file with the command and SHA-256 of its input and STL; `python scripts/verify_claims.py` rechecks them without any API call.
-10. Demo video: TODO (link to be added at submission).
+10. Demo video (3 min): https://www.loom.com/share/55fd3cf835994a6a99e1fee8fc2b907d
 
 ## Verify in 2 minutes
 
