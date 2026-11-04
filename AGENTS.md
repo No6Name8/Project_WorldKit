@@ -4,7 +4,7 @@ Orientation for AI agents and human reviewers. The same text is in `llms.txt`.
 
 ## What this project is
 
-WorldKit turns a short phone video of a real object into a 3D model at real size. You can inspect the model, edit it by typing, and download it as an STL in millimetres. Built for the Meta Global AI Developer Hackathon 2026 (commits from 2026-10-26).
+WorldKit turns a short phone video of a real object into a 3D model with its scale estimated from a coin or card. You can inspect the model, edit it by typing, and download it as an STL in millimetres. Built for the Meta Global AI Developer Hackathon 2026 (commits from 2026-10-26).
 
 - **Input:** a video of an object next to a coin, or a bank card.
 - **Output:** a textured GLB, a print STL in mm, and `report.json`. The report records which model produced what, what was observed vs generated, and the scale source.
@@ -48,7 +48,7 @@ Not Meta: TRELLIS (hosted fallback, `reconstruct.py`), trimesh/manifold3d, Rapie
 
 ## 3D environment (Map mode)
 
-Map mode turns one phone video of a desk into a 3D environment: a real-size table, the objects on it, the scale reference object as known geometry, and a printable diorama. Two scenes are bundled. In the viewer, **Demo run** in Map loads the coin desk, and **Demo: desk, three laps** (Developer tools) loads the second.
+Map mode turns one phone video of a desk into a 3D environment: a table with its scale estimated from a coin or card, the objects on it, the scale reference object as known geometry, and a printable diorama. Two scenes are bundled. In the viewer, **Demo run** in Map loads the coin desk, and **Demo: desk, three laps** (Developer tools) loads the second.
 
 Screenshots: `docs/ui/desk_v2_*` (coin desk) and `docs/ui/desk3_*` (three-lap desk).
 
@@ -107,7 +107,8 @@ npm --prefix web run check:live                                      # the deplo
 
 ## Evidence
 
-- **Accuracy vs a ruler:** `docs/accuracy.md` (three tables: headline, scene with coin, scene with card).
+- **Accuracy vs a ruler:** `docs/accuracy.md`, generated from one JSON per claim in `docs/results/` (command, input and STL SHA-256, measured and ruler values) by `python scripts/accuracy_table.py --from-results`; `python scripts/make_results.py` rebuilds the JSON from local runs. The second object (Hydro Flask) is recorded there as not scored: SAM 3.1 found the coin in 1 of 12 frames.
+- **AI Edit replay:** `viewer/assets/demo/edit_replay/` (from `scripts/make_edit_replay.py`): five real recorded edits the hosted demo viewer can replay without an edit server.
 - **Measurements and diagnosis:** `docs/TECHNICAL_NOTES.md`. Failed experiments: `docs/what_we_tried.md`.
 - **Screenshots:**
   - viewer: `docs/ui/`
@@ -126,7 +127,7 @@ npm --prefix web run check:live                                      # the deplo
 - **Part edits work on the mug handle only.**
 - **Scene AI Edit has not been run live.**
 - **The hosted viewer has no AI Edit.** It needs `worldkit.serve` on the laptop.
-- **The real pipeline has not run through the web upload → worker path.** Only `--dry-run` was used there.
+- **The web upload → worker path was run for real once** (2026-11-04, `docs/results/e2e_web_real.json`): it works, and a fresh SAM 3D mesh differs from the headline mesh by up to 4% (height).
 
 ## Rules for agents working here
 

@@ -1,0 +1,340 @@
+{
+ "mode": "map",
+ "warnings": [],
+ "timings_sec": {
+  "frames": 5.9,
+  "track": 0.1,
+  "build_wall": 0.0,
+  "place": 1014.3,
+  "verify": 41.6,
+  "export": 1.6
+ },
+ "spark_calls": 1,
+ "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used",
+ "frame_selection": {
+  "frames_scanned_for_coin": "all",
+  "frames_with_coin_detected_by_colour": 5,
+  "kept_with_coin": 5,
+  "kept_sharpest": 15
+ },
+ "discover_from_cache": true,
+ "discovered": {
+  "objects": [
+   "striped mug",
+   "black case"
+  ],
+  "surface": "coffee table",
+  "spark_tokens": {
+   "completion_tokens": 2061,
+   "prompt_tokens": 3401,
+   "total_tokens": 5462,
+   "completion_tokens_details": {
+    "accepted_prediction_tokens": null,
+    "audio_tokens": null,
+    "reasoning_tokens": 1854,
+    "rejected_prediction_tokens": null,
+    "text_tokens": null
+   },
+   "prompt_tokens_details": {
+    "audio_tokens": null,
+    "cache_write_tokens": null,
+    "cached_tokens": 0,
+    "image_tokens": null,
+    "text_tokens": null
+   }
+  }
+ },
+ "skipped": [
+  {
+   "name": "candle in red holder",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "silver incense burner",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  }
+ ],
+ "build": {
+  "backend": "modal",
+  "parallel_containers_max": 3,
+  "from_cache": 2,
+  "modal_wall_seconds": 0.0,
+  "modal_metered_cost_usd_delta": null
+ },
+ "built": [
+  {
+   "id": "black_case",
+   "name": "black case"
+  },
+  {
+   "id": "striped_mug",
+   "name": "striped mug"
+  }
+ ],
+ "reference_object_id": "striped_mug",
+ "scale_source": {
+  "text": "scale source: striped mug, 70 mm height, reconstructed mesh height set to the supplied value",
+  "kind": "object",
+  "name": "striped mug",
+  "size_mm": 70.0,
+  "frames_used": [
+   "sharp_00",
+   "sharp_01",
+   "sharp_02",
+   "sharp_03",
+   "sharp_04",
+   "sharp_05",
+   "sharp_06",
+   "sharp_07",
+   "sharp_10",
+   "sharp_11",
+   "sharp_12",
+   "sharp_13",
+   "sharp_14",
+   "sharp_52",
+   "sharp_60",
+   "sharp_63",
+   "sharp_64",
+   "sharp_65"
+  ],
+  "object_id": "striped_mug",
+  "considered": [
+   "scale source: striped mug, 70 mm height, reconstructed mesh height set to the supplied value"
+  ],
+  "notes": [],
+  "note": "the reference object's reconstructed height is set to the supplied value, so it cannot be checked against itself"
+ },
+ "coin": {
+  "frames_with_reference": [
+   "sharp_00",
+   "sharp_01",
+   "sharp_02",
+   "sharp_03",
+   "sharp_04",
+   "sharp_05",
+   "sharp_06",
+   "sharp_07",
+   "sharp_10",
+   "sharp_11",
+   "sharp_12",
+   "sharp_13",
+   "sharp_14",
+   "sharp_52",
+   "sharp_60",
+   "sharp_63",
+   "sharp_64",
+   "sharp_65"
+  ]
+ },
+ "grounded_reshape": {},
+ "reference_frame": "sharp_02",
+ "overlap_resolution": [],
+ "verify": {
+  "frames": [
+   "sharp_02",
+   "sharp_00",
+   "sharp_01"
+  ],
+  "iou_before": {
+   "black_case": {
+    "sharp_02": 0.914,
+    "sharp_00": 0.0,
+    "sharp_01": 0.0
+   },
+   "striped_mug": {
+    "sharp_02": 0.924,
+    "sharp_00": 0.734,
+    "sharp_01": 0.733
+   }
+  },
+  "iou_after": {
+   "black_case": {
+    "sharp_02": 0.914,
+    "sharp_00": 0.0,
+    "sharp_01": 0.0
+   },
+   "striped_mug": {
+    "sharp_02": 0.924,
+    "sharp_00": 0.734,
+    "sharp_01": 0.733
+   }
+  },
+  "mean_iou_before": 0.551,
+  "mean_iou_after": 0.551,
+  "camera_azimuth_from_object": {
+   "sharp_00": "black_case",
+   "sharp_01": "black_case"
+  },
+  "camera_fit": {
+   "sharp_00": {
+    "method": "azimuth from the best-pinned object (fewer than 3 objects visible)"
+   },
+   "sharp_01": {
+    "method": "azimuth from the best-pinned object (fewer than 3 objects visible)"
+   }
+  },
+  "rounds": [
+   {
+    "round": 1,
+    "worst_view": "sharp_01",
+    "spark_corrections": [
+     {
+      "id": "black_case",
+      "dx_cm": 5.0,
+      "dz_cm": 0.0,
+      "scale": 1.0,
+      "yaw_deg": 0.0,
+      "reason": "black case render is too far left of real black case, need move right"
+     }
+    ],
+    "applied": [],
+    "rejected": [
+     {
+      "id": "black_case",
+      "dx_cm": 5.0,
+      "dz_cm": 0.0,
+      "scale": 1.0,
+      "yaw_deg": 0.0,
+      "reason": "IoU did not improve"
+     }
+    ],
+    "usage": {
+     "completion_tokens": 3285,
+     "prompt_tokens": 1335,
+     "total_tokens": 4620,
+     "completion_tokens_details": {
+      "accepted_prediction_tokens": null,
+      "audio_tokens": null,
+      "reasoning_tokens": 3209,
+      "rejected_prediction_tokens": null,
+      "text_tokens": null
+     },
+     "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cache_write_tokens": null,
+      "cached_tokens": 0,
+      "image_tokens": null,
+      "text_tokens": null
+     }
+    }
+   }
+  ],
+  "images": [
+   "verify/weak_view0_sharp_02.png",
+   "verify/weak_view1_sharp_00.png",
+   "verify/weak_view2_sharp_01.png"
+  ],
+  "camera_method_kept": "weak",
+  "weak_perspective": {
+   "frames": [
+    "sharp_02",
+    "sharp_00",
+    "sharp_01"
+   ],
+   "iou_before": {
+    "black_case": {
+     "sharp_02": 0.914,
+     "sharp_00": 0.0,
+     "sharp_01": 0.0
+    },
+    "striped_mug": {
+     "sharp_02": 0.924,
+     "sharp_00": 0.734,
+     "sharp_01": 0.733
+    }
+   },
+   "iou_after": {
+    "black_case": {
+     "sharp_02": 0.914,
+     "sharp_00": 0.0,
+     "sharp_01": 0.0
+    },
+    "striped_mug": {
+     "sharp_02": 0.924,
+     "sharp_00": 0.734,
+     "sharp_01": 0.733
+    }
+   },
+   "mean_iou_before": 0.551,
+   "mean_iou_after": 0.551,
+   "rounds": [
+    {
+     "round": 1,
+     "worst_view": "sharp_01",
+     "spark_corrections": [
+      {
+       "id": "black_case",
+       "dx_cm": 5.0,
+       "dz_cm": 0.0,
+       "scale": 1.0,
+       "yaw_deg": 0.0,
+       "reason": "black case render is too far left of real black case, need move right"
+      }
+     ],
+     "applied": [],
+     "rejected": [
+      {
+       "id": "black_case",
+       "dx_cm": 5.0,
+       "dz_cm": 0.0,
+       "scale": 1.0,
+       "yaw_deg": 0.0,
+       "reason": "IoU did not improve"
+      }
+     ],
+     "usage": {
+      "completion_tokens": 3285,
+      "prompt_tokens": 1335,
+      "total_tokens": 4620,
+      "completion_tokens_details": {
+       "accepted_prediction_tokens": null,
+       "audio_tokens": null,
+       "reasoning_tokens": 3209,
+       "rejected_prediction_tokens": null,
+       "text_tokens": null
+      },
+      "prompt_tokens_details": {
+       "audio_tokens": null,
+       "cache_write_tokens": null,
+       "cached_tokens": 0,
+       "image_tokens": null,
+       "text_tokens": null
+      }
+     }
+    }
+   ]
+  },
+  "vggt": null,
+  "note": "IoU compares the rendered silhouette with the SAM 3.1 mask. Weak-perspective method: the reference frame uses the scale reference camera; other frames use a camera fitted to the objects' base-centre pixels (IoU there tests size, shape and yaw, not position). VGGT method: per-frame pinhole cameras from VGGT, scale from the coin."
+ },
+ "diorama": {
+  "scale_ratio": 0.5007,
+  "scale_text": "1:2.0",
+  "size_mm": [
+   256.0,
+   185.9,
+   36.3
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "black_case",
+   "striped_mug"
+  ],
+  "repairs": [
+   "black_case: trimesh_repair",
+   "striped_mug: trimesh_repair"
+  ],
+  "warnings": [
+   "7% of sampled surface points are thinner than 1.2 mm at this scale: thin walls/handles may not print",
+   "scaled to 1:2.0 to fit the 256 mm bed: real sizes are 2.0x larger"
+  ],
+  "thin_feature_fraction": 0.069
+ },
+ "total_seconds": 1076.9,
+ "scene": "runs\\desk_mugref\\scene.json"
+}

@@ -1,0 +1,295 @@
+{
+ "started": "2026-11-04T05:27:41.309Z",
+ "live_url": "https://web-flame-psi-45.vercel.app",
+ "video": "pipeline/samples/mug_on_table.mp4",
+ "upload_seconds": 14,
+ "worker_seconds": 715,
+ "worker_log_tail": [
+  "Signed in as the worker; waiting for uploads. Ctrl+C to stop.\r",
+  "999042e1-e1a2-4b49-861e-ca449f14d8a8: done (6 files)"
+ ],
+ "chip_sequence": [
+  "processing",
+  "done"
+ ],
+ "report": {
+  "kind": "object",
+  "files": [
+   "chosen_frame.png",
+   "mask_overlay.png",
+   "model.glb",
+   "model_print.stl",
+   "object_rgba.png",
+   "report.json"
+  ],
+  "warnings": [
+   "A4 sheet not found/segmented: SAM 3.1 found no mask for concept 'A4 sheet of paper' in C:\\Users\\h\\Documents\\Project_WorldKit\\pipeline\\runs\\web\\999042e1-e1a2-4b49-861e-ca449f14d8a8\\run\\frames\\sharp_11.png. Try a different --object name, or check the frame actually shows it.",
+   "generated mesh reshaped: height x1.000, taper -0.20 (fitted to the silhouettes at the coin-derived camera elevation; mean IoU 0.951 -> 0.963; lateral scale from the coin)"
+  ],
+  "measurement": {
+   "method": "coin (coin, 2.15 cm diameter, 4 frames)",
+   "height_cm": 7.417,
+   "height_mm": 74.2,
+   "stl_units": "mm",
+   "stl_bbox_mm": [
+    93.3,
+    115.2,
+    75.8
+   ],
+   "scale_source": "scale source: coin, 21.5 mm diameter, disk ellipse major axis; camera elevation from the coin, height aspect and taper fitted to silhouettes",
+   "uncertainty_pct": 5.2,
+   "uncertainty_note": "ESTIMATE: root-sum-square of the measured frame spread, a 1 px coin-edge error and the method's mean error on synthetic scenes; worst synthetic case was 11.5%. Real accuracy is only known where a measured height is also given.",
+   "height_definition": "upright object height, before the flat print base is added",
+   "uncertainty_components_pct": {
+    "coin_edge_1px": 3.63,
+    "frame_to_frame_spread": 0.36,
+    "method_systematic_synthetic": 3.7
+   }
+  },
+  "object_name": "mug",
+  "print_ready": false,
+  "timings_sec": {
+   "scale": 457.05,
+   "detect": 61.85,
+   "frames": 1.24,
+   "preview": 7.37,
+   "segment": 4.61,
+   "printprep": 0.73,
+   "appearance": 0.2,
+   "reconstruct": 155.7
+  },
+  "scale_calibration": {
+   "note": "An estimate, not a measurement: assumes the reference and the object are at similar distance from the camera (weak perspective). The spread shows self-consistency across frames, not accuracy.",
+   "method": "known-diameter disk reference + silhouette pose-fit scale (weak perspective)",
+   "status": "ok",
+   "grounded": {
+    "frames": [
+     {
+      "frame": "sharp_00",
+      "px_per_cm": 13.858170948868441,
+      "coin_elevation_deg": 32.53668024791613
+     },
+     {
+      "frame": "sharp_03",
+      "px_per_cm": 13.245701371463703,
+      "coin_elevation_deg": 33.65488063485315
+     },
+     {
+      "frame": "sharp_08",
+      "px_per_cm": 12.795613930509349,
+      "coin_elevation_deg": 36.311848148869444
+     },
+     {
+      "frame": "sharp_11",
+      "px_per_cm": 14.662422305158646,
+      "coin_elevation_deg": 35.7488718418415
+     }
+    ],
+    "method": "the scale reference (coin ellipse or card corners) fixes the camera elevation; height aspect and taper fitted to the silhouettes at that elevation; lateral scale from the reference",
+    "applied": true,
+    "taper_t": -0.2,
+    "aspect_k": 1,
+    "height_cm": 7.416722463056047,
+    "mean_iou_by_k": {
+     "0.80": 0.9253,
+     "0.85": 0.9406,
+     "0.90": 0.9502,
+     "0.95": 0.9522,
+     "1.00": 0.9513,
+     "1.05": 0.9455,
+     "1.10": 0.9344
+    },
+    "mean_iou_final": 0.963046737853377,
+    "height_range_cm": [
+     7.026006168771363,
+     7.4344599211561535
+    ],
+    "cm_per_mesh_unit": 5.105895284740729,
+    "mean_iou_by_taper": {
+     "+0.00": 0.9513,
+     "+0.05": 0.9427,
+     "+0.10": 0.9333,
+     "-0.05": 0.958,
+     "-0.10": 0.9603,
+     "-0.15": 0.9626,
+     "-0.20": 0.963
+    },
+    "mean_iou_generated": 0.9512535172743956,
+    "reference_diameter_cm": 2.15
+   },
+   "per_frame": [
+    {
+     "frame": "sharp_00",
+     "pose_iou": 0.9460072907352638,
+     "px_per_cm": 13.858170948868441,
+     "cm_per_unit": 5.0986316177190405,
+     "ref_elevation_deg": 32.53668024791613,
+     "object_px_per_unit": 70.65770856365612,
+     "pose_elevation_deg": 36
+    },
+    {
+     "frame": "sharp_03",
+     "pose_iou": 0.9573795180722892,
+     "px_per_cm": 13.245701371463703,
+     "cm_per_unit": 5.1477076472982635,
+     "ref_elevation_deg": 33.65488063485315,
+     "object_px_per_unit": 68.1849982437128,
+     "pose_elevation_deg": 32
+    },
+    {
+     "frame": "sharp_08",
+     "pose_iou": 0.9556095585257189,
+     "px_per_cm": 12.795613930509349,
+     "cm_per_unit": 5.08206656079561,
+     "ref_elevation_deg": 36.311848148869444,
+     "object_px_per_unit": 65.02816168109204,
+     "pose_elevation_deg": 36
+    },
+    {
+     "frame": "sharp_11",
+     "pose_iou": 0.9510690287110568,
+     "px_per_cm": 14.662422305158646,
+     "cm_per_unit": 5.1191172648654355,
+     "ref_elevation_deg": 35.7488718418415,
+     "object_px_per_unit": 75.05865916708568,
+     "pose_elevation_deg": 29
+    }
+   ],
+   "reference": "coin",
+   "frames_used": 4,
+   "mesh_reshaped": "generated mesh reshaped: height x1.000, taper -0.20 (fitted to the silhouettes at the coin-derived camera elevation; mean IoU 0.951 -> 0.963; lateral scale from the coin)",
+   "frames_rejected": {
+    "sharp_01": "reference not found in this frame",
+    "sharp_02": "reference not found in this frame",
+    "sharp_04": "reference not found in this frame",
+    "sharp_05": "reference not found in this frame",
+    "sharp_06": "reference not found in this frame",
+    "sharp_07": "reference not found in this frame",
+    "sharp_09": "reference not found in this frame",
+    "sharp_10": "reference not found in this frame"
+   },
+   "height_range_cm": [
+    7.026006168771363,
+    7.4344599211561535
+   ],
+   "self_consistent": true,
+   "cm_per_mesh_unit": 5.105895284740729,
+   "relative_spread_mad": 0.003626112218609804,
+   "silhouette_pose_only": {
+    "height_cm": 7.421049926915828,
+    "cm_per_mesh_unit": 5.1088744412922384
+   },
+   "reference_diameter_cm": 2.15,
+   "reference_diameter_source": "user-supplied (never guessed)",
+   "frames_without_object_mask": [],
+   "estimated_upright_height_cm": 7.416722463056047
+  }
+ },
+ "viewer_dims_text": "W 88.8mm H 74.2mm D 109.8mm",
+ "measurement": {
+  "method": "coin (coin, 2.15 cm diameter, 4 frames)",
+  "height_cm": 7.417,
+  "height_mm": 74.2,
+  "stl_units": "mm",
+  "stl_bbox_mm": [
+   93.3,
+   115.2,
+   75.8
+  ],
+  "scale_source": "scale source: coin, 21.5 mm diameter, disk ellipse major axis; camera elevation from the coin, height aspect and taper fitted to silhouettes",
+  "uncertainty_pct": 5.2,
+  "uncertainty_note": "ESTIMATE: root-sum-square of the measured frame spread, a 1 px coin-edge error and the method's mean error on synthetic scenes; worst synthetic case was 11.5%. Real accuracy is only known where a measured height is also given.",
+  "height_definition": "upright object height, before the flat print base is added",
+  "uncertainty_components_pct": {
+   "coin_edge_1px": 3.63,
+   "frame_to_frame_spread": 0.36,
+   "method_systematic_synthetic": 3.7
+  }
+ },
+ "checks": [
+  {
+   "name": "worker account signs in (REST)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "name": "uploaded on the live site",
+   "pass": true,
+   "detail": "14 s"
+  },
+  {
+   "name": "the real worker (--once, no dry run) exited 0",
+   "pass": true,
+   "detail": "715 s: Signed in as the worker; waiting for uploads. Ctrl+C to stop.\r | 999042e1-e1a2-4b49-861e-ca449f14d8a8: done (6 files)"
+  },
+  {
+   "name": "the open page showed uploaded -> processing -> done live",
+   "pass": true,
+   "detail": "processing > done"
+  },
+  {
+   "name": "the row is done, not a dry run, with result files",
+   "pass": true,
+   "detail": "files: chosen_frame.png, mask_overlay.png, model.glb, model_print.stl, object_rgba.png, report.json"
+  },
+  {
+   "name": "the live viewer opens the result with mm sizes",
+   "pass": true,
+   "detail": "W 88.8mm H 74.2mm D 109.8mm"
+  },
+  {
+   "name": "the test project was deleted (row, video, results)",
+   "pass": true,
+   "detail": ""
+  }
+ ],
+ "provenance": {
+  "worker_command": "python -m worldkit.object video.mp4 --out run --object mug --coin saudi-25-halalas (worldkit.worker, no dry run)",
+  "models": {
+   "best frame": "Muse Spark muse-spark-1.3 (1 call)",
+   "masks": "SAM 3.1 (coin and mug; frames cached by image hash from earlier runs of the same video)",
+   "mesh": "SAM 3D Objects on Modal A100 (modal_sam3d_builtin_mesh_postprocess_and_texture_baking)"
+  },
+  "timings_sec": {
+   "frames": 1.24,
+   "detect": 61.85,
+   "segment": 4.61,
+   "reconstruct": 155.7,
+   "appearance": 0.2,
+   "scale": 457.05,
+   "printprep": 0.73,
+   "preview": 7.37
+  },
+  "worker_wall_seconds": 715,
+  "upload_seconds": 14,
+  "budget_note": "SAM 3.1 calls hit the 30-call cap of this session; 2 non-essential calls were refused (the optional A4-sheet lookup). The coin calibration used 4 frames, as in the CLI."
+ },
+ "comparison": {
+  "web_result_mm": {
+   "height_mm": 74.2,
+   "rim_diameter_mm": 87.0,
+   "base_diameter_mm": 61.4
+  },
+  "cli_headline_mm": {
+   "height_mm": 71.3,
+   "rim_diameter_mm": 88.1,
+   "base_diameter_mm": 63.8
+  },
+  "web_vs_cli_pct": {
+   "height_mm": 4.1,
+   "rim_diameter_mm": -1.2,
+   "base_diameter_mm": -3.8
+  },
+  "web_vs_ruler_pct": {
+   "height_mm": 6.0,
+   "rim_diameter_mm": 2.4,
+   "base_diameter_mm": -5.5
+  },
+  "cli_repro_from_the_web_video_mm": {
+   "height_mm": 71.3,
+   "rim_diameter_mm": 88.1,
+   "base_diameter_mm": 63.8
+  },
+  "finding": "Not within 1% of the CLI headline (height +4.1%). Cause: the worker ran SAM 3D Objects, which generated a new mesh; the CLI headline imported an earlier SAM 3D mesh (runs/final_e2e). Re-running the CLI on the worker's own downloaded video (byte-identical to mug_on_table.mp4) with that same mesh gives exactly 71.3 / 88.1 / 63.8 mm, so the web path itself changes nothing; the spread is SAM 3D run-to-run variation."
+ }
+}

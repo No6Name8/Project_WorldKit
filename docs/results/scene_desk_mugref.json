@@ -1,0 +1,50 @@
+{
+ "id": "scene_desk_mugref",
+ "kind": "scene (map mode)",
+ "run": "pipeline/runs/desk_mugref",
+ "command": "python -m worldkit.scene samples/desk_scene_coin.mp4 --out runs/desk_mugref --ref \"striped mug=70mm\"",
+ "input": {
+  "video": "pipeline/samples/desk_scene_coin.mp4",
+  "sha256": "b3095f5546682194b82cc652eadd00a918d6f5544c4fa67f64238ddb56992aee"
+ },
+ "stl": {
+  "object": "striped mug",
+  "path": "pipeline/runs/desk_mugref/objects/striped_mug/model_print.stl",
+  "sha256": "8d6ae5c3c399487ab28ae522e6ec64dbb9bb797799fed2c27feeb698d90dfb44",
+  "bbox_mm": [
+   76.8,
+   100.7,
+   71.6
+  ]
+ },
+ "scale_source": "striped mug, 70 mm height, reconstructed mesh height set to the supplied value",
+ "measure_method": "scripts/accuracy_table.load_model_objects (scene object STL, base plate excluded)",
+ "measured_mm": {
+  "height_mm": 70.0,
+  "_plate_mm": 1.6,
+  "rim_diameter_mm": 71.61,
+  "base_diameter_mm": 59.59,
+  "diameter_mm": 72.12,
+  "width_mm": 87.02,
+  "depth_mm": 73.37
+ },
+ "ruler": {
+  "dimensions": {
+   "rim_diameter_mm": {
+    "ruler_mm": 85,
+    "model_mm": 71.6,
+    "error_pct": -15.8
+   },
+   "base_diameter_mm": {
+    "ruler_mm": 65,
+    "model_mm": 59.6,
+    "error_pct": -8.3
+   }
+  },
+  "mean_abs_error_pct": 12.1,
+  "worst_abs_error_pct": 15.8
+ },
+ "report_copy": "docs/results/reports/scene_desk_mugref_scene_report.json",
+ "scene_copy": "docs/results/reports/scene_desk_mugref_scene.json",
+ "section": "f"
+}

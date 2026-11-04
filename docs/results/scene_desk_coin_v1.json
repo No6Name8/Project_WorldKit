@@ -1,0 +1,55 @@
+{
+ "id": "scene_desk_coin_v1",
+ "kind": "scene (map mode)",
+ "run": "pipeline/runs/desk_coin",
+ "command": "python -m worldkit.scene samples/desk_scene_coin.mp4 --out runs/desk_coin --coin saudi-25-halalas --vggt --fresh --keep-frames 20",
+ "input": {
+  "video": "pipeline/samples/desk_scene_coin.mp4",
+  "sha256": "b3095f5546682194b82cc652eadd00a918d6f5544c4fa67f64238ddb56992aee"
+ },
+ "stl": {
+  "object": "striped mug",
+  "path": "pipeline/runs/desk_coin/objects/striped_mug/model_print.stl",
+  "sha256": "1e3e3aeb5e2fae515d91f0c21309f58db64cf2e5e8061567e64cc286028e1232",
+  "bbox_mm": [
+   94.2,
+   121.8,
+   67.2
+  ]
+ },
+ "scale_source": "coin, 21.5 mm diameter, disk ellipse major axis (weak perspective)",
+ "measure_method": "scripts/accuracy_table.load_model_objects (scene object STL, base plate excluded)",
+ "measured_mm": {
+  "height_mm": 65.6,
+  "_plate_mm": 1.6,
+  "rim_diameter_mm": 87.75,
+  "base_diameter_mm": 66.77,
+  "diameter_mm": 87.78,
+  "width_mm": 104.6,
+  "depth_mm": 90.04
+ },
+ "ruler": {
+  "dimensions": {
+   "height_mm": {
+    "ruler_mm": 70,
+    "model_mm": 65.6,
+    "error_pct": -6.3
+   },
+   "rim_diameter_mm": {
+    "ruler_mm": 85,
+    "model_mm": 87.7,
+    "error_pct": 3.2
+   },
+   "base_diameter_mm": {
+    "ruler_mm": 65,
+    "model_mm": 66.8,
+    "error_pct": 2.7
+   }
+  },
+  "mean_abs_error_pct": 4.1,
+  "worst_abs_error_pct": 6.3
+ },
+ "report_copy": "docs/results/reports/scene_desk_coin_v1_scene_report.json",
+ "scene_copy": "docs/results/reports/scene_desk_coin_v1_scene.json",
+ "section": "b"
+}

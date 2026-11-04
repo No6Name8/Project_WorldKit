@@ -8,7 +8,7 @@ WorldKit
 
 ## Tagline
 
-Film an object, get a real-size 3D model you can edit by typing and print.
+Film an object, get a 3D model, scaled from a coin or card, that you can edit by typing and print.
 
 ## Track
 
@@ -16,7 +16,7 @@ Indie Developer
 
 ## Description (250 words)
 
-WorldKit turns a short phone video into a real-size 3D model you can inspect, edit by typing, and 3D print.
+WorldKit turns a short phone video into a 3D model, with its scale estimated from a coin or card, that you can inspect, edit by typing, and 3D print.
 
 You film an object with a coin beside it. Muse Spark names the object and picks the best frame. SAM 3.1 segments the object and the coin in every frame, and SAM 3D Objects, running on a Modal A100, rebuilds the object as a textured mesh. The coin fixes the scale and camera angle, and the mesh's proportions are fitted to the SAM silhouettes. On a real mug measured with a ruler, the model's height, rim and base came within +1.9%, +3.7% and -1.9%.
 
@@ -70,7 +70,7 @@ Only the models and the vendored libraries (three.js, Rapier, fonts) come from o
 
 Map mode turns one phone video of a desk into a 3D environment. It reconstructs:
 
-- a real-size table: a stadium top fused from SAM 3.1 masks on the VGGT plane, plus the gold base estimated from the frames;
+- a table with its scale estimated from the coin or card: a stadium top fused from SAM 3.1 masks on the VGGT plane, plus the gold base estimated from the frames;
 - the objects: SAM 3D Objects meshes, or a revolved silhouette profile for the incense burner;
 - the scale reference (coin or bank card) as known geometry;
 - a printable diorama.

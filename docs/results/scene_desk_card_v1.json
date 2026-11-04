@@ -1,0 +1,55 @@
+{
+ "id": "scene_desk_card_v1",
+ "kind": "scene (map mode)",
+ "run": "pipeline/runs/desk_card",
+ "command": "python -m worldkit.scene samples/desk_scene_card.mp4 --out runs/desk_card --card --vggt --prefer-vggt ... (the full flag list is in the copied scene_report.json; argv is not logged)",
+ "input": {
+  "video": "pipeline/samples/desk_scene_card.mp4",
+  "sha256": "5a01a0824165dc108040883810f6b96507202233b7bcbce28b98968801fcd2ac"
+ },
+ "stl": {
+  "object": "striped cup",
+  "path": "pipeline/runs/desk_card/objects/striped_cup/model_print.stl",
+  "sha256": "ebdae7a7ec914a530c38d0ead88c9356d9447efcc1fc16defe94d423bb0dc67c",
+  "bbox_mm": [
+   85.8,
+   85.7,
+   83.4
+  ]
+ },
+ "scale_source": "card (85.6 x 54 mm), corner fit, weak perspective, perspective-corrected per object with VGGT depth",
+ "measure_method": "scripts/accuracy_table.load_model_objects (scene object STL, base plate excluded)",
+ "measured_mm": {
+  "height_mm": 81.8,
+  "_plate_mm": 1.6,
+  "rim_diameter_mm": 77.48,
+  "base_diameter_mm": 56.98,
+  "diameter_mm": 77.85,
+  "width_mm": 81.88,
+  "depth_mm": 81.37
+ },
+ "ruler": {
+  "dimensions": {
+   "height_mm": {
+    "ruler_mm": 70,
+    "model_mm": 81.8,
+    "error_pct": 16.9
+   },
+   "rim_diameter_mm": {
+    "ruler_mm": 85,
+    "model_mm": 77.5,
+    "error_pct": -8.8
+   },
+   "base_diameter_mm": {
+    "ruler_mm": 65,
+    "model_mm": 57.0,
+    "error_pct": -12.3
+   }
+  },
+  "mean_abs_error_pct": 12.7,
+  "worst_abs_error_pct": 16.9
+ },
+ "report_copy": "docs/results/reports/scene_desk_card_v1_scene_report.json",
+ "scene_copy": "docs/results/reports/scene_desk_card_v1_scene.json",
+ "section": "c"
+}

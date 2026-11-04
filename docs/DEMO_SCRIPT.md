@@ -23,7 +23,7 @@ claims while recording. Where a number comes from the live screen (AI Edit), rea
   .venv\Scripts\python.exe -m worldkit.worker --once
   ```
   Decide before recording which way you will show it:
-  - **Real.** It runs SAM 3D on Modal and the Meta API. It takes several minutes and uses credits. The real pipeline has never been run through this hosted path, so do one complete rehearsal first. Cut the waiting time in the edit and say "sped up".
+  - **Real.** It runs SAM 3D on Modal and the Meta API. It takes several minutes and uses credits. The real pipeline through this hosted path took 715 s in its one real run (2026-11-04), so do one complete rehearsal first. Cut the waiting time in the edit and say "sped up".
   - **`--dry-run`.** It publishes the bundled mug instead of processing the video. If you use it, the voice-over must say so.
 - [ ] Open a slicer (PrusaSlicer, Cura or Bambu Studio) with an empty plate, set to mm.
 - [ ] Rehearse once (the reset script gives a throwaway copy). The rehearsed wordings and timings are in `docs/DEMO_EDITS.md`. Use the exact wording.

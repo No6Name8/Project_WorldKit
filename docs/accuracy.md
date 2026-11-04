@@ -27,7 +27,9 @@ height aspect and taper of the generated mesh are fitted to SAM 3.1 silhouettes,
 
 Mean absolute error 2.5%, worst 3.7%. Caveats: one mug only; the silhouette IoU is flat over heights 70.5-72.9 mm, so the real
 uncertainty is about +-2%; the taper stage was added after seeing the base-diameter error (its fit uses no ground truth), so this result
-is partly tuned by hindsight and needs a second object to confirm.
+is partly tuned by hindsight and needs a second object to confirm. Run-to-run variation: the same video run fresh through the web app and the laptop worker (2026-11-04, a new SAM 3D mesh, `docs/results/e2e_web_real.json`) gave 74.2 / 87.0 / 61.4 mm (+6.0 / +2.4 / -5.5%). The CLI with the headline's own mesh reproduces 71.3 / 88.1 / 63.8 mm exactly from that same video, so the difference is the generated mesh, not the web path.
+
+Source: `docs/results/object_mug_coin.json` (command, input SHA-256, measured STL SHA-256).
 
 ## b) Scene mode, coin scale, desk run (`runs/desk_coin`): layout, not metrology
 
@@ -44,6 +46,8 @@ plausible, not that the object sizes are measured.
 Mean absolute error 4.1%, worst 6.3%. The height miss comes from the silhouette-fitted stretch reaching the edge of its search grid
 (k = 0.80) with a tiny coin (coin-edge error about 5-8%, scale spread across frames 9.5%). The black case (56 mm tall in the model) has
 no ground truth and is not scored.
+
+Source: `docs/results/scene_desk_coin_v1.json` (command, input SHA-256, measured STL SHA-256).
 
 ## c) Scene mode, card scale, latest run (`runs/desk_card`, 2026-11-02): documented limitation
 
@@ -70,6 +74,8 @@ working feature. Causes, plainly:
 - The frames with a large mug and the card together (43-47 of the 2 fps extraction) were not among the 12 kept, and the SAM call cap
   for the run (25) was spent.
 
+Source: `docs/results/scene_desk_card_v1.json` (command, input SHA-256, measured STL SHA-256).
+
 ## d) Scene mode v2, coin scale, VGGT cameras, triangulated placement (`runs/desk_v2`, 2026-11-03)
 
 Video `pipeline/samples/desk_scene_coin.mp4` (33 s, about one lap). VGGT-1B cameras on all 66 frames (2 fps). Scale from the coin measured
@@ -94,6 +100,8 @@ Silhouette IoU on the 6 held-out frames (VGGT cameras): mug 0.608, black case 0.
 0.582. One Muse Spark correction round proposed 3 moves; none improved IoU, so before and after are equal. The mug's worst view (0.265) is
 one where the mug is cut off at the image edge.
 
+Source: `docs/results/scene_desk_v2.json` (command, input SHA-256, measured STL SHA-256).
+
 ## e) Scene mode, card scale, three laps (`runs/desk_card3`, 2026-11-03)
 
 Video `pipeline/samples/desk_scene_card.mp4` (113 s, three laps), VGGT on 113 frames (1 fps). Scale from the bank card: the rectangle
@@ -116,6 +124,14 @@ so the height is likely low (a camera plane sweep was tried and was inconclusive
 Silhouette IoU on 6 held-out frames (VGGT cameras): incense burner 0.639 (revolved profile: its SAM 3D mesh was not watertight),
 black case 0.627, water bottle 0.381, mug 0.185 (one held-out frame); mean 0.542; table top 0.501. One Muse Spark round: no correction
 improved IoU.
+
+Source: `docs/results/scene_desk_card3.json` (command, input SHA-256, measured STL SHA-256).
+
+## Second object: Hydro Flask 32 oz, coin scale, Object mode (`runs/object2`, 2026-11-04): not scored
+
+Video `pipeline/samples/object2.mp4` (67 s; the bottle with the coin on a small round table), run exactly as the mug: `--object "water bottle" --coin saudi-25-halalas`, no other flags. Ruler: height 240 mm (cap on), widest body diameter 90 mm, cap rim width 70 mm.
+
+**Not scored.** SAM 3.1 found the coin in only 1 of the 12 frames the run kept (the coin calibration needs 3), so the scale stayed a placeholder and no size from this run means anything. Muse Spark picked the best frame and SAM 3D Objects built a mesh, but without a scale there is nothing to compare with the ruler. The stage was stopped without tuning, as briefed. What is different about this object: it is tall (240 mm, more than three times the mug), so the camera stays farther back and the coin is smaller in every frame than in the mug video. Source: `docs/results/object_hydroflask_coin.json`.
 
 ## Side by side (mug)
 

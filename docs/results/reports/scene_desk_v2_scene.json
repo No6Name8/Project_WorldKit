@@ -1,0 +1,259 @@
+{
+ "worldkit_scene": 1,
+ "mode": "map",
+ "source_video": "desk_scene_coin.mp4",
+ "source_frames": 66,
+ "video_seconds": 33,
+ "units": "centimetres on the table plane (Y up, origin at the table centre)",
+ "cm_per_scene_unit": 1.0,
+ "scale_source": {
+  "text": "scale source: coin 21.5 mm, measured on the table plane in 5 frames (VGGT cameras)",
+  "kind": "coin",
+  "name": "coin",
+  "size_mm": 21.5,
+  "object_id": "reference"
+ },
+ "layout_method": "mask-centroid rays triangulated over the fit frames (VGGT cameras), dropped onto the fitted table plane; scale and yaw fitted to the SAM silhouettes in the fit frames; the case yaw seeded by its footprint's principal axis",
+ "objects": [
+  {
+   "id": "table",
+   "name": "table top",
+   "mesh": "objects/table/model.glb",
+   "role": "parent",
+   "printable": false,
+   "reconstruction_model": {
+    "name": "stadium fitted to fused SAM 3.1 table masks on the VGGT plane",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "rotation_deg": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    121.0,
+    2.0,
+    60.0
+   ],
+   "note": "top: stadium from the fused masks, thickness 2.0 cm estimated (not measured); tabletop only (no legs); colours = median of the masks"
+  },
+  {
+   "id": "reference",
+   "name": "reference: coin 21.5 mm",
+   "mesh": "objects/reference/model.glb",
+   "role": "child",
+   "printable": false,
+   "is_scale_reference": true,
+   "reconstruction_model": {
+    "name": "known geometry (not reconstructed)",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     -11.592429310550283,
+     0.0,
+     -12.122514225515708
+    ],
+    "rotation_deg": [
+     0,
+     0.0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    2.15,
+    0.15,
+    2.15
+   ],
+   "note": "thickness 1.5 mm assumed"
+  },
+  {
+   "id": "mug",
+   "name": "striped mug",
+   "mesh": "objects/mug/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/mug/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     -23.463140640683196,
+     0.0,
+     12.144148021509103
+    ],
+    "rotation_deg": [
+     0.0,
+     276.0,
+     0.0
+    ],
+    "scale": [
+     5.081875090305272,
+     5.081875090305272,
+     5.081875090305272
+    ]
+   },
+   "size_cm": [
+    10.14,
+    7.43,
+    8.01
+   ],
+   "size_mm": [
+    101.4,
+    74.3,
+    80.1
+   ],
+   "is_scale_reference": false
+  },
+  {
+   "id": "case",
+   "name": "black case",
+   "mesh": "objects/case/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/case/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     19.436835951844113,
+     0.0,
+     13.629959546139213
+    ],
+    "rotation_deg": [
+     0.0,
+     348.6,
+     0.0
+    ],
+    "scale": [
+     7.5958379943825935,
+     7.5958379943825935,
+     7.5958379943825935
+    ]
+   },
+   "size_cm": [
+    15.25,
+    4.96,
+    8.77
+   ],
+   "size_mm": [
+    152.5,
+    49.6,
+    87.7
+   ],
+   "is_scale_reference": false
+  },
+  {
+   "id": "candle",
+   "name": "candle in red holder",
+   "mesh": "objects/candle/model.glb",
+   "role": "child",
+   "printable": true,
+   "stl": "objects/candle/model_print.stl",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "built": "SAM 3D Objects (generated mesh)",
+   "transform": {
+    "position": [
+     -37.447742511921184,
+     0.0,
+     -2.8946151068871164
+    ],
+    "rotation_deg": [
+     0.0,
+     75.0,
+     0.0
+    ],
+    "scale": [
+     11.001201097946229,
+     11.001201097946229,
+     11.001201097946229
+    ]
+   },
+   "size_cm": [
+    6.15,
+    22.0,
+    6.07
+   ],
+   "size_mm": [
+    61.5,
+    220.0,
+    60.7
+   ],
+   "is_scale_reference": false
+  }
+ ],
+ "verify": {
+  "mean_iou_before": 0.643,
+  "mean_iou_after": 0.643,
+  "images": [
+   "verify/vggt_view0_frame_000006.png",
+   "verify/vggt_view1_frame_000012.png",
+   "verify/vggt_view2_frame_000029.png",
+   "verify/vggt_view3_frame_000041.png",
+   "verify/vggt_view4_frame_000048.png",
+   "verify/vggt_view5_frame_000057.png"
+  ],
+  "cameras": "VGGT, held-out frames"
+ },
+ "diorama": {
+  "stl": "diorama.stl",
+  "scale_ratio": 0.2073,
+  "scale_text": "1:4.8",
+  "size_mm": [
+   250.9,
+   124.4,
+   49.7
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "table",
+   "reference",
+   "mug",
+   "case",
+   "candle"
+  ],
+  "warnings": []
+ },
+ "skipped": [
+  {
+   "name": "silver incense burner",
+   "reason": "not part of this scene build"
+  }
+ ]
+}

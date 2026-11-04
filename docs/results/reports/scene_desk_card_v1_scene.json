@@ -1,0 +1,160 @@
+{
+ "worldkit_scene": 1,
+ "mode": "map",
+ "source_video": "desk_scene_card.mp4",
+ "frame": "sharp_06",
+ "units": "centimetres on the desk plane (Y up, origin at the scale reference)",
+ "cm_per_scene_unit": 1.0,
+ "scale_source": {
+  "text": "scale source: card (85.6 x 54 mm), corner fit, weak perspective, perspective-corrected per object with VGGT depth",
+  "kind": "card",
+  "name": "bank card",
+  "size_mm": 85.6,
+  "frames_used": [
+   "sharp_06",
+   "sharp_07",
+   "sharp_09"
+  ],
+  "object_id": null,
+  "considered": [
+   "scale source: card (85.6 x 54 mm), corner fit, weak perspective"
+  ],
+  "notes": []
+ },
+ "scale_calibration": {
+  "reference": "bank card",
+  "reference_size_mm": 85.6,
+  "relative_spread_mad": null,
+  "frames_used": 3
+ },
+ "objects": [
+  {
+   "id": "desk",
+   "name": "coffee table",
+   "mesh": "objects/desk/model.glb",
+   "report": "objects/desk/report.json",
+   "role": "parent",
+   "reconstruction_model": {
+    "name": "procedural plane",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "rotation_deg": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    30.0,
+    1.0,
+    22.0
+   ],
+   "printable": false
+  },
+  {
+   "id": "striped_cup",
+   "name": "striped cup",
+   "mesh": "objects/striped_cup/model.glb",
+   "report": "objects/striped_cup/report.json",
+   "role": "child",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "transform": {
+    "position": [
+     -4.604745456377953,
+     4.087564886970748,
+     -23.92624803781098
+    ],
+    "rotation_deg": [
+     0.0,
+     313.0,
+     0.0
+    ],
+    "scale": [
+     4.087564886970748,
+     4.087564886970748,
+     4.087564886970748
+    ]
+   },
+   "size_cm": [
+    8.26,
+    8.18,
+    8.09
+   ],
+   "size_mm": [
+    82.6,
+    81.8,
+    80.9
+   ],
+   "stl": "objects/striped_cup/model_print.stl",
+   "printable": true,
+   "is_scale_reference": false
+  }
+ ],
+ "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used",
+ "verify": {
+  "mean_iou_before": 0.207,
+  "mean_iou_after": 0.207,
+  "images": [
+   "verify/weak_view0_sharp_06.png",
+   "verify/weak_view1_sharp_07.png",
+   "verify/weak_view2_sharp_09.png",
+   "verify/vggt_view0_sharp_06.png",
+   "verify/vggt_view1_sharp_07.png",
+   "verify/vggt_view2_sharp_09.png"
+  ]
+ },
+ "diorama": {
+  "stl": "diorama.stl",
+  "scale_ratio": 1.0,
+  "scale_text": "1:1",
+  "size_mm": [
+   94.6,
+   92.9,
+   84.3
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "striped_cup"
+  ],
+  "repairs": [
+   "striped_cup: trimesh_repair"
+  ],
+  "warnings": [],
+  "thin_feature_fraction": 0.0
+ },
+ "skipped": [
+  {
+   "name": "silver incense burner",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "water bottle",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "black case",
+   "reason": "not visible in the reference frame sharp_06"
+  }
+ ]
+}

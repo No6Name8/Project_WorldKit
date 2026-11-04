@@ -110,6 +110,50 @@ def load_model_objects(runs: dict[str, Path], scenes: list[Path]) -> dict[str, d
     return found
 
 
+def from_results(results_dir: Path, out: Path) -> str:
+    """docs/accuracy.md generated from docs/results/*.json (one file per claim, written by scripts/make_results.py) and the page's prose
+    (docs/results/accuracy_text.json). Every number in a table comes from a claim file."""
+    import re
+
+    text = json.loads((results_dir / "accuracy_text.json").read_text(encoding="utf-8"))
+    claims = {}
+    for f in sorted(results_dir.glob("*.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if isinstance(d, dict) and d.get("section"):
+            claims[d["section"]] = d
+    lines = [text["intro"], ""]
+    names = {"height_mm": "height", "rim_diameter_mm": "rim_diameter", "base_diameter_mm": "base_diameter"}
+    for key, sec in text["sections"].items():
+        lines += [f"## {sec['title']}", ""]
+        if sec.get("before"):
+            lines += [sec["before"], ""]
+        c = claims.get(key)
+        if c and sec.get("scale_label"):
+            lines += ["| object | dimension | real mm | model mm | error % | model scale from |", "|---|---|---:|---:|---:|---|"]
+            for dim, v in c["ruler"]["dimensions"].items():
+                lines.append(f"| {sec['object_label']} | {names[dim]} | {v['ruler_mm']:g} | {v['model_mm']:.1f} | {v['error_pct']:+.1f} | {sec['scale_label']} |")
+            lines.append("")
+            after = re.sub(r"Mean absolute error [\d.]+%, worst [\d.]+%", f"Mean absolute error {c['ruler']['mean_abs_error_pct']}%, worst {c['ruler']['worst_abs_error_pct']}%",
+                           sec.get("after", ""), count=1)
+            if after:
+                lines += [after, ""]
+            lines += [f"Source: `docs/results/{c['id']}.json` (command, input SHA-256, measured STL SHA-256).", ""]
+        elif key.startswith("Side by side"):
+            cols = [k for k in "abcde" if k in claims]
+            hdr = {"a": "a) coin, Object mode", "b": "b) coin, scene mode", "c": "c) card, scene mode", "d": "d) coin, scene v2", "e": "e) card, three laps"}
+            lines += ["| dimension | real mm | " + " | ".join(hdr[k] for k in cols) + " |", "|---|---:|" + "---:|" * len(cols)]
+            for dim, label in (("height_mm", "height"), ("rim_diameter_mm", "rim diameter"), ("base_diameter_mm", "base diameter")):
+                vals = [claims[k]["ruler"]["dimensions"].get(dim) for k in cols]
+                real = next(v["ruler_mm"] for v in vals if v)
+                lines.append(f"| {label} | {real:g} | " + " | ".join(f"{v['model_mm']:.1f} ({v['error_pct']:+.1f}%)" if v else "n/a" for v in vals) + " |")
+            lines.append("")
+        elif sec.get("after"):
+            lines += [sec["after"], ""]
+    md = "\n".join(lines).rstrip() + "\n"
+    out.write_text(md, encoding="utf-8")
+    return md
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", nargs="*", default=None, help="name=run_dir (an object-mode run with model_print.stl + report.json)")
@@ -117,7 +161,13 @@ def main(argv=None) -> int:
     ap.add_argument("--truth", type=Path, default=GT_PATH)
     ap.add_argument("--out", type=Path, default=OUT_MD)
     ap.add_argument("--alias", action="append", default=[], help='model name = ground-truth name, e.g. "striped cup=mug" (the discovery step names objects freely)')
+    ap.add_argument("--from-results", nargs="?", const=str(ROOT / "docs" / "results"), default=None,
+                    help="generate docs/accuracy.md from docs/results/*.json (written by scripts/make_results.py) instead of measuring runs")
     a = ap.parse_args(argv)
+    if a.from_results:
+        md = from_results(Path(a.from_results), a.out)
+        print(md)
+        return 0
     runs = DEFAULT_RUNS if a.runs is None else {kv.split("=", 1)[0]: Path(kv.split("=", 1)[1]) for kv in a.runs}
     truth = json.loads(a.truth.read_text(encoding="utf-8"))
     model = load_model_objects({k: v for k, v in runs.items() if (v / "model_print.stl").is_file()}, [Path(s) for s in a.scenes])

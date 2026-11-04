@@ -1,0 +1,53 @@
+{
+ "id": "scene_desk_card3",
+ "kind": "scene",
+ "run": "pipeline/runs/desk_card3",
+ "command": "python -m worldkit.desk samples/desk_scene_card.mp4 --out runs/desk_card3 --ref card --fps 1.0 --objects mug case burner bottle --legs --concept \"burner=silver lantern\" --spark-rounds 1",
+ "input": {
+  "video": "pipeline/samples/desk_scene_card.mp4",
+  "sha256": "5a01a0824165dc108040883810f6b96507202233b7bcbce28b98968801fcd2ac"
+ },
+ "stl": {
+  "path": "pipeline/runs/desk_card3/objects/mug/model_print.stl",
+  "sha256": "b67378a8c6210fff6ac880ba74167ce347efa7d4e72c7e860f34bb3b614791d8",
+  "bbox_mm": [
+   89.2,
+   117.5,
+   85.8
+  ]
+ },
+ "measure_method": "scripts/accuracy_table.measure_mesh (object STL without a base plate)",
+ "measured_mm": {
+  "height_mm": 85.83,
+  "_plate_mm": 0.0,
+  "rim_diameter_mm": 87.38,
+  "base_diameter_mm": 63.83,
+  "diameter_mm": 89.69,
+  "width_mm": 104.63,
+  "depth_mm": 89.16
+ },
+ "ruler": {
+  "dimensions": {
+   "height_mm": {
+    "ruler_mm": 70,
+    "model_mm": 85.8,
+    "error_pct": 22.6
+   },
+   "rim_diameter_mm": {
+    "ruler_mm": 85,
+    "model_mm": 87.4,
+    "error_pct": 2.8
+   },
+   "base_diameter_mm": {
+    "ruler_mm": 65,
+    "model_mm": 63.8,
+    "error_pct": -1.8
+   }
+  },
+  "mean_abs_error_pct": 9.1,
+  "worst_abs_error_pct": 22.6
+ },
+ "report_copy": "docs/results/reports/scene_desk_card3_desk_report.json",
+ "scene_copy": "docs/results/reports/scene_desk_card3_scene.json",
+ "section": "e"
+}

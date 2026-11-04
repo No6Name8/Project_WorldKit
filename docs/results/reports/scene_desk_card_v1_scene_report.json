@@ -1,0 +1,405 @@
+{
+ "mode": "map",
+ "warnings": [],
+ "timings_sec": {
+  "frames": 3.5,
+  "track": 0.0,
+  "build_wall": 0.0,
+  "reshape": 271.3,
+  "place": 284.2,
+  "verify": 64.1,
+  "export": 0.9
+ },
+ "spark_calls": 1,
+ "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used",
+ "card_detection": {
+  "frames": {
+   "sharp_06": "rectangle",
+   "sharp_07": "rectangle",
+   "sharp_09": "rectangle"
+  },
+  "rejected_by_eye": [
+   "sharp_00",
+   "sharp_11"
+  ],
+  "reference_elevation_deg": 28.75803950297793,
+  "per_frame": {
+   "sharp_06": {
+    "px_per_cm": 9.139,
+    "elevation_deg": 29.24
+   },
+   "sharp_07": {
+    "px_per_cm": 7.527,
+    "elevation_deg": 28.76
+   },
+   "sharp_09": {
+    "px_per_cm": 9.074,
+    "elevation_deg": 28.8
+   }
+  }
+ },
+ "frame_selection": {
+  "tracked_frames": [
+   "sharp_06",
+   "sharp_07",
+   "sharp_09",
+   "sharp_00",
+   "sharp_01",
+   "sharp_02"
+  ]
+ },
+ "discover_from_cache": true,
+ "discovered": {
+  "objects": [
+   "black case",
+   "striped cup"
+  ],
+  "surface": "coffee table",
+  "spark_tokens": {
+   "completion_tokens": 1775,
+   "prompt_tokens": 3401,
+   "total_tokens": 5176,
+   "completion_tokens_details": {
+    "accepted_prediction_tokens": null,
+    "audio_tokens": null,
+    "reasoning_tokens": 1569,
+    "rejected_prediction_tokens": null,
+    "text_tokens": null
+   },
+   "prompt_tokens_details": {
+    "audio_tokens": null,
+    "cache_write_tokens": null,
+    "cached_tokens": 0,
+    "image_tokens": null,
+    "text_tokens": null
+   }
+  }
+ },
+ "skipped": [
+  {
+   "name": "silver incense burner",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "water bottle",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "black case",
+   "reason": "not visible in the reference frame sharp_06"
+  }
+ ],
+ "build": {
+  "backend": "modal",
+  "parallel_containers_max": 3,
+  "from_cache": 2,
+  "modal_wall_seconds": 0.0,
+  "modal_metered_cost_usd_delta": null
+ },
+ "built": [
+  {
+   "id": "black_case",
+   "name": "black case"
+  },
+  {
+   "id": "striped_cup",
+   "name": "striped cup"
+  }
+ ],
+ "scale_source": {
+  "text": "scale source: card (85.6 x 54 mm), corner fit, weak perspective, perspective-corrected per object with VGGT depth",
+  "kind": "card",
+  "name": "bank card",
+  "size_mm": 85.6,
+  "frames_used": [
+   "sharp_06",
+   "sharp_07",
+   "sharp_09"
+  ],
+  "object_id": null,
+  "considered": [
+   "scale source: card (85.6 x 54 mm), corner fit, weak perspective"
+  ],
+  "notes": []
+ },
+ "coin": {
+  "frames_with_reference": [
+   "sharp_06",
+   "sharp_07",
+   "sharp_09"
+  ]
+ },
+ "grounded_reshape": {
+  "black_case": {
+   "applied": false,
+   "reason": "only 0 frame(s) show both the object and the card (need 1)"
+  },
+  "striped_cup": {
+   "method": "the scale reference (coin ellipse or card corners) fixes the camera elevation; height aspect and taper fitted to the silhouettes at that elevation; lateral scale from the reference",
+   "aspect_k": 1.0,
+   "taper_t": -0.2,
+   "applied": true,
+   "cm_per_mesh_unit": 3.9553883552952875,
+   "height_cm": 7.910776710590575,
+   "height_range_cm": [
+    7.806357783421089,
+    7.923632522334478
+   ],
+   "mean_iou_by_k": {
+    "0.80": 0.8778,
+    "0.85": 0.8858,
+    "0.90": 0.8885,
+    "0.95": 0.8954,
+    "1.00": 0.8943,
+    "1.05": 0.891,
+    "1.10": 0.8818
+   },
+   "mean_iou_by_taper": {
+    "-0.20": 0.9249,
+    "-0.15": 0.9209,
+    "-0.10": 0.914,
+    "-0.05": 0.9047,
+    "+0.00": 0.8943,
+    "+0.05": 0.884,
+    "+0.10": 0.8753
+   },
+   "mean_iou_generated": 0.8943187071951043,
+   "mean_iou_final": 0.9248610721656348,
+   "frames": [
+    {
+     "frame": "sharp_06",
+     "card_elevation_deg": 21.059201524132035,
+     "px_per_cm": 7.380780691637499
+    },
+    {
+     "frame": "sharp_09",
+     "card_elevation_deg": 20.999927673902747,
+     "px_per_cm": 7.423424727569342
+    },
+    {
+     "frame": "sharp_07",
+     "card_elevation_deg": 22.70383456218203,
+     "px_per_cm": 6.965519559644249
+    }
+   ],
+   "reference_diameter_cm": 8.56,
+   "reference": "card",
+   "min_frames": 1,
+   "frames_used": 3
+  }
+ },
+ "depth_correction": {
+  "method": "px/cm at the object = px/cm at the scale reference x z_reference / z_object; elevation at the object = elevation read off the reference + (VGGT elevation of the object - VGGT elevation of the reference); VGGT medians over the masks",
+  "per_object": {
+   "striped_cup": {
+    "sharp_06": {
+     "depth_ratio": 0.8077,
+     "elevation_delta_deg": -8.18
+    },
+    "sharp_07": {
+     "depth_ratio": 0.9253,
+     "elevation_delta_deg": -6.05
+    },
+    "sharp_09": {
+     "depth_ratio": 0.8181,
+     "elevation_delta_deg": -7.8
+    }
+   }
+  }
+ },
+ "reference_frame": "sharp_06",
+ "overlap_resolution": [],
+ "verify": {
+  "frames": [
+   "sharp_06",
+   "sharp_07",
+   "sharp_09"
+  ],
+  "iou_before": {
+   "striped_cup": {
+    "sharp_06": 0.62,
+    "sharp_07": 0.0,
+    "sharp_09": 0.0
+   }
+  },
+  "iou_after": {
+   "striped_cup": {
+    "sharp_06": 0.62,
+    "sharp_07": 0.0,
+    "sharp_09": 0.0
+   }
+  },
+  "mean_iou_before": 0.207,
+  "mean_iou_after": 0.207,
+  "camera_azimuth_from_object": {
+   "sharp_07": "striped_cup",
+   "sharp_09": "striped_cup"
+  },
+  "camera_fit": {
+   "sharp_07": {
+    "method": "azimuth from the best-pinned object (fewer than 3 objects visible)"
+   },
+   "sharp_09": {
+    "method": "azimuth from the best-pinned object (fewer than 3 objects visible)"
+   }
+  },
+  "rounds": [],
+  "images": [
+   "verify/weak_view0_sharp_06.png",
+   "verify/weak_view1_sharp_07.png",
+   "verify/weak_view2_sharp_09.png",
+   "verify/vggt_view0_sharp_06.png",
+   "verify/vggt_view1_sharp_07.png",
+   "verify/vggt_view2_sharp_09.png"
+  ],
+  "camera_method_kept": "vggt",
+  "weak_perspective": {
+   "frames": [
+    "sharp_06",
+    "sharp_07",
+    "sharp_09"
+   ],
+   "iou_before": {
+    "striped_cup": {
+     "sharp_06": 0.62,
+     "sharp_07": 0.0,
+     "sharp_09": 0.0
+    }
+   },
+   "iou_after": {
+    "striped_cup": {
+     "sharp_06": 0.62,
+     "sharp_07": 0.0,
+     "sharp_09": 0.0
+    }
+   },
+   "mean_iou_before": 0.207,
+   "mean_iou_after": 0.207,
+   "rounds": []
+  },
+  "vggt": {
+   "frames": [
+    "sharp_06",
+    "sharp_07",
+    "sharp_09"
+   ],
+   "iou_before": {
+    "striped_cup": {
+     "sharp_06": 0.357,
+     "sharp_07": 0.06,
+     "sharp_09": 0.257
+    }
+   },
+   "iou_after": {
+    "striped_cup": {
+     "sharp_06": 0.357,
+     "sharp_07": 0.06,
+     "sharp_09": 0.257
+    }
+   },
+   "mean_iou_before": 0.225,
+   "mean_iou_after": 0.225,
+   "rounds": [
+    {
+     "round": 1,
+     "worst_view": "sharp_07",
+     "spark_corrections": [
+      {
+       "id": "striped_cup",
+       "dx_cm": 4.0,
+       "dz_cm": -2.5,
+       "scale": 1.0,
+       "yaw_deg": 0.0,
+       "reason": "render overlaps water bottle, real striped cup is to image-right and further back behind bottle"
+      }
+     ],
+     "applied": [],
+     "rejected": [
+      {
+       "id": "striped_cup",
+       "dx_cm": 4.0,
+       "dz_cm": -2.5,
+       "scale": 1.0,
+       "yaw_deg": 0.0,
+       "reason": "IoU did not improve"
+      }
+     ],
+     "usage": {
+      "completion_tokens": 1532,
+      "prompt_tokens": 1000,
+      "total_tokens": 2532,
+      "completion_tokens_details": {
+       "accepted_prediction_tokens": null,
+       "audio_tokens": null,
+       "reasoning_tokens": 1453,
+       "rejected_prediction_tokens": null,
+       "text_tokens": null
+      },
+      "prompt_tokens_details": {
+       "audio_tokens": null,
+       "cache_write_tokens": null,
+       "cached_tokens": 995,
+       "image_tokens": null,
+       "text_tokens": null
+      }
+     }
+    }
+   ],
+   "spark_calls": 1,
+   "images": [
+    "verify/vggt_view0_sharp_06.png",
+    "verify/vggt_view1_sharp_07.png",
+    "verify/vggt_view2_sharp_09.png"
+   ],
+   "alignment": {
+    "cm_per_vggt_unit": 118.79586791992188,
+    "scale_spread_rel": 0.026927281355768093,
+    "coin_frames_used": 3,
+    "coin_centre_spread_cm": 1.4269012212753296,
+    "table_plane_inlier_fraction": 0.9139208516015394,
+    "table_plane_points": 52231,
+    "camera_height_above_table_cm_ref_frame": 42.57307052612305,
+    "vggt_run": {
+     "from_cache": true
+    },
+    "scale_source": "card 85.6 x 54 mm (corner 3D points from VGGT)",
+    "per_frame_cm_per_unit": [
+     118.62443,
+     125.49431,
+     118.79587
+    ],
+    "card_3d_long_short_ratio": [
+     1.5,
+     1.387,
+     1.49
+    ]
+   }
+  },
+  "note": "IoU compares the rendered silhouette with the SAM 3.1 mask. Weak-perspective method: the reference frame uses the scale reference camera; other frames use a camera fitted to the objects' base-centre pixels (IoU there tests size, shape and yaw, not position). VGGT method: per-frame pinhole cameras from VGGT, scale from the coin."
+ },
+ "diorama": {
+  "scale_ratio": 1.0,
+  "scale_text": "1:1",
+  "size_mm": [
+   94.6,
+   92.9,
+   84.3
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "striped_cup"
+  ],
+  "repairs": [
+   "striped_cup: trimesh_repair"
+  ],
+  "warnings": [],
+  "thin_feature_fraction": 0.0
+ },
+ "total_seconds": 358.4,
+ "scene": "runs\\desk_card\\scene.json"
+}

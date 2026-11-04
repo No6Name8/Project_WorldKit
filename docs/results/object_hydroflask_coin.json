@@ -1,0 +1,41 @@
+{
+ "id": "object_hydroflask_coin",
+ "section": null,
+ "kind": "object",
+ "status": "not scored",
+ "object": "Hydro Flask 32 oz (946 ml) bottle, black powder-coated, flex cap with a carry loop",
+ "command": "python -m worldkit.object samples/object2.mp4 --out runs/object2 --object \"water bottle\" --coin saudi-25-halalas",
+ "input": {
+  "video": "pipeline/samples/object2.mp4",
+  "original_name": "WhatsApp Video 2026-11-04 at 8.16.42 AM.mp4",
+  "sha256": "9e336a8d7f0421ebcbf97eb392d8e18041d55ea2361884349f6651d002581f5e"
+ },
+ "ruler_mm": {
+  "height_mm": 240,
+  "body_diameter_mm": 90,
+  "cap_rim_width_mm": 70
+ },
+ "reason": "SAM 3.1 found the coin in only 1 of 12 kept frames (the coin calibration needs 3), so the scale stayed a placeholder and no size can be scored. Not tuned: the stage was stopped as briefed.",
+ "scale_calibration": {
+  "status": "failed",
+  "reason": "only 1 frame(s) usable for scale calibration (need 3); rejected: {'sharp_00': 'reference not found in this frame', 'sharp_02': 'reference not found in this frame', 'sharp_04': 'reference not found in this frame', 'sharp_05': 'reference not found in this frame', 'sharp_06': 'reference not found in this frame', 'sharp_08': 'reference not found in this frame', 'sharp_09': 'reference not found in this frame', 'sharp_10': 'reference not found in this frame', 'sharp_11': 'reference not found in this frame'}",
+  "reference": "coin"
+ },
+ "what_was_built": {
+  "mesh_backend": "modal",
+  "mesh_method": "modal_sam3d_builtin_mesh_postprocess_and_texture_baking",
+  "object_name": "water bottle",
+  "print_ready": false
+ },
+ "timings_sec": {
+  "frames": 5.4,
+  "detect": 37.5,
+  "segment": 7.73,
+  "reconstruct": 140.79,
+  "appearance": 0.21,
+  "scale": 83.81,
+  "printprep": 0.41,
+  "preview": 3.0
+ },
+ "report_copy": "docs/results/reports/object_hydroflask_coin_report.json"
+}

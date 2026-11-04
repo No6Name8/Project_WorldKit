@@ -1,0 +1,407 @@
+{
+ "warnings": [],
+ "frames": {
+  "video": "desk_scene_coin.mp4",
+  "n_frames": 66,
+  "fps": 2.0,
+  "video_seconds": 33,
+  "reference": "coin",
+  "reference_detector_frames": [
+   "frame_000020",
+   "frame_000063",
+   "frame_000064",
+   "frame_000065",
+   "frame_000066"
+  ],
+  "fit_frames": [
+   "frame_000003",
+   "frame_000009",
+   "frame_000020",
+   "frame_000025",
+   "frame_000032",
+   "frame_000044",
+   "frame_000045",
+   "frame_000053",
+   "frame_000063"
+  ],
+  "verify_frames": [
+   "frame_000006",
+   "frame_000012",
+   "frame_000029",
+   "frame_000041",
+   "frame_000048",
+   "frame_000057"
+  ],
+  "segments": [
+   [
+    "frame_000001",
+    "frame_000022"
+   ],
+   [
+    "frame_000023",
+    "frame_000044"
+   ],
+   [
+    "frame_000045",
+    "frame_000066"
+   ]
+  ],
+  "selection": "per third of the video: sharp frames with the coin visible, >= 3 frames apart; fit and verify frames disjoint"
+ },
+ "vggt": {
+  "frames": 66,
+  "wall_s": 150.7,
+  "from_cache": false,
+  "gpu_seconds": 45.54,
+  "load_seconds": 28.07,
+  "n": 66,
+  "peak_mem_gb": 13.04,
+  "modal_cost_usd_delta": null
+ },
+ "table": {
+  "plane_inlier_share": 0.45,
+  "masks": 15,
+  "fused_cells": 22046,
+  "stadium_fit_iou": 0.975,
+  "length_cm": 121.0,
+  "width_cm": 60.0,
+  "corner_radius_cm": 29.4,
+  "is_full_stadium": true,
+  "thickness_cm": 2.0,
+  "thickness_source": "estimated (not measured)",
+  "colour_rgb": [
+   184,
+   191,
+   197
+  ],
+  "scale_source": "coin 21.5 mm, measured on the table plane in 5 frames (VGGT cameras)",
+  "reference": {
+   "kind": "coin",
+   "frames": 5,
+   "frames_detected": 5,
+   "cm_per_unit_plane": 171.1370553693844,
+   "cm_per_unit_depth": 169.27554586681754,
+   "plane_vs_depth_disagreement_pct": -1.1,
+   "relative_spread": 0.002,
+   "median_px": 27.4,
+   "position_cm": [
+    -11.59,
+    0.0,
+    -12.12
+   ],
+   "yaw_deg": 0.0
+  },
+  "length_ref_cm": 121.0,
+  "width_ref_cm": 60.0,
+  "coin": {
+   "kind": "coin",
+   "frames": 5,
+   "frames_detected": 5,
+   "cm_per_unit_plane": 171.1370553693844,
+   "cm_per_unit_depth": 169.27554586681754,
+   "plane_vs_depth_disagreement_pct": -1.1,
+   "relative_spread": 0.002,
+   "median_px": 27.4,
+   "position_cm": [
+    -11.59,
+    0.0,
+    -12.12
+   ],
+   "yaw_deg": 0.0
+  }
+ },
+ "masks": {
+  "mug": [
+   "frame_000003",
+   "frame_000009",
+   "frame_000012",
+   "frame_000025",
+   "frame_000032",
+   "frame_000041",
+   "frame_000045",
+   "frame_000048",
+   "frame_000053",
+   "frame_000063"
+  ],
+  "case": [
+   "frame_000003",
+   "frame_000006",
+   "frame_000020",
+   "frame_000025",
+   "frame_000029",
+   "frame_000041",
+   "frame_000044",
+   "frame_000045",
+   "frame_000048",
+   "frame_000053",
+   "frame_000057"
+  ],
+  "candle": [
+   "frame_000003",
+   "frame_000006",
+   "frame_000020",
+   "frame_000025",
+   "frame_000029",
+   "frame_000032",
+   "frame_000045",
+   "frame_000048",
+   "frame_000053",
+   "frame_000057",
+   "frame_000063"
+  ]
+ },
+ "gpu": [
+  {
+   "what": "SAM 3D mug, case, candle",
+   "wall_s": 177.5,
+   "modal_cost_usd_delta": null
+  }
+ ],
+ "objects": {
+  "mug": {
+   "view": "frame_000063",
+   "qc_ok": true,
+   "qc": [],
+   "faces": 16982,
+   "extents": [
+    1.578,
+    1.461,
+    2.0
+   ]
+  },
+  "case": {
+   "view": "frame_000044",
+   "qc_ok": true,
+   "qc": [],
+   "faces": 7330,
+   "extents": [
+    2.0,
+    0.653,
+    0.909
+   ]
+  },
+  "candle": {
+   "view": "frame_000063",
+   "qc_ok": true,
+   "qc": [],
+   "faces": 2848,
+   "extents": [
+    0.553,
+    2.0,
+    0.559
+   ]
+  }
+ },
+ "placement": {
+  "method": "mask-centroid rays triangulated over the fit frames (VGGT cameras), dropped onto the fitted table plane; scale and yaw fitted to the SAM silhouettes in the fit frames; the case yaw seeded by its footprint's principal axis",
+  "objects": {
+   "mug": {
+    "triangulated_from": 7,
+    "center_height_cm": 4.39,
+    "built": "SAM 3D Objects (generated mesh)",
+    "position_cm": [
+     -23.46,
+     0.0,
+     12.14
+    ],
+    "yaw_deg": 276.0,
+    "scale": 5.0819,
+    "fit_frames": [
+     "frame_000003",
+     "frame_000009",
+     "frame_000025",
+     "frame_000032",
+     "frame_000045",
+     "frame_000053",
+     "frame_000063"
+    ],
+    "fit_iou": 0.796,
+    "size_cm": [
+     10.14,
+     7.43,
+     8.01
+    ]
+   },
+   "case": {
+    "triangulated_from": 6,
+    "center_height_cm": 1.72,
+    "principal_axis_deg": -168.6,
+    "built": "SAM 3D Objects (generated mesh)",
+    "position_cm": [
+     19.44,
+     0.0,
+     13.63
+    ],
+    "yaw_deg": 348.6,
+    "scale": 7.5958,
+    "fit_frames": [
+     "frame_000003",
+     "frame_000020",
+     "frame_000025",
+     "frame_000044",
+     "frame_000045",
+     "frame_000053"
+    ],
+    "fit_iou": 0.785,
+    "size_cm": [
+     15.25,
+     4.96,
+     8.77
+    ]
+   },
+   "candle": {
+    "triangulated_from": 7,
+    "center_height_cm": 7.27,
+    "built": "SAM 3D Objects (generated mesh)",
+    "position_cm": [
+     -37.45,
+     0.0,
+     -2.89
+    ],
+    "yaw_deg": 75.0,
+    "scale": 11.0012,
+    "fit_frames": [
+     "frame_000003",
+     "frame_000020",
+     "frame_000025",
+     "frame_000032",
+     "frame_000045",
+     "frame_000053",
+     "frame_000063"
+    ],
+    "fit_iou": 0.576,
+    "size_cm": [
+     6.15,
+     22.0,
+     6.07
+    ]
+   }
+  }
+ },
+ "verify": {
+  "frames": [
+   "frame_000006",
+   "frame_000012",
+   "frame_000029",
+   "frame_000041",
+   "frame_000048",
+   "frame_000057"
+  ],
+  "iou_before": {
+   "mug": {
+    "frame_000012": 0.846,
+    "frame_000041": 0.265,
+    "frame_000048": 0.712
+   },
+   "case": {
+    "frame_000006": 0.749,
+    "frame_000029": 0.436,
+    "frame_000041": 0.754,
+    "frame_000048": 0.703,
+    "frame_000057": 0.405
+   },
+   "candle": {
+    "frame_000006": 0.692,
+    "frame_000029": 0.871,
+    "frame_000048": 0.525,
+    "frame_000057": 0.753
+   }
+  },
+  "iou_after": {
+   "mug": {
+    "frame_000012": 0.846,
+    "frame_000041": 0.265,
+    "frame_000048": 0.712
+   },
+   "case": {
+    "frame_000006": 0.749,
+    "frame_000029": 0.436,
+    "frame_000041": 0.754,
+    "frame_000048": 0.703,
+    "frame_000057": 0.405
+   },
+   "candle": {
+    "frame_000006": 0.692,
+    "frame_000029": 0.871,
+    "frame_000048": 0.525,
+    "frame_000057": 0.753
+   }
+  },
+  "mean_iou_before": 0.643,
+  "mean_iou_after": 0.643,
+  "rounds": [],
+  "spark_calls": 0,
+  "after_transforms": {
+   "mug": {
+    "position": [
+     -23.463140640683196,
+     0.0,
+     12.144148021509103
+    ],
+    "rotation_deg": [
+     0.0,
+     276.0,
+     0.0
+    ],
+    "scale": [
+     5.081875090305272,
+     5.081875090305272,
+     5.081875090305272
+    ]
+   },
+   "case": {
+    "position": [
+     19.436835951844113,
+     0.0,
+     13.629959546139213
+    ],
+    "rotation_deg": [
+     0.0,
+     348.6,
+     0.0
+    ],
+    "scale": [
+     7.5958379943825935,
+     7.5958379943825935,
+     7.5958379943825935
+    ]
+   },
+   "candle": {
+    "position": [
+     -37.447742511921184,
+     0.0,
+     -2.8946151068871164
+    ],
+    "rotation_deg": [
+     0.0,
+     75.0,
+     0.0
+    ],
+    "scale": [
+     11.001201097946229,
+     11.001201097946229,
+     11.001201097946229
+    ]
+   }
+  },
+  "images": [
+   "verify/vggt_view0_frame_000006.png",
+   "verify/vggt_view1_frame_000012.png",
+   "verify/vggt_view2_frame_000029.png",
+   "verify/vggt_view3_frame_000041.png",
+   "verify/vggt_view4_frame_000048.png",
+   "verify/vggt_view5_frame_000057.png"
+  ],
+  "table_iou": {
+   "frame_000006": 0.699,
+   "frame_000012": 0.475,
+   "frame_000029": 0.713,
+   "frame_000041": 0.488,
+   "frame_000048": 0.644,
+   "frame_000057": 0.475
+  },
+  "table_mean_iou": 0.582,
+  "warnings": []
+ },
+ "total_wall_s": 68.7
+}

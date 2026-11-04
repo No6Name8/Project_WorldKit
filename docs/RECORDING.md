@@ -37,7 +37,7 @@ Check the edit server: the top bar must say "Muse Spark ready". If it says unava
    cd pipeline
    .venv\Scripts\python.exe -m worldkit.worker --once
    ```
-   Decide before recording: a real run takes several minutes and Modal credits (cut the wait in the edit), and the real pipeline has not been run through the hosted path yet, so rehearse it once. `--dry-run` publishes the bundled mug instead, and the voice-over must say so.
+   Decide before recording: a real run takes several minutes and Modal credits (cut the wait in the edit), and the real pipeline through the hosted path took 715 s in its one real run (2026-11-04), so rehearse it once. `--dry-run` publishes the bundled mug instead, and the voice-over must say so.
 3. **Chrome tab 1:** <http://127.0.0.1:5070/?demo=1>. The mug at v0, with Object, AI Edit and the SAM overlay.
 4. **Chrome tab 2:** <http://127.0.0.1:5050/?demo=1>, switched to **Map**: the coin desk scene. For the second scene, use the Developer tools button "Demo: desk, three laps" on <http://127.0.0.1:5050/>, without `?demo=1`.
 5. **Slicer** (PrusaSlicer, Cura or Bambu Studio), units mm, an empty plate. Before the take, drop in the STL from tab 1's "Download STL (mm)" and check that it reads about 72.9 mm tall: the mug's 71.3 mm plus the base plate. Then clear the plate.

@@ -1,0 +1,216 @@
+{
+ "worldkit_scene": 1,
+ "mode": "map",
+ "source_video": "desk_scene_coin.mp4",
+ "frame": "sharp_02",
+ "units": "centimetres on the desk plane (Y up, origin at the scale reference)",
+ "cm_per_scene_unit": 1.0,
+ "scale_source": {
+  "text": "scale source: striped mug, 70 mm height, reconstructed mesh height set to the supplied value",
+  "kind": "object",
+  "name": "striped mug",
+  "size_mm": 70.0,
+  "frames_used": [
+   "sharp_00",
+   "sharp_01",
+   "sharp_02",
+   "sharp_03",
+   "sharp_04",
+   "sharp_05",
+   "sharp_06",
+   "sharp_07",
+   "sharp_10",
+   "sharp_11",
+   "sharp_12",
+   "sharp_13",
+   "sharp_14",
+   "sharp_52",
+   "sharp_60",
+   "sharp_63",
+   "sharp_64",
+   "sharp_65"
+  ],
+  "object_id": "striped_mug",
+  "considered": [
+   "scale source: striped mug, 70 mm height, reconstructed mesh height set to the supplied value"
+  ],
+  "notes": [],
+  "note": "the reference object's reconstructed height is set to the supplied value, so it cannot be checked against itself"
+ },
+ "scale_calibration": {
+  "reference": "striped mug",
+  "reference_size_mm": 70.0,
+  "relative_spread_mad": null,
+  "frames_used": 18
+ },
+ "objects": [
+  {
+   "id": "desk",
+   "name": "coffee table",
+   "mesh": "objects/desk/model.glb",
+   "report": "objects/desk/report.json",
+   "role": "parent",
+   "reconstruction_model": {
+    "name": "procedural plane",
+    "vendor": "WorldKit",
+    "is_meta_model": false
+   },
+   "transform": {
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "rotation_deg": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "size_cm": [
+    61.9,
+    1.0,
+    47.9
+   ],
+   "printable": false
+  },
+  {
+   "id": "black_case",
+   "name": "black case",
+   "mesh": "objects/black_case/model.glb",
+   "report": "objects/black_case/report.json",
+   "role": "child",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "transform": {
+    "position": [
+     36.72331015664519,
+     3.011193730264461,
+     24.343276769988123
+    ],
+    "rotation_deg": [
+     0.0,
+     326.0,
+     0.0
+    ],
+    "scale": [
+     9.16514580133814,
+     9.16514580133814,
+     9.16514580133814
+    ]
+   },
+   "size_cm": [
+    17.39,
+    6.02,
+    14.24
+   ],
+   "size_mm": [
+    173.9,
+    60.2,
+    142.4
+   ],
+   "stl": "objects/black_case/model_print.stl",
+   "printable": true,
+   "is_scale_reference": false
+  },
+  {
+   "id": "striped_mug",
+   "name": "striped mug",
+   "mesh": "objects/striped_mug/model.glb",
+   "report": "objects/striped_mug/report.json",
+   "role": "child",
+   "reconstruction_model": {
+    "name": "SAM 3D Objects",
+    "vendor": "Meta",
+    "is_meta_model": true
+   },
+   "transform": {
+    "position": [
+     0.0,
+     3.5,
+     -0.0
+    ],
+    "rotation_deg": [
+     0.0,
+     226.0,
+     0.0
+    ],
+    "scale": [
+     4.794489496464038,
+     4.794489496464038,
+     4.794489496464038
+    ]
+   },
+   "size_cm": [
+    8.2,
+    7.0,
+    7.99
+   ],
+   "size_mm": [
+    82.0,
+    70.0,
+    79.9
+   ],
+   "stl": "objects/striped_mug/model_print.stl",
+   "printable": true,
+   "is_scale_reference": true
+  }
+ ],
+ "layout_method": "weak-perspective pose fits in one reference frame (the scale reference gives the desk plane's scale and elevation); VGGT not used",
+ "verify": {
+  "mean_iou_before": 0.551,
+  "mean_iou_after": 0.551,
+  "images": [
+   "verify/weak_view0_sharp_02.png",
+   "verify/weak_view1_sharp_00.png",
+   "verify/weak_view2_sharp_01.png"
+  ]
+ },
+ "diorama": {
+  "stl": "diorama.stl",
+  "scale_ratio": 0.5007,
+  "scale_text": "1:2.0",
+  "size_mm": [
+   256.0,
+   185.9,
+   36.3
+  ],
+  "bed_mm": [
+   256.0,
+   256.0,
+   256.0
+  ],
+  "watertight": true,
+  "objects": [
+   "black_case",
+   "striped_mug"
+  ],
+  "repairs": [
+   "black_case: trimesh_repair",
+   "striped_mug: trimesh_repair"
+  ],
+  "warnings": [
+   "7% of sampled surface points are thinner than 1.2 mm at this scale: thin walls/handles may not print",
+   "scaled to 1:2.0 to fit the 256 mm bed: real sizes are 2.0x larger"
+  ],
+  "thin_feature_fraction": 0.069
+ },
+ "skipped": [
+  {
+   "name": "candle in red holder",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  },
+  {
+   "name": "silver incense burner",
+   "reason": "flagged shiny/transparent by Muse Spark (3D reconstruction of polished metal, mirror or glass fails)"
+  }
+ ]
+}
