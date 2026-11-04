@@ -40,6 +40,7 @@ docs/                accuracy, architecture, submission text, demo script, deplo
 | | callers | `object.run`, `scene.run`/`scene.choose_frame`, `mapmode.cached_mask`/`build_tracks`, `parts.find_part` (mug handle) |
 | SAM 3D Objects (open weights, Modal A100-40GB) | `pipeline/modal_app/sam3d.py` | `reconstruct_mesh` (GPU function), `run_remote`, `run_remote_many` |
 | | callers | `object.run_sam3d_on_modal` (Object and two-object scene), `mapmode._run` (Map mode, parallel) |
+| Muse Spark Open `meta-models/muse-spark-open-1026` (open weights, served by Baseten) | `pipeline/worldkit/spark_open.py` | `ask_spark_open_with_usage`: optional AI Edit verifier, `python -m worldkit.edit RUN_DIR "..." --spark-backend baseten` (off by default); agreement run: `scripts/spark_open_agreement.py` |
 | VGGT-1B (open weights, Modal A100) | `pipeline/modal_app/vggt_probe.py` | `run_vggt` (GPU function) |
 | | `pipeline/worldkit/vggt_cams.py` | `run_vggt` (cached client), `verify_with_vggt`, `perspective_corrections`; used by Map mode with `--vggt` |
 | | `pipeline/worldkit/desk.py` | desk scene v2: VGGT cameras for the table plane, fused table outline, triangulated placement and held-out verify |
@@ -105,10 +106,21 @@ npm --prefix web run check:live                                      # the deplo
 | web unit, web e2e (mocked Supabase) | `web/tests/` | offline |
 | web e2e (real Supabase), live-site check | `web/tests/e2e_real.mjs`, `scripts/check_live.mjs` | Need credentials in `pipeline/.env` and `web/.env.local` |
 
+## How to evaluate this project in 5 minutes
+
+1. `pipeline\.venv\Scripts\python.exe scriptserify_claims.py`: no API, no GPU, about 2 s. Recomputes the accuracy tables from `docs/results/*.json`, checks SHA-256 of the files they name (when present), checks README numbers and the AI Edit tables against the traces, checks every relative link. Expect all PASS.
+2. Open the hosted demo: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1 (Source tab: the original video, the model, the frames used with SAM 3.1 outlines; then Viewer, AI Edit replay, Accuracy). Locally: `python viewer\server.py`, then http://127.0.0.1:5050/?demo=1.
+3. Read the agent traces: `docs/agent_traces/edit_a.json` to `edit_e.json` (real Muse Wonder tool calls, SAM coverage, checks, Muse Spark verdicts, tokens) and the two refusals; fields in `docs/agent_traces/README.md`.
+4. Run the tests: `python -m pytest pipeline/tests -q` (about 4 min, no API calls), or everything with `powershell -ExecutionPolicy Bypass -File scripts	est_all.ps1` (Python, 10 browser suites, web; about 12 min).
+5. Evidence index mapped to the judging criteria and prizes: `docs/JUDGING.md`. Models: `docs/MODELS.md`. Agent: `docs/AGENTIC.md`. Muse Wonder: `docs/WONDER.md`.
+
 ## Evidence
 
 - **Accuracy vs a ruler:** `docs/accuracy.md`, generated from one JSON per claim in `docs/results/` (command, input and STL SHA-256, measured and ruler values) by `python scripts/accuracy_table.py --from-results`; `python scripts/make_results.py` rebuilds the JSON from local runs. The second object (Hydro Flask) is recorded there as not scored: SAM 3.1 found the coin in 1 of 12 frames.
 - **Source tab (original video next to the model):** `viewer/assets/demo/run_mug/source/` and `run_desk/source/` (from `scripts/make_source_view.py`): a re-encoded copy of the video (H.264 CRF 28, no audio), a poster, 8-9 thumbnails of the frames used with SAM 3.1 outlines read from the runs' mask caches (no new model calls), `source.json`. The three-lap card video is not included (9.6 MB compressed, over the 8 MB limit). Web projects play the uploaded video from the private `videos` bucket through a signed URL. Tabs: Source | Viewer | AI Edit | Accuracy; `?demo=1` opens on Source.
+- **AI Edit agent:** `docs/AGENTIC.md` (loop, decisions, limits, tools, five rehearsed edits), `docs/agent_traces/` (from `scripts/make_agent_traces.py`: five real traces, one real refusal, one tool-level refusal), `docs/WONDER.md` (Muse Wonder's role and code).
+- **Models:** `docs/MODELS.md` (job, file, input/output, calls per run, where it runs, fallback). Muse Spark Open agreement: `docs/results/spark_open_agreement.json` (5 of 5 same decision on the rehearsed edits, verification only).
+- **Judging index:** `docs/JUDGING.md`. **Claim checker:** `scripts/verify_claims.py` (also run by `scripts/test_all`).
 - **AI Edit replay:** `viewer/assets/demo/edit_replay/` (from `scripts/make_edit_replay.py`): five real recorded edits the hosted demo viewer can replay without an edit server.
 - **Measurements and diagnosis:** `docs/TECHNICAL_NOTES.md`. Failed experiments: `docs/what_we_tried.md`.
 - **Screenshots:**

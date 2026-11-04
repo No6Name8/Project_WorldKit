@@ -1,0 +1,113 @@
+{
+ "trace": "rehearsal_b",
+ "kind": "real run (Muse Wonder muse-wonder-1.0 and Muse Spark muse-spark-1.3, Meta Model API)",
+ "created": "2026-11-03T13:24:52",
+ "run_dir": "pipeline/runs/rehearse (a copy of runs/mug_grounded; local, gitignored)",
+ "instruction": "put a 5 mm hole through the handle side",
+ "version_id": 3,
+ "parent_version_id": 0,
+ "wonder_tool_calls": [
+  {
+   "name": "drill_hole",
+   "arguments": {
+    "diameter_mm": 5.0,
+    "position": [
+     -1.66,
+     53.13,
+     60.62
+    ],
+    "direction": [
+     -0.9998,
+     -0.0187,
+     0.0
+    ],
+    "through": true
+   },
+   "result_sentence": "Drilled a 5 mm hole all the way through",
+   "result_ok": true
+  }
+ ],
+ "wonder_reply": "Drilled a 5 mm through-hole through the handle side.",
+ "sam_coverage": {
+  "part": "handle",
+  "views_found": 11,
+  "views_total": 12,
+  "source": "model facts given to Muse Wonder (the tool used did not need the part)"
+ },
+ "deterministic_checks": [
+  {
+   "name": "watertight solid",
+   "ok": true,
+   "detail": "volume 61920 mm3"
+  },
+  {
+   "name": "base on z=0",
+   "ok": 1.0,
+   "detail": "min z 0.000"
+  },
+  {
+   "name": "hole removed material",
+   "ok": 1.0,
+   "detail": "volume change -150.9 mm3"
+  },
+  {
+   "name": "hole did not enlarge the model",
+   "ok": true,
+   "detail": ""
+  }
+ ],
+ "spark_verdict": {
+  "matches_instruction": true,
+  "unintended_changes": false,
+  "confidence": 0.95,
+  "reason": "Close-up shows a clear through-hole in the handle side with no other visible changes."
+ },
+ "decision": "accepted",
+ "decision_reason": "all checks passed",
+ "retries": 0,
+ "attempts": 1,
+ "seconds_server": 19.0,
+ "tokens": {
+  "muse_wonder": {
+   "prompt_tokens": 4035,
+   "completion_tokens": 427,
+   "total_tokens": 4462,
+   "reasoning_tokens": 253
+  },
+  "muse_spark": {
+   "prompt_tokens": 1284,
+   "completion_tokens": 865,
+   "total_tokens": 2149,
+   "reasoning_tokens": 813
+  }
+ },
+ "size_mm_before": [
+  95.32,
+  118.57,
+  72.87
+ ],
+ "size_mm_after": [
+  95.32,
+  118.57,
+  72.87
+ ],
+ "renders": [
+  "edits/v3_try0_view0.png",
+  "edits/v3_try0_view1.png"
+ ],
+ "sources": [
+  "pipeline/runs/rehearse/edits/versions.json",
+  "docs/demo_edits.json"
+ ],
+ "client": {
+  "stages_seen": [
+   "Choosing",
+   "Checking Spark"
+  ],
+  "seconds_client": 20
+ },
+ "renders_in_repo": [
+  "viewer/assets/demo/edit_replay/b_render0.jpg",
+  "viewer/assets/demo/edit_replay/b_render1.jpg"
+ ]
+}

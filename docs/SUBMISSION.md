@@ -35,6 +35,17 @@ WorldKit reports its failures too: a run scaled by a bank card instead of a coin
 - **SAM 3.1:** segments the object, the coin and every scene object in every frame, and finds the mug handle for part edits.
 - **SAM 3D Objects:** reconstructs each object's textured 3D mesh from one masked frame, on a Modal A100.
 - **VGGT:** estimates per-frame cameras on a Modal A100 to check the scene layout (silhouette agreement) and to correct perspective per object.
+- **Muse Spark Open** (open weights, served by Baseten): an optional second verifier for AI Edit (`--spark-backend baseten`); it gave the same accept decision as Muse Spark on all 5 rehearsed edits.
+
+Details for each model (file, function, calls per run, fallback): [MODELS.md](MODELS.md).
+
+## Prize fit
+
+**Best Agentic Use-Case.** The AI Edit agent turns one typed instruction into a verified change of the print mesh: Muse Wonder picks one of 8 geometry tools and its arguments, SAM 3.1 supplies the part, and geometry checks plus Muse Spark decide whether to accept, retry once, or refuse ([AGENTIC.md](AGENTIC.md)). In the rehearsal with the real models, 10 of 10 edits were accepted on the first attempt in 13.9-33.6 s each, including "make the handle thinner" with no amount given, which became -2 mm ([DEMO_EDITS.md](DEMO_EDITS.md), [agent_traces/](agent_traces/)). It stops on its own below 50% SAM coverage of a part or a 1.2 mm wall, never edits the original, and keeps every version for undo ([agent_traces/refusal_wall_floor.json](agent_traces/refusal_wall_floor.json)).
+
+**Best Creative Build (Muse Wonder).** Muse Wonder edits a 3D print of a real, filmed object from plain language: it converts "put a 5 mm hole through the handle side" into a hole position and direction taken from the measured handle, and "make it exactly 12 cm tall" into a target in the tool's own unit ([WONDER.md](WONDER.md)). It never touches geometry itself; every call goes through exact tools and is checked by geometry tests and Muse Spark before it is kept. Each rehearsed edit used 4,223-4,463 Wonder tokens, stored per edit with the tool calls ([agent_traces/](agent_traces/)).
+
+**Best Build on Meta Open Weight Models.** Muse Spark Open (`meta-models/muse-spark-open-1026`), served by Baseten, is a selectable backend for the AI Edit verification step (`python -m worldkit.edit RUN_DIR "..." --spark-backend baseten`; code in `pipeline/worldkit/spark_open.py`). On the stored before/after renders of the 5 rehearsed edits it gave the same accept decision as Muse Spark 5 of 5 times; one verification needed a second call because the first used all 6,000 completion tokens without answering ([results/spark_open_agreement.json](results/spark_open_agreement.json), [MODELS.md](MODELS.md)). It covers verification only, on edits Muse Spark had accepted; the meshes themselves come from SAM 3D Objects, also an open-weight Meta model, on a Modal A100.
 
 ## What is new in the hackathon
 

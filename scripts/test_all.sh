@@ -14,12 +14,13 @@ run() {  # run NAME DIR CMD...
   echo "== $name"
   local out code
   out="$(cd "$dir" && "$@" 2>&1)"; code=$?
-  local line; line="$(echo "$out" | grep -E "passed|checks passed|^# (pass|fail) " | tail -2 | tr '\n' ';')"
+  local line; line="$(echo "$out" | grep -E "passed|checks passed|^# (pass|fail) |PASS, " | tail -2 | tr '\n' ';')"
   [ $code -ne 0 ] && { echo "$out" | grep -E "^FAIL|CRASH|Error" | head -5; FAILED=1; }
   SUMMARY+="$( [ $code -eq 0 ] && echo PASS || echo FAIL )  $name  $line"$'\n'
 }
 
 run "pytest" "$ROOT" "$PY" -m pytest pipeline/tests -q -p no:cacheprovider
+run "verify_claims" "$ROOT" "$PY" scripts/verify_claims.py
 
 "$PY" "$ROOT/viewer/server.py" >/dev/null 2>&1 &
 SERVER=$!

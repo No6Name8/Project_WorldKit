@@ -1,0 +1,97 @@
+{
+ "trace": "rehearsal_d",
+ "kind": "real run (Muse Wonder muse-wonder-1.0 and Muse Spark muse-spark-1.3, Meta Model API)",
+ "created": "2026-11-03T13:26:30",
+ "run_dir": "pipeline/runs/rehearse (a copy of runs/mug_grounded; local, gitignored)",
+ "instruction": "make it exactly 12 cm tall",
+ "version_id": 7,
+ "parent_version_id": 0,
+ "wonder_tool_calls": [
+  {
+   "name": "scale_to",
+   "arguments": {
+    "height_cm": 12.0
+   },
+   "result_sentence": "Scaled to 120 mm tall",
+   "result_ok": true
+  }
+ ],
+ "wonder_reply": "Scaled the model to exactly 12 cm (120 mm) tall.",
+ "sam_coverage": {
+  "part": "handle",
+  "views_found": 11,
+  "views_total": 12,
+  "source": "model facts given to Muse Wonder (the tool used did not need the part)"
+ },
+ "deterministic_checks": [
+  {
+   "name": "watertight solid",
+   "ok": true,
+   "detail": "volume 277226 mm3"
+  },
+  {
+   "name": "base on z=0",
+   "ok": 1.0,
+   "detail": "min z 0.000"
+  },
+  {
+   "name": "height as requested",
+   "ok": 1.0,
+   "detail": "120.00 mm vs 120.00 mm"
+  }
+ ],
+ "spark_verdict": {
+  "matches_instruction": true,
+  "unintended_changes": false,
+  "confidence": 0.98,
+  "reason": "After Z is 120 mm with proportional scaling and no shape change."
+ },
+ "decision": "accepted",
+ "decision_reason": "all checks passed",
+ "retries": 0,
+ "attempts": 1,
+ "seconds_server": 18.1,
+ "tokens": {
+  "muse_wonder": {
+   "prompt_tokens": 3943,
+   "completion_tokens": 280,
+   "total_tokens": 4223,
+   "reasoning_tokens": 182
+  },
+  "muse_spark": {
+   "prompt_tokens": 1236,
+   "completion_tokens": 1128,
+   "total_tokens": 2364,
+   "reasoning_tokens": 1079
+  }
+ },
+ "size_mm_before": [
+  95.32,
+  118.57,
+  72.87
+ ],
+ "size_mm_after": [
+  156.98,
+  195.26,
+  120.0
+ ],
+ "renders": [
+  "edits/v7_try0_view0.png",
+  "edits/v7_try0_view1.png"
+ ],
+ "sources": [
+  "pipeline/runs/rehearse/edits/versions.json",
+  "docs/demo_edits.json"
+ ],
+ "client": {
+  "stages_seen": [
+   "Choosing",
+   "Checking Spark"
+  ],
+  "seconds_client": 19
+ },
+ "renders_in_repo": [
+  "viewer/assets/demo/edit_replay/d_render0.jpg",
+  "viewer/assets/demo/edit_replay/d_render1.jpg"
+ ]
+}

@@ -15,12 +15,13 @@ function Run-Suite($name, $workdir, $exe, $argList) {
   $out = & $exe @argList 2>&1 | Out-String
   $code = $LASTEXITCODE
   Pop-Location
-  $summary = ($out -split "`r?`n" | Where-Object { $_ -match "passed|checks passed|^# (pass|fail) " } | Select-Object -Last 2) -join "; "
+  $summary = ($out -split "`r?`n" | Where-Object { $_ -match "passed|checks passed|^# (pass|fail) |PASS, " } | Select-Object -Last 2) -join "; "
   if ($code -ne 0) { Write-Host ($out -split "`r?`n" | Where-Object { $_ -match "^FAIL|CRASH|Error" } | Select-Object -First 5 | Out-String) }
   $script:results += [pscustomobject]@{ Suite = $name; Result = $(if ($code -eq 0) { "PASS" } else { "FAIL" }); Summary = $summary.Trim() }
 }
 
 Run-Suite "pytest" $Root $Py @("-m", "pytest", "pipeline\tests", "-q", "-p", "no:cacheprovider")
+Run-Suite "verify_claims" $Root $Py @("scripts\verify_claims.py")
 
 # viewer server for the browser suites (port 5050)
 $server = Start-Process -FilePath $Py -ArgumentList "viewer\server.py" -WorkingDirectory $Root -PassThru -WindowStyle Hidden

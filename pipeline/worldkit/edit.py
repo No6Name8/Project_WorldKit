@@ -449,6 +449,8 @@ def main(argv=None) -> int:
     ap.add_argument("instruction", nargs="?")
     ap.add_argument("--undo", nargs="?", const=-1, type=int, metavar="N", help="step back one version, or to version N")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--spark-backend", choices=["meta", "baseten"], default="meta",
+                    help="who verifies the edit: Muse Spark on the Meta Model API (default), or Muse Spark Open (open weights) served by Baseten")
     a = ap.parse_args(argv)
     try:
         if a.list:
@@ -462,7 +464,10 @@ def main(argv=None) -> int:
             return 0
         if not a.instruction:
             ap.error("give an instruction, or --undo / --list")
-        r = run_edit(a.model_dir, a.instruction)
+        ask = ask_muse_spark_with_usage
+        if a.spark_backend == "baseten":
+            from .spark_open import ask_spark_open_with_usage as ask
+        r = run_edit(a.model_dir, a.instruction, ask_spark=ask)
         calls = ", ".join(f"{c['name']}({json.dumps(c['arguments'])})" for c in r.get("tool_calls", []) or r["attempts"][-1].get("tool_calls", []))
         if r["applied"]:
             print(f"APPLIED as v{r['version']} in {r['seconds']}s: {calls}\n  verdict: {r['verdict']['reason']}  | Spark: {r['spark'].get('reason')}")

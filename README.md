@@ -1,5 +1,11 @@
 ![WorldKit: Film it. Print it.](docs/assets/banner.png)
 
+> **For judges.** Evidence index with a 2-minute check for each claim: [docs/JUDGING.md](docs/JUDGING.md).
+> The AI Edit agent (Muse Wonder tool calls, SAM 3.1 parts, Muse Spark verification): [docs/AGENTIC.md](docs/AGENTIC.md), traces in [docs/agent_traces/](docs/agent_traces/).
+> How Muse Wonder is used: [docs/WONDER.md](docs/WONDER.md). Every Meta model, its job, file and fallback: [docs/MODELS.md](docs/MODELS.md).
+> Accuracy against a ruler, generated from [docs/results/](docs/results/): [docs/accuracy.md](docs/accuracy.md). Recheck it all offline: `python scripts/verify_claims.py`.
+> Demo video: TODO (link after upload). Hosted demo, no account: https://web-flame-psi-45.vercel.app/viewer/index.html?demo=1
+
 **WorldKit turns a short phone video of a real object into a 3D model, with its scale estimated from a coin or card, that you can edit by typing and 3D print.**
 
 [![Live demo](https://img.shields.io/badge/live_demo-web--flame--psi--45.vercel.app-2f6ed2)](https://web-flame-psi-45.vercel.app)
@@ -85,6 +91,36 @@ flowchart LR
 
 More diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Agentic design
+
+AI Edit is an agent loop over the print mesh. Details, limits and the tool table: [docs/AGENTIC.md](docs/AGENTIC.md).
+
+```mermaid
+flowchart LR
+  I["Instruction"] --> W["Muse Wonder<br/>picks a tool + arguments"]
+  P["SAM 3.1 part<br/>(handle, 11 of 12 frames)"] --> W
+  W --> T["Geometry tool<br/>on a copy of the mesh"]
+  T --> D["Checks: watertight,<br/>base, size per tool"]
+  D --> S["Muse Spark:<br/>before/after renders"]
+  S -->|pass| A["New version, undo kept"]
+  S -->|fail| R["Retry once, then refuse"]
+  T -->|"part under 50% coverage,<br/>wall under 1.2 mm"| W
+```
+
+Rehearsed with the real models on 2026-11-03, each instruction twice; 10 of 10 accepted on the first attempt ([docs/DEMO_EDITS.md](docs/DEMO_EDITS.md), traces in [docs/agent_traces/](docs/agent_traces/)):
+
+| Instruction | Tool Muse Wonder chose | Result | Seconds (run 1 / run 2) |
+|---|---|---|---|
+| make the handle 2 mm thicker | `thicken_part` handle, +2 mm | handle wall 5.22 → 7.34 mm | 19.6 / 18.4 |
+| put a 5 mm hole through the handle side | `drill_hole` 5 mm, through | through-hole, size unchanged | 19.0 / 15.1 |
+| make the handle thinner | `thicken_part` handle, -2 mm | handle wall 5.22 → 3.16 mm | 20.0 / 33.6 |
+| make it exactly 12 cm tall | `scale_to` 12 cm | 72.9 → 120.0 mm tall | 18.1 / 17.2 |
+| add the text WORLDKIT on the base | `emboss_text` base | engraved underside | 15.7 / 13.9 |
+
+## How Muse Wonder is used
+
+Muse Wonder (`muse-wonder-1.0`) is the editing engine: it reads the instruction and the model's measured facts and calls the geometry tools with exact arguments (part ids, mm, a 3D hole position from the handle facts, cm for a target height). It never edits the mesh itself, and every call is checked by geometry tests and Muse Spark. Code: `edit.wonder_tool_step` in [pipeline/worldkit/edit.py](pipeline/worldkit/edit.py). Examples with before/after renders, validation and limits: [docs/WONDER.md](docs/WONDER.md).
+
 ## Meta models used
 
 | Model | What it does here | File |
@@ -94,8 +130,9 @@ More diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | SAM 3.1 (`sam-3.1`) | Masks the object, the coin and each scene object in every frame; finds the mug handle for part edits | [segment.py](pipeline/worldkit/segment.py), [parts.py](pipeline/worldkit/parts.py) |
 | SAM 3D Objects | Builds each object's textured 3D mesh from one masked frame, on a Modal A100 | [modal_app/sam3d.py](pipeline/modal_app/sam3d.py) |
 | VGGT-1B | Per-frame cameras to check scene layout and correct perspective per object (Map mode, `--vggt`) | [modal_app/vggt_probe.py](pipeline/modal_app/vggt_probe.py), [vggt_cams.py](pipeline/worldkit/vggt_cams.py) |
+| Muse Spark Open (`meta-models/muse-spark-open-1026`, open weights, served by Baseten) | Optional second verifier for AI Edit (`--spark-backend baseten`, off by default); same accept decision as Muse Spark on 5 of 5 rehearsed edits | [spark_open.py](pipeline/worldkit/spark_open.py), [docs/results/spark_open_agreement.json](docs/results/spark_open_agreement.json) |
 
-Function-level call sites are listed in [AGENTS.md](AGENTS.md).
+Muse Spark, Muse Wonder and SAM 3.1 are API models (Meta Model API). SAM 3D Objects, VGGT and Muse Spark Open are open-weight models (Modal A100 for the first two, Baseten for the third). Job, input and output, calls per run and fallbacks: [docs/MODELS.md](docs/MODELS.md). Function-level call sites are listed in [AGENTS.md](AGENTS.md).
 
 ## Results
 
@@ -114,6 +151,8 @@ Object mode, scale estimated from a coin, against a ruler. The same mug video, r
 The Hydro Flask, a second object filmed the same way, could not be scored. SAM 3.1 found the coin in only 1 of 12 frames, so its scale stayed a placeholder. That leaves one mug as the only scored object.
 
 The full tables, and how the ground truth was measured, are in [docs/accuracy.md](docs/accuracy.md). With a bank card instead of a coin (scene mode), the error rose to +16.9 / -8.8 / -12.3%: the mug was only about 65 px wide in the card frames, and SAM 3.1 never found the card.
+
+**Verify the claims in 1 minute.** `python scripts/verify_claims.py` (no API calls, no GPU) recomputes every error % in `docs/results`, regenerates `docs/accuracy.md` and compares it, checks the SHA-256 of each input and STL that is present, checks the numbers in this README and the AI Edit tables against the traces, and checks every relative link. It prints PASS or FAIL per check.
 
 **Reproducible numbers.** Every accuracy claim has a machine-readable file in [docs/results/](docs/results/), and `docs/accuracy.md` is generated from them (`python scripts/accuracy_table.py --from-results`). Each file holds:
 
@@ -187,18 +226,17 @@ powershell -ExecutionPolicy Bypass -File scripts\test_all.ps1     # or: bash scr
 npm --prefix web run check:live                                    # the deployed site
 ```
 
-Latest run (2026-11-03):
+Latest run (2026-11-04, `scripts/test_all.ps1`):
 
 | Suite | Result |
 |---|---|
-| pytest (`pipeline/tests`) | 243 passed |
-| Browser: scene-physics, demo-readiness, AI Edit, map scene, parts | 50/50, 10/10, 14/14, 19/19, 10/10 |
-| Browser: viewer, integration, SAM 3D | 31 checks passed; each stops at its one real Muse Spark call, which was not made (pipeline frozen, no API calls) |
-| Web unit, web e2e (mocked Supabase) | 8/8, 46/46 |
-| Colour contrast (`scripts/check_contrast.mjs`), dark and light | 88/88 token pairs at WCAG AA |
+| pytest (`pipeline/tests`, Meta API and Modal mocked) | 251 passed |
+| `scripts/verify_claims.py` | 24 PASS, 0 FAIL |
+| Browser: viewer, integration, SAM 3D, scene physics, demo readiness | 29/29, 11/11, 28/28, 50/50, 10/10 (the first three each make one real Muse Spark call) |
+| Browser: AI Edit, map scene, parts, AI Edit replay, Source tab | 23/23, 19/19, 10/10, 13/13, 30/30 |
+| Web unit, web e2e (mocked Supabase) | 10/10, 50/50 |
+| Colour contrast (`scripts/check_contrast.mjs`), dark and light | 88/88 token pairs at WCAG AA (2026-11-03) |
 | Web e2e (real Supabase), live site (`check:live`) | 19/19 (2026-11-03), 16/16 |
-
-The map-scene suite timed out once under heavy machine load and passed 19/19 on two reruns.
 
 ## Built during the hackathon
 
